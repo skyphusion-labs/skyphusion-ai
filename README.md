@@ -37,12 +37,12 @@ wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'cloudflare' 
 
 $vectors = cloudflare_ai_provider_embeddings( array( 'linen shirt' ) );
 
-$answer = cloudflare_ai_search_query( 'shipping times' );
+$answer = skyphusion_ai_query( 'shipping times' );
 ```
 
 `cloudflare_ai_provider_embeddings()` returns a list of vectors, or a `WP_Error`. That error message never includes the token. The model is `@cf/baai/bge-large-en-v1.5`.
 
-`cloudflare_ai_search_query()` posts to the public `{endpoint}/chat/completions` address. It returns `answer` and `sources`, or a `WP_Error`. It does not send a token. `{endpoint}/search` returns pages and no sentence. The connection check uses that path.
+`skyphusion_ai_query()` posts to the public `{endpoint}/chat/completions` address. It returns `answer` and `sources`, or a `WP_Error`. It does not send a token. `{endpoint}/search` returns pages and no sentence. The connection check uses that path. `cloudflare_ai_search_query()` still calls the same helper.
 
 WooCommerce code that calls `wp_ai_client_prompt()` can use the same provider. The shop already shows the search box when the public endpoint is set.
 
@@ -68,12 +68,12 @@ Speech is `@cf/deepgram/aura-1` (MP3). Voices: angus, asteria, arcas, orion, orp
 
 ## Command line
 
-`wp cloudflare-ai-search` writes the same option the dashboard saves. A later save in **Settings, then Skyphusion AI** shows those values.
+`wp skyphusion-ai` writes the same option the dashboard saves. A later save in **Settings, then Skyphusion AI** shows those values.
 
 ```bash
-wp cloudflare-ai-search status
-wp cloudflare-ai-search set --endpoint=https://abc.search.ai.cloudflare.com/ --accent-color=#1B3A32 --chat=0
-wp cloudflare-ai-search set --account-id=0123456789abcdef0123456789abcdef --gateway-id=store --lead-search=0
+wp skyphusion-ai status
+wp skyphusion-ai set --endpoint=https://abc.search.ai.cloudflare.com/ --accent-color=#1B3A32 --chat=0
+wp skyphusion-ai set --account-id=0123456789abcdef0123456789abcdef --gateway-id=store --lead-search=0
 ```
 
 Flags:
@@ -92,14 +92,14 @@ The search box only lists pages. The chat button answers in a sentence. It uses 
 
 ## External services
 
-- AI Search. The browser loads the snippet from the public endpoint address you paste. The site sends a question to `{endpoint}/search` when you check the connection. `cloudflare_ai_search_query()` and the search-results switch send the question to `{endpoint}/chat/completions`. No API token is sent. Search feeds and embeds do not print the answer.
+- AI Search. The browser loads the snippet from the public endpoint address you paste. The site sends a question to `{endpoint}/search` when you check the connection. `skyphusion_ai_query()` and the search-results switch send the question to `{endpoint}/chat/completions`. No API token is sent. Search feeds and embeds do not print the answer.
 - Workers AI and AI Gateway. Prompts, images, speech text, and embedding texts go to `api.cloudflare.com`. They go to `gateway.ai.cloudflare.com` instead when a gateway id is set. The request carries the Connectors API token as a bearer token. Account ids and gateway ids are not secrets. The plugin reads that token from `CLOUDFLARE_API_KEY` in the environment first. It then tries a PHP constant of the same name. The Connectors option `connectors_ai_cloudflare_api_key` is the fallback. The Skyphusion AI screen says which of those is in use. It does not show the token.
 
 ## Directory
 
 The display name is Skyphusion AI for Cloudflare. Submit it under the permalink `skyphusion-ai`. That permalink is permanent, and it must not begin with `cloudflare`. The text domain is `skyphusion-ai`, the same as that permalink.
 
-The GitHub repository name, the settings page slug, and the option key stay `cloudflare-ai-search`. That way an existing install keeps its settings. `Contributors` in readme.txt stays the wordpress.org username `skyphusion`.
+The settings page slug stays `cloudflare-ai-search`. The saved option is `skyphusion_ai_settings`. An install that still has `cloudflare_ai_search_settings` is read from that key until a save writes the new one. `Contributors` in readme.txt stays the wordpress.org username `skyphusion`.
 
 ## Develop
 
@@ -135,7 +135,7 @@ It exits 0 when no finding is new, 1 when a finding is new or a count went up, a
 
 ## Distribution
 
-A distributed build carries the runtime only. That is `cloudflare-ai-search.php`, `includes/`, `assets/`, `readme.txt`, `README.md`, `LICENSE` and `uninstall.php`. The test files, the workflow and the dotfiles stay out of it. The coding-standard config stays out of it too. That is `composer.json`, `composer.lock` and `phpcs.xml.dist`.
+A distributed build carries the runtime only. That is `skyphusion-ai.php`, `includes/`, `assets/`, `readme.txt`, `README.md`, `LICENSE` and `uninstall.php`. The test files, the workflow and the dotfiles stay out of it. The coding-standard config stays out of it too. That is `composer.json`, `composer.lock` and `phpcs.xml.dist`.
 
 `tests/endpoint-test.php` and `tests/account-order.php` define `ABSPATH` themselves, so the harness can load `includes/` directly. That is the opposite of what a shipped file should do. `tests/provider-test.php` also calls `shell_exec()`. None of that belongs in an archive a site owner installs.
 
@@ -147,8 +147,8 @@ Two files hold that list, because two mechanisms build archives here. Neither on
 Keep the two lists in step. To check what a build would contain:
 
 ```bash
-git archive --format=zip --prefix=cloudflare-ai-search/ HEAD | tar -tf - 2>/dev/null || \
-  git archive --format=tar --prefix=cloudflare-ai-search/ HEAD | tar -tf -
+git archive --format=zip --prefix=skyphusion-ai/ HEAD | tar -tf - 2>/dev/null || \
+  git archive --format=tar --prefix=skyphusion-ai/ HEAD | tar -tf -
 ```
 
 ## Trademarks

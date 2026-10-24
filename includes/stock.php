@@ -26,7 +26,7 @@ if (!defined('ABSPATH')) {
  * @param mixed $value
  * @return string
  */
-function cloudflare_ai_search_stock_escape($value)
+function skyphusion_ai_stock_escape($value)
 {
     $text = (string) $value;
     if (function_exists('esc_html')) {
@@ -41,7 +41,7 @@ function cloudflare_ai_search_stock_escape($value)
  * @param string $text
  * @return string
  */
-function cloudflare_ai_search_stock_sentence($text)
+function skyphusion_ai_stock_sentence($text)
 {
     $text = trim((string) $text);
     if ($text === '') {
@@ -64,7 +64,7 @@ function cloudflare_ai_search_stock_sentence($text)
  *
  * @return array
  */
-function cloudflare_ai_search_stock_labels()
+function skyphusion_ai_stock_labels()
 {
     if (!function_exists('__')) {
         return array(
@@ -93,7 +93,7 @@ function cloudflare_ai_search_stock_labels()
  * @param int $quantity
  * @return string
  */
-function cloudflare_ai_search_stock_quantity_text($quantity)
+function skyphusion_ai_stock_quantity_text($quantity)
 {
     $count = (int) $quantity;
     if (function_exists('_n')) {
@@ -102,7 +102,7 @@ function cloudflare_ai_search_stock_quantity_text($quantity)
     } else {
         $format = '%d available.';
     }
-    return sprintf(cloudflare_ai_search_stock_escape($format), $count);
+    return sprintf(skyphusion_ai_stock_escape($format), $count);
 }
 
 /**
@@ -115,38 +115,38 @@ function cloudflare_ai_search_stock_quantity_text($quantity)
  * @param array|null $labels Pass the set once when looping, or let it load.
  * @return string Escaped text, with no markup of its own.
  */
-function cloudflare_ai_search_stock_line($row, $labels = null)
+function skyphusion_ai_stock_line($row, $labels = null)
 {
     if (!is_array($row)) {
         return '';
     }
     if (!is_array($labels)) {
-        $labels = cloudflare_ai_search_stock_labels();
+        $labels = skyphusion_ai_stock_labels();
     }
 
     $parts = array();
 
     $attributes = isset($row['attributes']) ? trim((string) $row['attributes']) : '';
     if ($attributes !== '') {
-        $parts[] = cloudflare_ai_search_stock_escape(cloudflare_ai_search_stock_sentence($attributes));
+        $parts[] = skyphusion_ai_stock_escape(skyphusion_ai_stock_sentence($attributes));
     }
 
     $sku = isset($row['sku']) ? trim((string) $row['sku']) : '';
     if ($sku !== '') {
         $parts[] = sprintf(
-            cloudflare_ai_search_stock_escape($labels['sku']),
-            cloudflare_ai_search_stock_escape($sku)
+            skyphusion_ai_stock_escape($labels['sku']),
+            skyphusion_ai_stock_escape($sku)
         );
     }
 
     $price = isset($row['price']) ? trim((string) $row['price']) : '';
     if ($price !== '') {
-        $parts[] = cloudflare_ai_search_stock_escape(cloudflare_ai_search_stock_sentence($price));
+        $parts[] = skyphusion_ai_stock_escape(skyphusion_ai_stock_sentence($price));
     }
 
     $status = isset($row['stock_status']) ? (string) $row['stock_status'] : '';
     if ($status === 'instock' || $status === 'outofstock' || $status === 'onbackorder') {
-        $parts[] = cloudflare_ai_search_stock_escape($labels[$status]);
+        $parts[] = skyphusion_ai_stock_escape($labels[$status]);
     }
 
     /*
@@ -157,7 +157,7 @@ function cloudflare_ai_search_stock_line($row, $labels = null)
     $managing = isset($row['managing_stock']) && $row['managing_stock'] === true;
     $quantity = array_key_exists('quantity', $row) ? $row['quantity'] : null;
     if ($managing && is_int($quantity) && $quantity >= 0) {
-        $parts[] = cloudflare_ai_search_stock_quantity_text($quantity);
+        $parts[] = skyphusion_ai_stock_quantity_text($quantity);
     }
 
     return implode(' ', $parts);
@@ -169,17 +169,17 @@ function cloudflare_ai_search_stock_line($row, $labels = null)
  * @param mixed $rows
  * @return string
  */
-function cloudflare_ai_search_stock_html($rows)
+function skyphusion_ai_stock_html($rows)
 {
     if (!is_array($rows) || $rows === array()) {
         return '';
     }
 
-    $labels = cloudflare_ai_search_stock_labels();
+    $labels = skyphusion_ai_stock_labels();
 
     $items = '';
     foreach ($rows as $row) {
-        $line = cloudflare_ai_search_stock_line($row, $labels);
+        $line = skyphusion_ai_stock_line($row, $labels);
         if ($line === '') {
             continue;
         }
@@ -190,7 +190,7 @@ function cloudflare_ai_search_stock_html($rows)
     }
 
     return '<section class="cloudflare-ai-search-stock"><h2>'
-        . cloudflare_ai_search_stock_escape($labels['heading'])
+        . skyphusion_ai_stock_escape($labels['heading'])
         . '</h2><ul>' . $items . '</ul></section>';
 }
 
@@ -200,7 +200,7 @@ function cloudflare_ai_search_stock_html($rows)
  * @param mixed $value
  * @return string
  */
-function cloudflare_ai_search_stock_plain($value)
+function skyphusion_ai_stock_plain($value)
 {
     $text = wp_strip_all_tags((string) $value);
     $text = preg_replace('/\s+/u', ' ', $text);
@@ -216,7 +216,7 @@ function cloudflare_ai_search_stock_plain($value)
  * @param object $product
  * @return string
  */
-function cloudflare_ai_search_stock_attribute_text($product)
+function skyphusion_ai_stock_attribute_text($product)
 {
     if (!is_object($product)) {
         return '';
@@ -227,7 +227,7 @@ function cloudflare_ai_search_stock_attribute_text($product)
     } elseif (function_exists('wc_get_formatted_variation')) {
         $summary = wc_get_formatted_variation($product, true, true, false);
     }
-    return cloudflare_ai_search_stock_plain($summary);
+    return skyphusion_ai_stock_plain($summary);
 }
 
 /**
@@ -239,7 +239,7 @@ function cloudflare_ai_search_stock_attribute_text($product)
  * @param object $product
  * @return string
  */
-function cloudflare_ai_search_stock_price_text($product)
+function skyphusion_ai_stock_price_text($product)
 {
     if (!is_object($product) || !method_exists($product, 'get_price')) {
         return '';
@@ -272,7 +272,7 @@ function cloudflare_ai_search_stock_price_text($product)
  * @param bool   $managing
  * @return int|null
  */
-function cloudflare_ai_search_stock_quantity($product, $managing)
+function skyphusion_ai_stock_quantity($product, $managing)
 {
     if (!$managing || !is_object($product) || !method_exists($product, 'get_stock_quantity')) {
         return null;
@@ -294,7 +294,7 @@ function cloudflare_ai_search_stock_quantity($product, $managing)
  * @param bool   $include_attributes
  * @return array
  */
-function cloudflare_ai_search_stock_row_from_product($product, $include_attributes)
+function skyphusion_ai_stock_row_from_product($product, $include_attributes)
 {
     /*
      * A variation reports the string 'parent' when it defers stock to its
@@ -318,12 +318,12 @@ function cloudflare_ai_search_stock_row_from_product($product, $include_attribut
     }
 
     return array(
-        'attributes' => $include_attributes ? cloudflare_ai_search_stock_attribute_text($product) : '',
+        'attributes' => $include_attributes ? skyphusion_ai_stock_attribute_text($product) : '',
         'sku' => $sku,
-        'price' => cloudflare_ai_search_stock_price_text($product),
+        'price' => skyphusion_ai_stock_price_text($product),
         'stock_status' => $status,
         'managing_stock' => $managing,
-        'quantity' => cloudflare_ai_search_stock_quantity($product, $managing),
+        'quantity' => skyphusion_ai_stock_quantity($product, $managing),
     );
 }
 
@@ -342,7 +342,7 @@ function cloudflare_ai_search_stock_row_from_product($product, $include_attribut
  *
  * @return int
  */
-function cloudflare_ai_search_stock_max_variations()
+function skyphusion_ai_stock_max_variations()
 {
     $default = 100;
     $max = $default;
@@ -369,7 +369,7 @@ function cloudflare_ai_search_stock_max_variations()
  * @param object $product
  * @return array
  */
-function cloudflare_ai_search_stock_variation_rows($product)
+function skyphusion_ai_stock_variation_rows($product)
 {
     if (!is_object($product) || !method_exists($product, 'get_children') || !function_exists('wc_get_product')) {
         return array();
@@ -379,7 +379,7 @@ function cloudflare_ai_search_stock_variation_rows($product)
         return array();
     }
 
-    $max = cloudflare_ai_search_stock_max_variations();
+    $max = skyphusion_ai_stock_max_variations();
     $rows = array();
     foreach ($children as $child_id) {
         if (count($rows) >= $max) {
@@ -389,7 +389,7 @@ function cloudflare_ai_search_stock_variation_rows($product)
         if (!is_object($child) || !method_exists($child, 'is_type') || !$child->is_type('variation')) {
             continue;
         }
-        $rows[] = cloudflare_ai_search_stock_row_from_product($child, true);
+        $rows[] = skyphusion_ai_stock_row_from_product($child, true);
     }
     return $rows;
 }
@@ -405,7 +405,7 @@ function cloudflare_ai_search_stock_variation_rows($product)
  * @param object $product
  * @return array
  */
-function cloudflare_ai_search_stock_grouped_rows($product)
+function skyphusion_ai_stock_grouped_rows($product)
 {
     if (!is_object($product) || !method_exists($product, 'get_children') || !function_exists('wc_get_product')) {
         return array();
@@ -415,7 +415,7 @@ function cloudflare_ai_search_stock_grouped_rows($product)
         return array();
     }
 
-    $max = cloudflare_ai_search_stock_max_variations();
+    $max = skyphusion_ai_stock_max_variations();
     $rows = array();
     foreach ($children as $child_id) {
         if (count($rows) >= $max) {
@@ -425,9 +425,9 @@ function cloudflare_ai_search_stock_grouped_rows($product)
         if (!is_object($child)) {
             continue;
         }
-        $row = cloudflare_ai_search_stock_row_from_product($child, false);
+        $row = skyphusion_ai_stock_row_from_product($child, false);
         if (method_exists($child, 'get_name')) {
-            $row['attributes'] = cloudflare_ai_search_stock_plain($child->get_name());
+            $row['attributes'] = skyphusion_ai_stock_plain($child->get_name());
         }
         $rows[] = $row;
     }
@@ -446,7 +446,7 @@ function cloudflare_ai_search_stock_grouped_rows($product)
  *
  * @return array
  */
-function cloudflare_ai_search_stock_rows()
+function skyphusion_ai_stock_rows()
 {
     if (function_exists('is_admin') && is_admin()) {
         return array();
@@ -469,12 +469,12 @@ function cloudflare_ai_search_stock_rows()
         return array();
     }
     if ($product->is_type('variable')) {
-        return cloudflare_ai_search_stock_variation_rows($product);
+        return skyphusion_ai_stock_variation_rows($product);
     }
     if ($product->is_type('grouped')) {
-        return cloudflare_ai_search_stock_grouped_rows($product);
+        return skyphusion_ai_stock_grouped_rows($product);
     }
-    return array(cloudflare_ai_search_stock_row_from_product($product, false));
+    return array(skyphusion_ai_stock_row_from_product($product, false));
 }
 
 /**
@@ -487,13 +487,13 @@ function cloudflare_ai_search_stock_rows()
  *
  * @return string
  */
-function cloudflare_ai_search_stock_markup()
+function skyphusion_ai_stock_markup()
 {
     static $done = false;
     if ($done) {
         return '';
     }
-    $html = cloudflare_ai_search_stock_html(cloudflare_ai_search_stock_rows());
+    $html = skyphusion_ai_stock_html(skyphusion_ai_stock_rows());
     if ($html === '') {
         return '';
     }
@@ -506,7 +506,7 @@ function cloudflare_ai_search_stock_markup()
  *
  * @return array
  */
-function cloudflare_ai_search_stock_allowed_html()
+function skyphusion_ai_stock_allowed_html()
 {
     return array(
         'section' => array(

@@ -8,14 +8,14 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-if (!defined('CLOUDFLARE_AI_SEARCH_SNIPPET')) {
-    define('CLOUDFLARE_AI_SEARCH_SNIPPET', '0.0.25');
+if (!defined('SKYPHUSION_AI_SNIPPET')) {
+    define('SKYPHUSION_AI_SNIPPET', '0.0.25');
 }
 
 /**
  * Return the canonical https origin, or an empty string when the address is not a Cloudflare AI Search public endpoint.
  */
-function cloudflare_ai_search_normalize_endpoint($url)
+function skyphusion_ai_normalize_endpoint($url)
 {
     $url = trim((string) $url);
     if ($url === '') {
@@ -56,14 +56,14 @@ function cloudflare_ai_search_normalize_endpoint($url)
 /**
  * Script URL for the pinned snippet build. Empty when the endpoint is not usable.
  */
-function cloudflare_ai_search_snippet_src($url)
+function skyphusion_ai_snippet_src($url)
 {
-    $base = cloudflare_ai_search_normalize_endpoint($url);
+    $base = skyphusion_ai_normalize_endpoint($url);
     if ($base === '') {
         return '';
     }
 
-    return $base . '/assets/v' . CLOUDFLARE_AI_SEARCH_SNIPPET . '/search-snippet.es.js';
+    return $base . '/assets/v' . SKYPHUSION_AI_SNIPPET . '/search-snippet.es.js';
 }
 
 /**
@@ -72,7 +72,7 @@ function cloudflare_ai_search_snippet_src($url)
  * @param mixed $content
  * @return string
  */
-function cloudflare_ai_search_part_text($content)
+function skyphusion_ai_part_text($content)
 {
     if (is_string($content)) {
         return trim($content);
@@ -101,7 +101,7 @@ function cloudflare_ai_search_part_text($content)
  * @param mixed $row
  * @return string
  */
-function cloudflare_ai_search_row_text($row)
+function skyphusion_ai_row_text($row)
 {
     if (!is_array($row)) {
         return '';
@@ -115,7 +115,7 @@ function cloudflare_ai_search_row_text($row)
     if (!isset($row['content'])) {
         return '';
     }
-    return cloudflare_ai_search_part_text($row['content']);
+    return skyphusion_ai_part_text($row['content']);
 }
 
 /**
@@ -125,12 +125,12 @@ function cloudflare_ai_search_row_text($row)
  * @param mixed $decoded
  * @return string
  */
-function cloudflare_ai_search_choice_text($decoded)
+function skyphusion_ai_choice_text($decoded)
 {
     if (!is_array($decoded) || !isset($decoded['choices'][0]['message']['content'])) {
         return '';
     }
-    return cloudflare_ai_search_part_text($decoded['choices'][0]['message']['content']);
+    return skyphusion_ai_part_text($decoded['choices'][0]['message']['content']);
 }
 
 /**
@@ -143,7 +143,7 @@ function cloudflare_ai_search_choice_text($decoded)
  * @param mixed $decoded
  * @return array{answer: string, sources: array<int, string>}
  */
-function cloudflare_ai_search_read_answer($decoded)
+function skyphusion_ai_read_answer($decoded)
 {
     $answer = '';
     $sources = array();
@@ -159,9 +159,9 @@ function cloudflare_ai_search_read_answer($decoded)
     ) {
         $answer = $decoded['result']['response'];
     } else {
-        $answer = cloudflare_ai_search_choice_text($decoded);
+        $answer = skyphusion_ai_choice_text($decoded);
         if ($answer === '' && isset($decoded['result']) && is_array($decoded['result'])) {
-            $answer = cloudflare_ai_search_choice_text($decoded['result']);
+            $answer = skyphusion_ai_choice_text($decoded['result']);
         }
     }
 
@@ -181,7 +181,7 @@ function cloudflare_ai_search_read_answer($decoded)
     $seen = array();
     foreach ($groups as $rows) {
         foreach ($rows as $row) {
-            $text = cloudflare_ai_search_row_text($row);
+            $text = skyphusion_ai_row_text($row);
             if ($text === '' || isset($seen[$text])) {
                 continue;
             }

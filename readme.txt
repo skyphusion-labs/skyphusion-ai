@@ -12,7 +12,7 @@ Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce.
 
 == Description ==
 
-This plugin connects your site to Cloudflare® AI Search. Open Settings, then Skyphusion AI. Paste your public endpoint address there. You can set the same options with `wp cloudflare-ai-search`.
+This plugin connects your site to Cloudflare® AI Search. Open Settings, then Skyphusion AI. Paste your public endpoint address there. You can set the same options with `wp skyphusion-ai`.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
 
@@ -30,7 +30,7 @@ Example:
 
 `wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'cloudflare' );`
 
-Other plugins can call `cloudflare_ai_provider_embeddings()` and `cloudflare_ai_search_query()`. The search helper posts to the public chat/completions path. It does not send a token.
+Other plugins can call `cloudflare_ai_provider_embeddings()` and `skyphusion_ai_query()`. `cloudflare_ai_search_query()` still calls the same helper. The search helper posts to the public chat/completions path. It does not send a token.
 
 Cloudflare, the Cloudflare logo, and Cloudflare Workers are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions. This plugin is an independent work. Cloudflare, Inc. does not sponsor or endorse it.
 

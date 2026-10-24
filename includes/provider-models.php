@@ -123,8 +123,8 @@ class Cloudflare_AI_Provider_Availability implements ProviderAvailabilityInterfa
             $key = $this->requestAuthentication->getApiKey();
         }
         $account = '';
-        if (function_exists('cloudflare_ai_search_settings')) {
-            $settings = cloudflare_ai_search_settings();
+        if (function_exists('skyphusion_ai_settings')) {
+            $settings = skyphusion_ai_settings();
             $account = $settings['account_id'];
         }
         $credentials = cloudflare_ai_provider_resolve_credentials($key, $account);
@@ -231,8 +231,8 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
         $key = '';
     }
     $account = '';
-    if (function_exists('cloudflare_ai_search_settings')) {
-        $account = cloudflare_ai_search_settings()['account_id'];
+    if (function_exists('skyphusion_ai_settings')) {
+        $account = skyphusion_ai_settings()['account_id'];
     }
     $credentials = cloudflare_ai_provider_resolve_credentials($key, $account);
     if ($credentials['token'] === '' || $credentials['account_id'] === '') {
@@ -264,18 +264,18 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
 
 function cloudflare_ai_provider_gateway_from_settings()
 {
-    if (!function_exists('cloudflare_ai_search_settings')) {
+    if (!function_exists('skyphusion_ai_settings')) {
         return '';
     }
-    return cloudflare_ai_search_settings()['gateway_id'];
+    return skyphusion_ai_settings()['gateway_id'];
 }
 
 function cloudflare_ai_provider_account_from_settings()
 {
-    if (!function_exists('cloudflare_ai_search_settings')) {
+    if (!function_exists('skyphusion_ai_settings')) {
         return '';
     }
-    return cloudflare_ai_search_settings()['account_id'];
+    return skyphusion_ai_settings()['account_id'];
 }
 
 /**

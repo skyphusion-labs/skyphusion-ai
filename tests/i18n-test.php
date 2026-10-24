@@ -47,7 +47,7 @@ $i18n_floors = array(
 /** The domain declared in the plugin header. Read, not hardcoded twice. */
 function i18n_declared_domain($root)
 {
-    $header = file_get_contents($root . '/cloudflare-ai-search.php');
+    $header = file_get_contents($root . '/skyphusion-ai.php');
     if (!is_string($header)) {
         return '';
     }
@@ -162,7 +162,7 @@ expect('the plugin header declares a text domain', $i18n_domain, 'skyphusion-ai'
 
 $i18n_files = array();
 foreach (array_merge(array_keys($i18n_floors), array(
-    'cloudflare-ai-search.php',
+    'skyphusion-ai.php',
     'includes/endpoint.php',
     'includes/frontend.php',
     'includes/routes.php',
@@ -246,7 +246,7 @@ expect('but a real call beside that comment is', count(i18n_calls($i18n_planted_
 // without `Domain Path`, and this assertion turns that from something a
 // future author must remember into something the suite says.
 $i18n_has_languages = is_dir($i18n_root . '/languages');
-$i18n_header = (string) file_get_contents($i18n_root . '/cloudflare-ai-search.php');
+$i18n_header = (string) file_get_contents($i18n_root . '/skyphusion-ai.php');
 $i18n_has_domain_path = strpos($i18n_header, 'Domain Path:') !== false;
 expect(
     'a shipped languages/ directory is declared with Domain Path',

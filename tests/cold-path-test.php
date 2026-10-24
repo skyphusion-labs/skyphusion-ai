@@ -14,10 +14,10 @@
  * three were picked because each one guards a DEFECT somebody can actually
  * ship, and each was cold:
  *
- *   cloudflare_ai_search_cli_truthy()        a flag parser, 1 of 2 cold in cli.php
- *   cloudflare_ai_search_token_source_now()  cold, and see below
+ *   skyphusion_ai_cli_truthy()        a flag parser, 1 of 2 cold in cli.php
+ *   skyphusion_ai_token_source_now()  cold, and see below
  *   cloudflare_ai_provider_connector_key()   cold, and must agree with the above
- *   cloudflare_ai_search_stock_allowed_html() cold, and see below
+ *   skyphusion_ai_stock_allowed_html() cold, and see below
  *
  * A test added to raise a coverage number and incapable of failing is worse
  * than the gap it filled, so every expectation here was driven red once by
@@ -28,32 +28,32 @@
  * ------------------------------------------------------------------ 1 of 3
  * The CLI flag parser.
  *
- * `cloudflare_ai_search_cli_truthy` decides what `--flag=value` MEANS. It
+ * `skyphusion_ai_cli_truthy` decides what `--flag=value` MEANS. It
  * lowercases, trims, and compares against a four-element allowlist with
  * in_array's strict flag. A change to that set silently changes what the
  * command does for an operator typing a value that used to work, and there is
  * no error path: an unrecognised value is simply false.
  */
-expect('cli truthy: one', cloudflare_ai_search_cli_truthy('1'), true);
-expect('cli truthy: true', cloudflare_ai_search_cli_truthy('true'), true);
-expect('cli truthy: yes', cloudflare_ai_search_cli_truthy('yes'), true);
-expect('cli truthy: on', cloudflare_ai_search_cli_truthy('on'), true);
-expect('cli truthy is case-insensitive', cloudflare_ai_search_cli_truthy('TRUE'), true);
-expect('cli truthy trims', cloudflare_ai_search_cli_truthy("  on\t"), true);
-expect('cli truthy: zero is false', cloudflare_ai_search_cli_truthy('0'), false);
-expect('cli truthy: false is false', cloudflare_ai_search_cli_truthy('false'), false);
-expect('cli truthy: no is false', cloudflare_ai_search_cli_truthy('no'), false);
-expect('cli truthy: off is false', cloudflare_ai_search_cli_truthy('off'), false);
-expect('cli truthy: empty is false', cloudflare_ai_search_cli_truthy(''), false);
-expect('cli truthy: null is false', cloudflare_ai_search_cli_truthy(null), false);
+expect('cli truthy: one', skyphusion_ai_cli_truthy('1'), true);
+expect('cli truthy: true', skyphusion_ai_cli_truthy('true'), true);
+expect('cli truthy: yes', skyphusion_ai_cli_truthy('yes'), true);
+expect('cli truthy: on', skyphusion_ai_cli_truthy('on'), true);
+expect('cli truthy is case-insensitive', skyphusion_ai_cli_truthy('TRUE'), true);
+expect('cli truthy trims', skyphusion_ai_cli_truthy("  on\t"), true);
+expect('cli truthy: zero is false', skyphusion_ai_cli_truthy('0'), false);
+expect('cli truthy: false is false', skyphusion_ai_cli_truthy('false'), false);
+expect('cli truthy: no is false', skyphusion_ai_cli_truthy('no'), false);
+expect('cli truthy: off is false', skyphusion_ai_cli_truthy('off'), false);
+expect('cli truthy: empty is false', skyphusion_ai_cli_truthy(''), false);
+expect('cli truthy: null is false', skyphusion_ai_cli_truthy(null), false);
 /*
  * THE TWO THAT MATTER MOST, because they are the ones a looser comparison
  * would let through. `in_array($v, array(...), true)` is strict, so a
  * substring or a near-miss is false; dropping the strict flag or switching to
  * a loose truthiness test would make both of these true.
  */
-expect('cli truthy: a near-miss is false', cloudflare_ai_search_cli_truthy('truex'), false);
-expect('cli truthy: an arbitrary number is false', cloudflare_ai_search_cli_truthy('2'), false);
+expect('cli truthy: a near-miss is false', skyphusion_ai_cli_truthy('truex'), false);
+expect('cli truthy: an arbitrary number is false', skyphusion_ai_cli_truthy('2'), false);
 /*
  * THE INPUT THAT ACTUALLY PINS THE STRICT FLAG, and it took a mutation that
  * stayed GREEN to find it. Removing `true` from the `in_array` call left this
@@ -66,14 +66,14 @@ expect('cli truthy: an arbitrary number is false', cloudflare_ai_search_cli_trut
  * FALSE. Measured on PHP 8.5.12 before this line was written. It is also a
  * plausible thing for an operator to type.
  */
-expect('cli truthy: a decimal one is false', cloudflare_ai_search_cli_truthy('1.0'), false);
+expect('cli truthy: a decimal one is false', skyphusion_ai_cli_truthy('1.0'), false);
 
 /*
  * ------------------------------------------------------------------ 2 of 3
  * The two functions that must name the same token source.
  *
  * `includes/provider.php` says it in its own comment: *"The settings screen
- * reports this same decision via cloudflare_ai_search_token_source(). A change
+ * reports this same decision via skyphusion_ai_token_source(). A change
  * to either function has to land in both, or the screen will name a source
  * this function does not return."* That is a stated invariant with nothing
  * asserting it, and BOTH functions were measured cold.
@@ -137,7 +137,7 @@ putenv('CLOUDFLARE_API_KEY=' . $cold_path_token);
 
 expect(
     'the screen names the environment as the source',
-    cloudflare_ai_search_token_source_now(),
+    skyphusion_ai_token_source_now(),
     'env'
 );
 expect(
@@ -153,7 +153,7 @@ expect(
  */
 expect(
     'the label and the value agree about which source won',
-    cloudflare_ai_search_token_source_now() === 'env'
+    skyphusion_ai_token_source_now() === 'env'
         && cloudflare_ai_provider_connector_key() === getenv('CLOUDFLARE_API_KEY'),
     true
 );
@@ -171,7 +171,7 @@ putenv('CLOUDFLARE_API_KEY');
 
 expect(
     'with nothing set the screen names no source',
-    cloudflare_ai_search_token_source_now(),
+    skyphusion_ai_token_source_now(),
     'none'
 );
 expect(
@@ -181,7 +181,7 @@ expect(
 );
 expect(
     'the label and the value agree that nothing is set',
-    cloudflare_ai_search_token_source_now() === 'none'
+    skyphusion_ai_token_source_now() === 'none'
         && cloudflare_ai_provider_connector_key() === '',
     true
 );
@@ -201,7 +201,7 @@ if (is_string($cold_path_saved_key)) {
  * ------------------------------------------------------------------ 3 of 3
  * The stock markup and the allowlist that filters it must not drift apart.
  *
- * `cloudflare_ai_search_stock_allowed_html()` is the tag allowlist the stock
+ * `skyphusion_ai_stock_allowed_html()` is the tag allowlist the stock
  * section is passed through, and it was measured cold. Nothing asserted that
  * the markup the plugin actually emits survives it.
  *
@@ -213,7 +213,7 @@ if (is_string($cold_path_saved_key)) {
  * The rows are the same fixture shape `stock-test.php` drives, so the markup
  * under test is real output and not a hand-written string.
  */
-$cold_path_markup = cloudflare_ai_search_stock_html(array(
+$cold_path_markup = skyphusion_ai_stock_html(array(
     array(
         'name' => 'Cold Path Widget',
         'stock_status' => 'instock',
@@ -248,7 +248,7 @@ expect(
     true
 );
 
-$cold_path_allowed = cloudflare_ai_search_stock_allowed_html();
+$cold_path_allowed = skyphusion_ai_stock_allowed_html();
 $cold_path_unpermitted = array();
 foreach ($cold_path_tags as $cold_path_tag) {
     if (!array_key_exists($cold_path_tag, $cold_path_allowed)) {

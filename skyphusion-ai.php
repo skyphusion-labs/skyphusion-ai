@@ -17,8 +17,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-define('CLOUDFLARE_AI_SEARCH_VERSION', '0.3.3');
-define('CLOUDFLARE_AI_SEARCH_FILE', __FILE__);
+define('SKYPHUSION_AI_VERSION', '0.3.3');
+define('SKYPHUSION_AI_FILE', __FILE__);
 
 require_once __DIR__ . '/includes/endpoint.php';
 require_once __DIR__ . '/includes/routes.php';
@@ -27,11 +27,12 @@ require_once __DIR__ . '/includes/stock.php';
 require_once __DIR__ . '/includes/frontend.php';
 require_once __DIR__ . '/includes/cli.php';
 require_once __DIR__ . '/includes/provider.php';
+require_once __DIR__ . '/includes/deprecated.php';
 
-function cloudflare_ai_search_activate()
+function skyphusion_ai_activate()
 {
-    if (get_option('cloudflare_ai_search_settings', null) === null) {
-        add_option('cloudflare_ai_search_settings', cloudflare_ai_search_defaults());
+    if (get_option('skyphusion_ai_settings', null) === null && get_option( 'cloudflare_ai_search_settings', null ) === null) {
+        add_option('skyphusion_ai_settings', skyphusion_ai_defaults());
     }
 }
-register_activation_hook(__FILE__, 'cloudflare_ai_search_activate');
+register_activation_hook(__FILE__, 'skyphusion_ai_activate');

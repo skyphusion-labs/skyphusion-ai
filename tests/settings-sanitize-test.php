@@ -1,6 +1,6 @@
 <?php
 /**
- * What `cloudflare_ai_search_sanitize()` STORES and what it SAYS. Issue #5.
+ * What `skyphusion_ai_sanitize()` STORES and what it SAYS. Issue #5.
  *
  * A BEHAVIOURAL test, not a text assertion. The real function runs against
  * real inputs and the notices it raises are captured, because the defect here
@@ -44,7 +44,7 @@ if (!function_exists('add_settings_error')) {
 if (!function_exists('get_option')) {
     function get_option($name, $default = false)
     {
-        return $name === 'cloudflare_ai_search_settings' ? $GLOBALS['cfais_stored'] : $default;
+        return $name === 'skyphusion_ai_settings' ? $GLOBALS['cfais_stored'] : $default;
     }
 }
 if (!function_exists('sanitize_text_field')) {
@@ -79,8 +79,8 @@ if (!function_exists('plugin_basename')) {
         return basename((string) $file);
     }
 }
-if (!defined('CLOUDFLARE_AI_SEARCH_FILE')) {
-    define('CLOUDFLARE_AI_SEARCH_FILE', dirname(__DIR__) . '/cloudflare-ai-search.php');
+if (!defined('SKYPHUSION_AI_FILE')) {
+    define('SKYPHUSION_AI_FILE', dirname(__DIR__) . '/skyphusion-ai.php');
 }
 
 require_once dirname(__DIR__) . '/includes/settings.php';
@@ -89,7 +89,7 @@ require_once dirname(__DIR__) . '/includes/settings.php';
 function cfais_sanitize($input)
 {
     $GLOBALS['cfais_notices'] = array();
-    $clean = cloudflare_ai_search_sanitize($input);
+    $clean = skyphusion_ai_sanitize($input);
     return array($clean, $GLOBALS['cfais_notices']);
 }
 

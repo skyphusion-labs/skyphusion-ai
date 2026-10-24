@@ -112,7 +112,7 @@ $openai_vectors = cloudflare_ai_provider_read_embeddings(array(
 ));
 expect('openai vector', $openai_vectors, array(array(0.25)));
 
-$search = cloudflare_ai_search_read_answer(array(
+$search = skyphusion_ai_read_answer(array(
     'response' => 'Ships in two days.',
     'data' => array(
         array('content' => 'Shipping page'),
@@ -122,7 +122,7 @@ $search = cloudflare_ai_search_read_answer(array(
 expect('search answer', $search['answer'], 'Ships in two days.');
 expect('search sources', $search['sources'], array('Shipping page', 'Another page'));
 
-$public_chat = cloudflare_ai_search_read_answer(array(
+$public_chat = skyphusion_ai_read_answer(array(
     'choices' => array(
         array('message' => array('content' => 'Ships in two days.')),
     ),
@@ -134,7 +134,7 @@ $public_chat = cloudflare_ai_search_read_answer(array(
 expect('chat answer', $public_chat['answer'], 'Ships in two days.');
 expect('chat sources', $public_chat['sources'], array('Shipping page', 'Another page'));
 
-$retrieved = cloudflare_ai_search_read_answer(array(
+$retrieved = skyphusion_ai_read_answer(array(
     'success' => true,
     'result' => array(
         'chunks' => array(
@@ -146,7 +146,7 @@ $retrieved = cloudflare_ai_search_read_answer(array(
 expect('retrieved answer', $retrieved['answer'], '');
 expect('retrieved sources', $retrieved['sources'], array('Beanie page', 'Care page'));
 
-$parts = cloudflare_ai_search_read_answer(array(
+$parts = skyphusion_ai_read_answer(array(
     'data' => array(
         array('content' => array(
             array('text' => 'First part'),

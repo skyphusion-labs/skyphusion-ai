@@ -11,7 +11,7 @@
  * `readme.txt` is the reviewer-facing answer to that, and a paragraph nothing
  * checks is a paragraph that drifts. These assertions keep it true.
  *
- * THE ONE THAT EARNS ITS PLACE is the pin: `CLOUDFLARE_AI_SEARCH_SNIPPET` is a
+ * THE ONE THAT EARNS ITS PLACE is the pin: `SKYPHUSION_AI_SNIPPET` is a
  * literal a human bumps, and the readme names the same build. Bump one without
  * the other and the published position describes a build the plugin no longer
  * loads. That is the straightedge#376 shape in a documentation file.
@@ -60,7 +60,7 @@ expect(
 // THE DRIFT GUARD. The readme must name the build the plugin actually pins.
 expect(
     'the readme names the pinned snippet build',
-    strpos($es_section, 'build ' . CLOUDFLARE_AI_SEARCH_SNIPPET) !== false,
+    strpos($es_section, 'build ' . SKYPHUSION_AI_SNIPPET) !== false,
     true
 );
 
@@ -83,6 +83,6 @@ expect(
 );
 expect(
     'a readme naming the wrong build fails the pin check',
-    strpos('pinned to snippet build 9.9.9.', 'build ' . CLOUDFLARE_AI_SEARCH_SNIPPET) !== false,
+    strpos('pinned to snippet build 9.9.9.', 'build ' . SKYPHUSION_AI_SNIPPET) !== false,
     false
 );

@@ -85,18 +85,18 @@ function expect($label, $actual, $expected)
 }
 
 $good = 'https://abc123.search.ai.cloudflare.com/';
-expect('lowercase host', cloudflare_ai_search_normalize_endpoint($good), 'https://abc123.search.ai.cloudflare.com');
-expect('uppercase host', cloudflare_ai_search_normalize_endpoint('https://ABC123.search.ai.cloudflare.com'), 'https://abc123.search.ai.cloudflare.com');
-expect('namespace host', cloudflare_ai_search_normalize_endpoint('https://ns-abc123.search.ai.cloudflare.com'), 'https://ns-abc123.search.ai.cloudflare.com');
-expect('trailing space', cloudflare_ai_search_normalize_endpoint('  https://abc123.search.ai.cloudflare.com  '), 'https://abc123.search.ai.cloudflare.com');
-expect('empty', cloudflare_ai_search_normalize_endpoint(''), '');
-expect('http rejected', cloudflare_ai_search_normalize_endpoint('http://abc123.search.ai.cloudflare.com'), '');
-expect('other host rejected', cloudflare_ai_search_normalize_endpoint('https://example.com'), '');
-expect('path rejected', cloudflare_ai_search_normalize_endpoint('https://abc123.search.ai.cloudflare.com/search'), '');
-expect('query rejected', cloudflare_ai_search_normalize_endpoint('https://abc123.search.ai.cloudflare.com/?q=1'), '');
-expect('userinfo rejected', cloudflare_ai_search_normalize_endpoint('https://user:pass@abc123.search.ai.cloudflare.com'), '');
-expect('snippet src', cloudflare_ai_search_snippet_src($good), 'https://abc123.search.ai.cloudflare.com/assets/v0.0.25/search-snippet.es.js');
-expect('snippet src rejected', cloudflare_ai_search_snippet_src('https://example.com'), '');
+expect('lowercase host', skyphusion_ai_normalize_endpoint($good), 'https://abc123.search.ai.cloudflare.com');
+expect('uppercase host', skyphusion_ai_normalize_endpoint('https://ABC123.search.ai.cloudflare.com'), 'https://abc123.search.ai.cloudflare.com');
+expect('namespace host', skyphusion_ai_normalize_endpoint('https://ns-abc123.search.ai.cloudflare.com'), 'https://ns-abc123.search.ai.cloudflare.com');
+expect('trailing space', skyphusion_ai_normalize_endpoint('  https://abc123.search.ai.cloudflare.com  '), 'https://abc123.search.ai.cloudflare.com');
+expect('empty', skyphusion_ai_normalize_endpoint(''), '');
+expect('http rejected', skyphusion_ai_normalize_endpoint('http://abc123.search.ai.cloudflare.com'), '');
+expect('other host rejected', skyphusion_ai_normalize_endpoint('https://example.com'), '');
+expect('path rejected', skyphusion_ai_normalize_endpoint('https://abc123.search.ai.cloudflare.com/search'), '');
+expect('query rejected', skyphusion_ai_normalize_endpoint('https://abc123.search.ai.cloudflare.com/?q=1'), '');
+expect('userinfo rejected', skyphusion_ai_normalize_endpoint('https://user:pass@abc123.search.ai.cloudflare.com'), '');
+expect('snippet src', skyphusion_ai_snippet_src($good), 'https://abc123.search.ai.cloudflare.com/assets/v0.0.25/search-snippet.es.js');
+expect('snippet src rejected', skyphusion_ai_snippet_src('https://example.com'), '');
 
 require __DIR__ . '/provider-test.php';
 require __DIR__ . '/external-services-test.php';
@@ -118,6 +118,9 @@ require __DIR__ . '/provider-guard-test.php';
 // driving functions already in memory, so it runs after every file that
 // defines a WordPress stand-in it depends on.
 require __DIR__ . '/frontend-load-test.php';
+// Own process. The suite's add_action stand-in records nothing, and this
+// file has to see the old hook names the shim registers.
+require __DIR__ . '/shim-compat-test.php';
 
 /**
  * EVERY test file in this directory is actually required by this runner.
