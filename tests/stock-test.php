@@ -43,7 +43,7 @@ require_once dirname(__DIR__) . '/includes/stock.php';
 
 /* ---------- part one: English fallback, no WordPress ---------- */
 
-$simple = cloudflare_ai_search_stock_html(array(array(
+$simple = skyphusion_ai_stock_html(array(array(
     'attributes' => '',
     'sku' => 'SHIRT-1',
     'price' => '45.00 USD',
@@ -60,7 +60,7 @@ expect('section class', strpos($simple, 'cloudflare-ai-search-stock') !== false,
 
 expect(
     'out of stock without quantity',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => '',
         'price' => '',
@@ -73,7 +73,7 @@ expect(
 
 expect(
     'on backorder',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => '',
         'price' => '12.00 USD',
@@ -91,7 +91,7 @@ expect(
  */
 expect(
     'negative quantity drops the count',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => 'BACK-1',
         'price' => '',
@@ -103,7 +103,7 @@ expect(
 );
 expect(
     'zero quantity still prints',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => '',
         'price' => '',
@@ -114,7 +114,7 @@ expect(
     '<section class="cloudflare-ai-search-stock"><h2>Stock</h2><ul><li>Out of stock. 0 available.</li></ul></section>'
 );
 
-$variable = cloudflare_ai_search_stock_html(array(
+$variable = skyphusion_ai_stock_html(array(
     array(
         'attributes' => 'Color Blue, Size Large',
         'sku' => 'HOODIE-BL-L',
@@ -142,8 +142,8 @@ expect(
 );
 expect('out of stock variation present', strpos($variable, 'HOODIE-BL-S') !== false && strpos($variable, 'Out of stock.') !== false, true);
 
-expect('empty input', cloudflare_ai_search_stock_html(array()), '');
-expect('blank row', cloudflare_ai_search_stock_html(array(array(
+expect('empty input', skyphusion_ai_stock_html(array()), '');
+expect('blank row', skyphusion_ai_stock_html(array(array(
     'attributes' => '',
     'sku' => '   ',
     'price' => '',
@@ -154,7 +154,7 @@ expect('blank row', cloudflare_ai_search_stock_html(array(array(
 
 expect(
     'unknown status omitted',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => 'PLAIN',
         'price' => '',
@@ -166,13 +166,13 @@ expect(
 );
 
 /*
- * cloudflare_ai_search_stock_line() takes the label set as an argument so the
+ * skyphusion_ai_stock_line() takes the label set as an argument so the
  * html builder loads it once per section instead of once per row. Called
  * without one it has to load its own, so that path is exercised here.
  */
 expect(
     'line loads its own labels when none are passed',
-    cloudflare_ai_search_stock_line(array(
+    skyphusion_ai_stock_line(array(
         'attributes' => 'Color Red',
         'sku' => 'LINE-1',
         'price' => '9.00 USD',
@@ -182,9 +182,9 @@ expect(
     )),
     'Color Red. SKU LINE-1. 9.00 USD. In stock. 2 available.'
 );
-expect('line returns empty for a non array', cloudflare_ai_search_stock_line('nope'), '');
+expect('line returns empty for a non array', skyphusion_ai_stock_line('nope'), '');
 
-$nasty = cloudflare_ai_search_stock_html(array(array(
+$nasty = skyphusion_ai_stock_html(array(array(
     'attributes' => 'Color <script>alert(1)</script>',
     'sku' => '<script>',
     'price' => '1 <b>USD</b>',
@@ -198,7 +198,7 @@ expect('attribute script escaped', strpos($nasty, '&lt;script&gt;') !== false, t
 expect('sku script escaped', strpos($nasty, 'SKU &lt;script&gt;.') !== false, true);
 
 /* The cap has to answer with its default before apply_filters exists. */
-expect('variation cap default without wordpress', cloudflare_ai_search_stock_max_variations(), 100);
+expect('variation cap default without wordpress', skyphusion_ai_stock_max_variations(), 100);
 
 /* ---------- part two: translated and filtered seams ---------- */
 /*
@@ -246,7 +246,7 @@ if (!function_exists('apply_filters')) {
  */
 expect(
     'labels come through translation',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => 'DE-1',
         'price' => '',
@@ -258,7 +258,7 @@ expect(
 );
 expect(
     'singular plural form selected',
-    cloudflare_ai_search_stock_html(array(array(
+    skyphusion_ai_stock_html(array(array(
         'attributes' => '',
         'sku' => '',
         'price' => '',
@@ -268,7 +268,7 @@ expect(
     ))),
     '<section class="cloudflare-ai-search-stock"><h2>Lager</h2><ul><li>Auf Lager. 1 available.</li></ul></section>'
 );
-expect('class name is not translated', strpos(cloudflare_ai_search_stock_html(array(array(
+expect('class name is not translated', strpos(skyphusion_ai_stock_html(array(array(
     'attributes' => '',
     'sku' => 'DE-2',
     'price' => '',
@@ -281,7 +281,7 @@ expect('class name is not translated', strpos(cloudflare_ai_search_stock_html(ar
 $GLOBALS['cfai_stock_test_strings']['Out of stock.'] = '<script>alert(1)</script>';
 $GLOBALS['cfai_stock_test_strings']['Stock'] = '<b>Stock</b>';
 $GLOBALS['cfai_stock_test_strings']['SKU %s.'] = '<i>SKU %s.</i>';
-$hostile = cloudflare_ai_search_stock_html(array(array(
+$hostile = skyphusion_ai_stock_html(array(array(
     'attributes' => '',
     'sku' => 'HOSTILE',
     'price' => '',
@@ -298,20 +298,20 @@ expect('hostile sku label keeps its value', strpos($hostile, 'SKU HOSTILE.') !==
 
 /* The cap reads the filter, and refuses a value it cannot use. */
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 5;
-expect('variation cap honours the filter', cloudflare_ai_search_stock_max_variations(), 5);
+expect('variation cap honours the filter', skyphusion_ai_stock_max_variations(), 5);
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = '7';
-expect('variation cap accepts a numeric string', cloudflare_ai_search_stock_max_variations(), 7);
+expect('variation cap accepts a numeric string', skyphusion_ai_stock_max_variations(), 7);
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 0;
-expect('variation cap rejects zero', cloudflare_ai_search_stock_max_variations(), 100);
+expect('variation cap rejects zero', skyphusion_ai_stock_max_variations(), 100);
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 'all';
-expect('variation cap rejects a non number', cloudflare_ai_search_stock_max_variations(), 100);
+expect('variation cap rejects a non number', skyphusion_ai_stock_max_variations(), 100);
 /*
  * A boolean is the case only is_numeric() catches. Someone wiring
  * __return_true to this filter by accident casts to 1, which the lower
  * bound below would wave through as a cap of one variation per page.
  */
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = true;
-expect('variation cap rejects a boolean', cloudflare_ai_search_stock_max_variations(), 100);
+expect('variation cap rejects a boolean', skyphusion_ai_stock_max_variations(), 100);
 
 /* ---------- part three: the grouped product decision path ---------- */
 /*
@@ -410,7 +410,7 @@ if (!function_exists('wc_get_product')) {
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 100;
 
 $grouped = new Cfai_Stock_Test_Grouped(array(11, 12));
-$rows = cloudflare_ai_search_stock_grouped_rows($grouped);
+$rows = skyphusion_ai_stock_grouped_rows($grouped);
 expect('grouped yields one row per child', count($rows), 2);
 expect('grouped child name takes the leading field', $rows[0]['attributes'], 'Beanie');
 expect('grouped child sku', $rows[0]['sku'], 'woo-beanie');
@@ -420,22 +420,22 @@ expect('grouped out of stock child kept', $rows[1]['stock_status'], 'outofstock'
 expect('grouped child without managed stock has no quantity', $rows[0]['quantity'], null);
 
 /* A grouped child is a product, not a variation, so no attribute summary is read. */
-$managed = cloudflare_ai_search_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(13)));
+$managed = skyphusion_ai_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(13)));
 expect('grouped child name is stripped of markup', $managed[0]['attributes'], 'Logo Cap');
 expect('grouped child managed quantity is read', $managed[0]['quantity'], 7);
 
 /* A missing child must be skipped rather than producing an empty row. */
-$withGap = cloudflare_ai_search_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(11, 999, 12)));
+$withGap = skyphusion_ai_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(11, 999, 12)));
 expect('grouped skips a child that cannot be loaded', count($withGap), 2);
 
 /* The cap bounds grouped children too, using the same filter. */
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 1;
-expect('grouped honours the row cap', count(cloudflare_ai_search_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(11, 12, 13)))), 1);
+expect('grouped honours the row cap', count(skyphusion_ai_stock_grouped_rows(new Cfai_Stock_Test_Grouped(array(11, 12, 13)))), 1);
 $GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 100;
 
 /* Nothing usable in, nothing out. */
-expect('grouped returns empty for a non object', cloudflare_ai_search_stock_grouped_rows('nope'), array());
-expect('grouped returns empty when get_children gives a non array', cloudflare_ai_search_stock_grouped_rows(new Cfai_Stock_Test_Grouped('bad')), array());
+expect('grouped returns empty for a non object', skyphusion_ai_stock_grouped_rows('nope'), array());
+expect('grouped returns empty when get_children gives a non array', skyphusion_ai_stock_grouped_rows(new Cfai_Stock_Test_Grouped('bad')), array());
 
 /*
  * The is_array() guards on get_children() return the same empty list whether
@@ -458,17 +458,17 @@ function cfai_stock_test_warnings($callable, $argument)
 
 expect(
     'grouped children guard emits no warning on a non array',
-    cfai_stock_test_warnings('cloudflare_ai_search_stock_grouped_rows', new Cfai_Stock_Test_Grouped('bad')),
+    cfai_stock_test_warnings('skyphusion_ai_stock_grouped_rows', new Cfai_Stock_Test_Grouped('bad')),
     0
 );
 expect(
     'variation children guard emits no warning on a non array',
-    cfai_stock_test_warnings('cloudflare_ai_search_stock_variation_rows', new Cfai_Stock_Test_Grouped('bad')),
+    cfai_stock_test_warnings('skyphusion_ai_stock_variation_rows', new Cfai_Stock_Test_Grouped('bad')),
     0
 );
 
 /*
- * The type dispatch in cloudflare_ai_search_stock_rows() is the thing that
+ * The type dispatch in skyphusion_ai_stock_rows() is the thing that
  * actually broke: it was an allowlist of variable and simple, so a grouped
  * product fell through to an empty array and its children never reached the
  * index. Covering it needs the WordPress context functions, so they are
@@ -535,7 +535,7 @@ if (!function_exists('get_the_ID')) {
 }
 
 $GLOBALS['cfai_stock_test_current'] = 20;
-$dispatched = cloudflare_ai_search_stock_rows();
+$dispatched = skyphusion_ai_stock_rows();
 expect('dispatch sends a grouped product to its children', count($dispatched), 2);
 expect('dispatch keeps the child name', $dispatched[0]['attributes'], 'Beanie');
 
@@ -545,7 +545,7 @@ expect('dispatch keeps the child name', $dispatched[0]['attributes'], 'Beanie');
  * and an external product was invisible to the index.
  */
 $GLOBALS['cfai_stock_test_current'] = 21;
-$ext = cloudflare_ai_search_stock_rows();
+$ext = skyphusion_ai_stock_rows();
 expect('dispatch gives an unlisted type one row', count($ext), 1);
 expect('unlisted type row carries its sku', $ext[0]['sku'], 'woo-ext');
 expect('unlisted type row carries its status', $ext[0]['stock_status'], 'instock');
@@ -554,7 +554,7 @@ expect('unlisted type row has no attribute text', $ext[0]['attributes'], '');
 $GLOBALS['cfai_stock_test_current'] = 20;
 
 /* The rows still render through the same builder. */
-$groupedHtml = cloudflare_ai_search_stock_html(cloudflare_ai_search_stock_grouped_rows($grouped));
+$groupedHtml = skyphusion_ai_stock_html(skyphusion_ai_stock_grouped_rows($grouped));
 expect('grouped rows render two list items', substr_count($groupedHtml, '<li>'), 2);
 expect('grouped html names the child', strpos($groupedHtml, 'Beanie') !== false, true);
 
@@ -616,7 +616,7 @@ class Cfai_Stock_Test_Variation
 }
 
 /* Deferred to the parent: the pooled count must NOT be claimed by this row. */
-$pooled = cloudflare_ai_search_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10), true);
+$pooled = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10), true);
 expect('pooled stock is not treated as managed', $pooled['managing_stock'], false);
 expect('pooled count is dropped from the row', $pooled['quantity'], null);
 expect('pooled row keeps its own status', $pooled['stock_status'], 'instock');
@@ -624,21 +624,21 @@ expect('pooled row keeps its attributes', $pooled['attributes'], 'Color: Blue');
 
 /* The pooled figure must not reach the rendered text either. The row has no
  * price, so the digits can only come from a count. */
-$pooledHtml = cloudflare_ai_search_stock_html(array($pooled));
+$pooledHtml = skyphusion_ai_stock_html(array($pooled));
 expect('pooled count absent from the rendered row', strpos($pooledHtml, '10') === false, true);
 
 /* Managed at its own level: the count is this variation's and is printed. */
-$own = cloudflare_ai_search_stock_row_from_product(new Cfai_Stock_Test_Variation(true, 3), true);
+$own = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation(true, 3), true);
 expect('own-level stock is treated as managed', $own['managing_stock'], true);
 expect('own-level count is kept', $own['quantity'], 3);
 
 /* A truthy non-boolean that is not the parent sentinel still counts as
  * managed, so the guard narrows on 'parent' alone and not on type. */
-$truthy = cloudflare_ai_search_stock_row_from_product(new Cfai_Stock_Test_Variation(1, 4), true);
+$truthy = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation(1, 4), true);
 expect('a truthy mode other than parent still manages', $truthy['managing_stock'], true);
 expect('a truthy mode other than parent keeps its count', $truthy['quantity'], 4);
 
 /* An out-of-stock variation with a pooled parent keeps the negative answer. */
-$pooledOut = cloudflare_ai_search_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10, 'outofstock'), true);
+$pooledOut = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10, 'outofstock'), true);
 expect('pooled out-of-stock row survives', $pooledOut['stock_status'], 'outofstock');
 expect('pooled out-of-stock row has no count', $pooledOut['quantity'], null);

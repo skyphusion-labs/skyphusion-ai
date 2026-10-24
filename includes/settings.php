@@ -7,7 +7,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-function cloudflare_ai_search_defaults()
+function skyphusion_ai_defaults()
 {
     return array(
         'endpoint' => '',
@@ -27,15 +27,15 @@ function cloudflare_ai_search_defaults()
     );
 }
 
-function cloudflare_ai_search_settings()
+function skyphusion_ai_settings()
 {
-    $stored = get_option('cloudflare_ai_search_settings', array());
+    $stored = get_option('skyphusion_ai_settings', get_option( 'cloudflare_ai_search_settings', array() ));
     if (!is_array($stored)) {
         $stored = array();
     }
 
-    $settings = array_merge(cloudflare_ai_search_defaults(), $stored);
-    $settings['endpoint'] = cloudflare_ai_search_normalize_endpoint($settings['endpoint']);
+    $settings = array_merge(skyphusion_ai_defaults(), $stored);
+    $settings['endpoint'] = skyphusion_ai_normalize_endpoint($settings['endpoint']);
     $settings['search_bar'] = (bool) $settings['search_bar'];
     $settings['modal'] = (bool) $settings['modal'];
     $settings['chat'] = (bool) $settings['chat'];
@@ -61,28 +61,28 @@ function cloudflare_ai_search_settings()
     return $settings;
 }
 
-function cloudflare_ai_search_register_settings()
+function skyphusion_ai_register_settings()
 {
     register_setting(
         'cloudflare_ai_search',
-        'cloudflare_ai_search_settings',
+        'skyphusion_ai_settings',
         array(
             'type' => 'array',
-            'sanitize_callback' => 'cloudflare_ai_search_sanitize',
-            'default' => cloudflare_ai_search_defaults(),
+            'sanitize_callback' => 'skyphusion_ai_sanitize',
+            'default' => skyphusion_ai_defaults(),
         )
     );
 
     add_settings_section(
         'connection',
         __('Connection', 'skyphusion-ai'),
-        'cloudflare_ai_search_section_connection',
+        'skyphusion_ai_section_connection',
         'cloudflare-ai-search'
     );
     add_settings_field(
         'endpoint',
         __('AI Search address', 'skyphusion-ai'),
-        'cloudflare_ai_search_field_endpoint',
+        'skyphusion_ai_field_endpoint',
         'cloudflare-ai-search',
         'connection'
     );
@@ -90,38 +90,38 @@ function cloudflare_ai_search_register_settings()
     add_settings_section(
         'workers',
         __('Workers AI and AI Gateway', 'skyphusion-ai'),
-        'cloudflare_ai_search_section_workers',
+        'skyphusion_ai_section_workers',
         'cloudflare-ai-search'
     );
-    add_settings_field('account_id', __('Account ID', 'skyphusion-ai'), 'cloudflare_ai_search_field_account_id', 'cloudflare-ai-search', 'workers');
-    add_settings_field('gateway_id', __('AI Gateway', 'skyphusion-ai'), 'cloudflare_ai_search_field_gateway_id', 'cloudflare-ai-search', 'workers');
+    add_settings_field('account_id', __('Account ID', 'skyphusion-ai'), 'skyphusion_ai_field_account_id', 'cloudflare-ai-search', 'workers');
+    add_settings_field('gateway_id', __('AI Gateway', 'skyphusion-ai'), 'skyphusion_ai_field_gateway_id', 'cloudflare-ai-search', 'workers');
 
     add_settings_section(
         'display',
         __('What visitors see', 'skyphusion-ai'),
-        'cloudflare_ai_search_section_display',
+        'skyphusion_ai_section_display',
         'cloudflare-ai-search'
     );
-    add_settings_field('search_bar', __('Search box', 'skyphusion-ai'), 'cloudflare_ai_search_field_search_bar', 'cloudflare-ai-search', 'display');
-    add_settings_field('modal', __('Keyboard search', 'skyphusion-ai'), 'cloudflare_ai_search_field_modal', 'cloudflare-ai-search', 'display');
-    add_settings_field('chat', __('Chat button', 'skyphusion-ai'), 'cloudflare_ai_search_field_chat', 'cloudflare-ai-search', 'display');
-    add_settings_field('placement', __('Where the search box goes', 'skyphusion-ai'), 'cloudflare_ai_search_field_placement', 'cloudflare-ai-search', 'display');
-    add_settings_field('hide_checkout', __('Cart and checkout', 'skyphusion-ai'), 'cloudflare_ai_search_field_hide_checkout', 'cloudflare-ai-search', 'display');
-    add_settings_field('lead_search', __('Search results', 'skyphusion-ai'), 'cloudflare_ai_search_field_lead_search', 'cloudflare-ai-search', 'display');
+    add_settings_field('search_bar', __('Search box', 'skyphusion-ai'), 'skyphusion_ai_field_search_bar', 'cloudflare-ai-search', 'display');
+    add_settings_field('modal', __('Keyboard search', 'skyphusion-ai'), 'skyphusion_ai_field_modal', 'cloudflare-ai-search', 'display');
+    add_settings_field('chat', __('Chat button', 'skyphusion-ai'), 'skyphusion_ai_field_chat', 'cloudflare-ai-search', 'display');
+    add_settings_field('placement', __('Where the search box goes', 'skyphusion-ai'), 'skyphusion_ai_field_placement', 'cloudflare-ai-search', 'display');
+    add_settings_field('hide_checkout', __('Cart and checkout', 'skyphusion-ai'), 'skyphusion_ai_field_hide_checkout', 'cloudflare-ai-search', 'display');
+    add_settings_field('lead_search', __('Search results', 'skyphusion-ai'), 'skyphusion_ai_field_lead_search', 'cloudflare-ai-search', 'display');
 
     add_settings_section(
         'appearance',
         __('Look', 'skyphusion-ai'),
-        'cloudflare_ai_search_section_appearance',
+        'skyphusion_ai_section_appearance',
         'cloudflare-ai-search'
     );
-    add_settings_field('placeholder', __('Placeholder', 'skyphusion-ai'), 'cloudflare_ai_search_field_placeholder', 'cloudflare-ai-search', 'appearance');
-    add_settings_field('color', __('Accent color', 'skyphusion-ai'), 'cloudflare_ai_search_field_color', 'cloudflare-ai-search', 'appearance');
-    add_settings_field('theme', __('Light or dark', 'skyphusion-ai'), 'cloudflare_ai_search_field_theme', 'cloudflare-ai-search', 'appearance');
-    add_settings_field('max_results', __('How many results', 'skyphusion-ai'), 'cloudflare_ai_search_field_max_results', 'cloudflare-ai-search', 'appearance');
-    add_settings_field('hide_branding', __('Cloudflare name', 'skyphusion-ai'), 'cloudflare_ai_search_field_hide_branding', 'cloudflare-ai-search', 'appearance');
+    add_settings_field('placeholder', __('Placeholder', 'skyphusion-ai'), 'skyphusion_ai_field_placeholder', 'cloudflare-ai-search', 'appearance');
+    add_settings_field('color', __('Accent color', 'skyphusion-ai'), 'skyphusion_ai_field_color', 'cloudflare-ai-search', 'appearance');
+    add_settings_field('theme', __('Light or dark', 'skyphusion-ai'), 'skyphusion_ai_field_theme', 'cloudflare-ai-search', 'appearance');
+    add_settings_field('max_results', __('How many results', 'skyphusion-ai'), 'skyphusion_ai_field_max_results', 'cloudflare-ai-search', 'appearance');
+    add_settings_field('hide_branding', __('Cloudflare name', 'skyphusion-ai'), 'skyphusion_ai_field_hide_branding', 'cloudflare-ai-search', 'appearance');
 }
-add_action('admin_init', 'cloudflare_ai_search_register_settings');
+add_action('admin_init', 'skyphusion_ai_register_settings');
 
 /**
  * Tell the admin that a submitted value was rejected and what was kept.
@@ -143,26 +143,26 @@ add_action('admin_init', 'cloudflare_ai_search_register_settings');
  * @param string $code    Field slug, matching the input key.
  * @param string $message Already translated.
  */
-function cloudflare_ai_search_reject($code, $message)
+function skyphusion_ai_reject($code, $message)
 {
     if (function_exists('add_settings_error')) {
         add_settings_error('cloudflare_ai_search', $code, $message);
     }
 }
 
-function cloudflare_ai_search_sanitize($input)
+function skyphusion_ai_sanitize($input)
 {
-    $old = cloudflare_ai_search_settings();
-    $clean = cloudflare_ai_search_defaults();
+    $old = skyphusion_ai_settings();
+    $clean = skyphusion_ai_defaults();
     if (!is_array($input)) {
         return $old;
     }
 
     $typed = isset($input['endpoint']) ? trim((string) $input['endpoint']) : '';
-    $endpoint = cloudflare_ai_search_normalize_endpoint($typed);
+    $endpoint = skyphusion_ai_normalize_endpoint($typed);
     if ($typed !== '' && $endpoint === '') {
         // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- names the required host. It does not load a file.
-        cloudflare_ai_search_reject('endpoint', __('That address has to be an https link ending in search.ai.cloudflare.com. The previous address was kept.', 'skyphusion-ai'));
+        skyphusion_ai_reject('endpoint', __('That address has to be an https link ending in search.ai.cloudflare.com. The previous address was kept.', 'skyphusion-ai'));
         $endpoint = $old['endpoint'];
     }
     $clean['endpoint'] = $endpoint;
@@ -177,7 +177,7 @@ function cloudflare_ai_search_sanitize($input)
         $clean['placement'] = $placement;
     } else {
         if ($placement !== '') {
-            cloudflare_ai_search_reject('placement', __('Where the search box goes has to be top or shortcode. It was set to top.', 'skyphusion-ai'));
+            skyphusion_ai_reject('placement', __('Where the search box goes has to be top or shortcode. It was set to top.', 'skyphusion-ai'));
         }
         $clean['placement'] = 'top';
     }
@@ -187,7 +187,7 @@ function cloudflare_ai_search_sanitize($input)
         $clean['theme'] = $theme;
     } else {
         if ($theme !== '') {
-            cloudflare_ai_search_reject('theme', __('Light or dark has to be auto, light, or dark. It was set to auto.', 'skyphusion-ai'));
+            skyphusion_ai_reject('theme', __('Light or dark has to be auto, light, or dark. It was set to auto.', 'skyphusion-ai'));
         }
         $clean['theme'] = 'auto';
     }
@@ -206,7 +206,7 @@ function cloudflare_ai_search_sanitize($input)
     $typed_color = isset($input['color']) ? trim((string) $input['color']) : '';
     $color = sanitize_hex_color($typed_color);
     if ($typed_color !== '' && !$color) {
-        cloudflare_ai_search_reject('color', __('Accent color has to be a hex color such as #1B3A32. The previous color was kept.', 'skyphusion-ai'));
+        skyphusion_ai_reject('color', __('Accent color has to be a hex color such as #1B3A32. The previous color was kept.', 'skyphusion-ai'));
     }
     $clean['color'] = $color ? $color : $old['color'];
 
@@ -227,7 +227,7 @@ function cloudflare_ai_search_sanitize($input)
     } else {
         $account = cloudflare_ai_provider_account_id($typed_account);
         if ($account === '') {
-            cloudflare_ai_search_reject('account_id', __('Account ID has to be 32 hex characters. The previous account ID was kept.', 'skyphusion-ai'));
+            skyphusion_ai_reject('account_id', __('Account ID has to be 32 hex characters. The previous account ID was kept.', 'skyphusion-ai'));
             $clean['account_id'] = $old['account_id'];
         } else {
             $clean['account_id'] = $account;
@@ -240,7 +240,7 @@ function cloudflare_ai_search_sanitize($input)
     } else {
         $gateway = cloudflare_ai_provider_gateway_id($typed_gateway);
         if ($gateway === '') {
-            cloudflare_ai_search_reject('gateway_id', __('Gateway ID has to be a slug of letters, numbers, hyphens, or underscores. The previous gateway ID was kept.', 'skyphusion-ai'));
+            skyphusion_ai_reject('gateway_id', __('Gateway ID has to be a slug of letters, numbers, hyphens, or underscores. The previous gateway ID was kept.', 'skyphusion-ai'));
             $clean['gateway_id'] = $old['gateway_id'];
         } else {
             $clean['gateway_id'] = $gateway;
@@ -250,7 +250,7 @@ function cloudflare_ai_search_sanitize($input)
     return $clean;
 }
 
-function cloudflare_ai_search_section_connection()
+function skyphusion_ai_section_connection()
 {
     echo '<p>' . esc_html__('Paste the public AI Search address. The search box does not send an API token.', 'skyphusion-ai') . '</p>';
     echo '<ol>';
@@ -286,7 +286,7 @@ function cloudflare_ai_search_section_connection()
  * @param mixed $stored   The Connectors option value.
  * @return string
  */
-function cloudflare_ai_search_token_source( $env, $constant, $stored ) {
+function skyphusion_ai_token_source( $env, $constant, $stored ) {
 	$from_env      = is_string( $env ) && '' !== $env;
 	$from_constant = is_string( $constant ) && '' !== $constant;
 	$from_option   = is_string( $stored ) && '' !== $stored;
@@ -310,14 +310,14 @@ function cloudflare_ai_search_token_source( $env, $constant, $stored ) {
  *
  * @return string
  */
-function cloudflare_ai_search_token_source_now() {
+function skyphusion_ai_token_source_now() {
 	$env      = getenv( 'CLOUDFLARE_API_KEY' );
 	$constant = defined( 'CLOUDFLARE_API_KEY' ) ? constant( 'CLOUDFLARE_API_KEY' ) : null;
 	$stored   = '';
 	if ( function_exists( 'get_option' ) ) {
 		$stored = get_option( 'connectors_ai_cloudflare_api_key', '' );
 	}
-	return cloudflare_ai_search_token_source( $env, $constant, $stored );
+	return skyphusion_ai_token_source( $env, $constant, $stored );
 }
 
 /**
@@ -326,10 +326,10 @@ function cloudflare_ai_search_token_source_now() {
  * The argument is a key, not a token. An unknown key uses the same sentence
  * as no token, so the argument itself is never returned.
  *
- * @param string $key Label key from cloudflare_ai_search_token_source(). Never a token.
+ * @param string $key Label key from skyphusion_ai_token_source(). Never a token.
  * @return string Translated. The caller escapes it.
  */
-function cloudflare_ai_search_token_source_notice( $key ) {
+function skyphusion_ai_token_source_notice( $key ) {
 	switch ( $key ) {
 		case 'env':
 			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> environment variable.', 'skyphusion-ai' );
@@ -345,7 +345,7 @@ function cloudflare_ai_search_token_source_notice( $key ) {
 	return __( 'No token is set.', 'skyphusion-ai' );
 }
 
-function cloudflare_ai_search_section_workers()
+function skyphusion_ai_section_workers()
 {
     $connectors = admin_url('options-connectors.php');
     echo '<p>' . sprintf(
@@ -358,87 +358,87 @@ function cloudflare_ai_search_section_workers()
     ) . '</p>';
     echo '<p>' . wp_kses(__('Leave the gateway blank to call Workers AI directly. Set a gateway id to send the same calls through AI Gateway. A model call does not replace another provider that is already configured. Call <code>using_provider(\'cloudflare\')</code> when the caller wants this one.', 'skyphusion-ai'), array('code' => array())) . '</p>';
 	echo '<p>' . wp_kses(
-		cloudflare_ai_search_token_source_notice( cloudflare_ai_search_token_source_now() ),
+		skyphusion_ai_token_source_notice( skyphusion_ai_token_source_now() ),
 		array( 'code' => array() )
 	) . '</p>';
 }
 
-function cloudflare_ai_search_section_display()
+function skyphusion_ai_section_display()
 {
     echo '<p>' . esc_html__('Choose what shows up for visitors. Save, then look at the front of the site.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_section_appearance()
+function skyphusion_ai_section_appearance()
 {
     echo '<p>' . esc_html__('These match the search box to the rest of the site.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_field_endpoint()
+function skyphusion_ai_field_endpoint()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="url" class="regular-text code" name="cloudflare_ai_search_settings[endpoint]" value="%s" placeholder="https://example.search.ai.cloudflare.com/" />', // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- names the required host. It does not load a file.
+        '<input type="url" class="regular-text code" name="skyphusion_ai_settings[endpoint]" value="%s" placeholder="https://example.search.ai.cloudflare.com/" />', // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- names the required host. It does not load a file.
         esc_attr($settings['endpoint'])
     );
     echo '<p class="description">' . esc_html__('Leave this blank to hide search until you are ready.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_field_search_bar()
+function skyphusion_ai_field_search_bar()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[search_bar]" value="1" ' . checked($settings['search_bar'], true, false) . ' /> Show a search box</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[search_bar]" value="1" ' . checked($settings['search_bar'], true, false) . ' /> Show a search box</label>';
     echo '<p class="description">' . esc_html__('Lists matching pages as someone types.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_field_modal()
+function skyphusion_ai_field_modal()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[modal]" value="1" ' . checked($settings['modal'], true, false) . ' /> Open search when someone presses Ctrl+K or Command+K</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[modal]" value="1" ' . checked($settings['modal'], true, false) . ' /> Open search when someone presses Ctrl+K or Command+K</label>';
 }
 
-function cloudflare_ai_search_field_chat()
+function skyphusion_ai_field_chat()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[chat]" value="1" ' . checked($settings['chat'], true, false) . ' /> Show a chat button in the corner</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[chat]" value="1" ' . checked($settings['chat'], true, false) . ' /> Show a chat button in the corner</label>';
     echo '<p class="description">' . esc_html__('The chat button answers in a sentence and uses more of the Cloudflare allowance. The search box only lists pages.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_field_placement()
+function skyphusion_ai_field_placement()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="radio" name="cloudflare_ai_search_settings[placement]" value="top" ' . checked($settings['placement'], 'top', false) . ' /> Top of every page</label><br />';
-    echo '<label><input type="radio" name="cloudflare_ai_search_settings[placement]" value="shortcode" ' . checked($settings['placement'], 'shortcode', false) . ' /> Only where I place the shortcode</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="radio" name="skyphusion_ai_settings[placement]" value="top" ' . checked($settings['placement'], 'top', false) . ' /> Top of every page</label><br />';
+    echo '<label><input type="radio" name="skyphusion_ai_settings[placement]" value="shortcode" ' . checked($settings['placement'], 'shortcode', false) . ' /> Only where I place the shortcode</label>';
     echo '<p class="description">' . wp_kses(__('Shortcode: <code>[cloudflare_ai_search]</code>', 'skyphusion-ai'), array('code' => array())) . '</p>';
 }
 
-function cloudflare_ai_search_field_hide_checkout()
+function skyphusion_ai_field_hide_checkout()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[hide_checkout]" value="1" ' . checked($settings['hide_checkout'], true, false) . ' /> Hide the search box and the chat button on the cart and checkout</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[hide_checkout]" value="1" ' . checked($settings['hide_checkout'], true, false) . ' /> Hide the search box and the chat button on the cart and checkout</label>';
 }
 
-function cloudflare_ai_search_field_placeholder()
+function skyphusion_ai_field_placeholder()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="text" class="regular-text" name="cloudflare_ai_search_settings[placeholder]" value="%s" maxlength="80" />',
+        '<input type="text" class="regular-text" name="skyphusion_ai_settings[placeholder]" value="%s" maxlength="80" />',
         esc_attr($settings['placeholder'])
     );
 }
 
-function cloudflare_ai_search_field_color()
+function skyphusion_ai_field_color()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="text" class="cloudflare-ai-search-color" name="cloudflare_ai_search_settings[color]" value="%s" />',
+        '<input type="text" class="cloudflare-ai-search-color" name="skyphusion_ai_settings[color]" value="%s" />',
         esc_attr($settings['color'])
     );
 }
 
-function cloudflare_ai_search_field_theme()
+function skyphusion_ai_field_theme()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<select name="cloudflare_ai_search_settings[theme]">';
+    $settings = skyphusion_ai_settings();
+    echo '<select name="skyphusion_ai_settings[theme]">';
     $choices = array(
         'auto' => 'Match the visitor\'s device',
         'light' => 'Always light',
@@ -455,69 +455,69 @@ function cloudflare_ai_search_field_theme()
     echo '</select>';
 }
 
-function cloudflare_ai_search_field_max_results()
+function skyphusion_ai_field_max_results()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="number" min="1" max="20" name="cloudflare_ai_search_settings[max_results]" value="%d" />',
+        '<input type="number" min="1" max="20" name="skyphusion_ai_settings[max_results]" value="%d" />',
         (int) $settings['max_results']
     );
 }
 
-function cloudflare_ai_search_field_hide_branding()
+function skyphusion_ai_field_hide_branding()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[hide_branding]" value="1" ' . checked($settings['hide_branding'], true, false) . ' /> Hide the Cloudflare name on the search box</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[hide_branding]" value="1" ' . checked($settings['hide_branding'], true, false) . ' /> Hide the Cloudflare name on the search box</label>';
 }
 
-function cloudflare_ai_search_field_account_id()
+function skyphusion_ai_field_account_id()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="text" class="regular-text code" name="cloudflare_ai_search_settings[account_id]" value="%s" maxlength="32" spellcheck="false" autocomplete="off" />',
+        '<input type="text" class="regular-text code" name="skyphusion_ai_settings[account_id]" value="%s" maxlength="32" spellcheck="false" autocomplete="off" />',
         esc_attr($settings['account_id'])
     );
     echo '<p class="description">' . wp_kses(__('32 hex characters from the Cloudflare dashboard. You can also set <code>CLOUDFLARE_ACCOUNT_ID</code>, or put the account id in front of the token on Connectors as <code>account-id:api-token</code>. Only the token half is sent.', 'skyphusion-ai'), array('code' => array())) . '</p>';
 }
 
-function cloudflare_ai_search_field_gateway_id()
+function skyphusion_ai_field_gateway_id()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     printf(
-        '<input type="text" class="regular-text code" name="cloudflare_ai_search_settings[gateway_id]" value="%s" maxlength="64" spellcheck="false" autocomplete="off" />',
+        '<input type="text" class="regular-text code" name="skyphusion_ai_settings[gateway_id]" value="%s" maxlength="64" spellcheck="false" autocomplete="off" />',
         esc_attr($settings['gateway_id'])
     );
     echo '<p class="description">' . wp_kses(__('Optional. A slug such as <code>store</code>. Blank sends Workers AI calls to api.cloudflare.com.', 'skyphusion-ai'), array('code' => array())) . '</p>';
 }
 
-function cloudflare_ai_search_field_lead_search()
+function skyphusion_ai_field_lead_search()
 {
-    $settings = cloudflare_ai_search_settings();
-    echo '<label><input type="checkbox" name="cloudflare_ai_search_settings[lead_search]" value="1" ' . checked($settings['lead_search'], true, false) . ' /> Show an AI Search answer above WordPress and WooCommerce search results</label>';
+    $settings = skyphusion_ai_settings();
+    echo '<label><input type="checkbox" name="skyphusion_ai_settings[lead_search]" value="1" ' . checked($settings['lead_search'], true, false) . ' /> Show an AI Search answer above WordPress and WooCommerce search results</label>';
     echo '<p class="description">' . esc_html__('Off until you turn it on. A failed request stays off the page. The cart and checkout stay quiet when that option is on.', 'skyphusion-ai') . '</p>';
 }
 
-function cloudflare_ai_search_add_menu()
+function skyphusion_ai_add_menu()
 {
     add_options_page(
         'Skyphusion AI for Cloudflare',
         'Skyphusion AI',
         'manage_options',
         'cloudflare-ai-search',
-        'cloudflare_ai_search_render_page'
+        'skyphusion_ai_render_page'
     );
 }
-add_action('admin_menu', 'cloudflare_ai_search_add_menu');
+add_action('admin_menu', 'skyphusion_ai_add_menu');
 
-function cloudflare_ai_search_action_links($links)
+function skyphusion_ai_action_links($links)
 {
     $url = admin_url('options-general.php?page=cloudflare-ai-search');
     array_unshift($links, '<a href="' . esc_url($url) . '">' . esc_html__('Settings', 'skyphusion-ai') . '</a>');
     return $links;
 }
-add_filter('plugin_action_links_' . plugin_basename(CLOUDFLARE_AI_SEARCH_FILE), 'cloudflare_ai_search_action_links');
+add_filter('plugin_action_links_' . plugin_basename(SKYPHUSION_AI_FILE), 'skyphusion_ai_action_links');
 
-function cloudflare_ai_search_admin_assets($hook)
+function skyphusion_ai_admin_assets($hook)
 {
     if ($hook !== 'settings_page_cloudflare-ai-search') {
         return;
@@ -529,14 +529,14 @@ function cloudflare_ai_search_admin_assets($hook)
         "jQuery(function($){ $('.cloudflare-ai-search-color').wpColorPicker(); });"
     );
 }
-add_action('admin_enqueue_scripts', 'cloudflare_ai_search_admin_assets');
+add_action('admin_enqueue_scripts', 'skyphusion_ai_admin_assets');
 
-function cloudflare_ai_search_admin_notice()
+function skyphusion_ai_admin_notice()
 {
     if (!current_user_can('manage_options')) {
         return;
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if ($settings['endpoint'] !== '') {
         return;
     }
@@ -553,11 +553,11 @@ function cloudflare_ai_search_admin_notice()
         esc_url($url)
     ) . '</p></div>';
 }
-add_action('admin_notices', 'cloudflare_ai_search_admin_notice');
+add_action('admin_notices', 'skyphusion_ai_admin_notice');
 
-function cloudflare_ai_search_render_product_links()
+function skyphusion_ai_render_product_links()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     $links = cloudflare_ai_provider_links($settings['account_id']);
     $products = array(
         array('Workers AI', $links['workers_ai'], $links['workers_ai_docs']),
@@ -573,14 +573,14 @@ function cloudflare_ai_search_render_product_links()
     echo '<p>Gateway calls to Workers AI are documented at <a href="' . esc_url($links['gateway_workers_docs']) . '" target="_blank" rel="noopener noreferrer">AI Gateway for Workers AI</a>.</p>';
 }
 
-function cloudflare_ai_search_render_page()
+function skyphusion_ai_render_page()
 {
     if (!current_user_can('manage_options')) {
         return;
     }
 
     $user_id = get_current_user_id();
-    $check_key = 'cloudflare_ai_search_check_' . $user_id;
+    $check_key = 'skyphusion_ai_check_' . $user_id;
     $check = get_transient($check_key);
     if (is_array($check)) {
         delete_transient($check_key);
@@ -589,7 +589,7 @@ function cloudflare_ai_search_render_page()
     echo '<div class="wrap">';
     echo '<h1>Skyphusion AI for Cloudflare</h1>';
     echo '<p>Workers AI, AI Gateway, and AI Search. Visitors can still search this site in their own words. WordPress and WooCommerce can call the same Cloudflare account for text, images, speech, and embeddings.</p>';
-    cloudflare_ai_search_render_product_links();
+    skyphusion_ai_render_product_links();
 
     if (is_array($check)) {
         $class = !empty($check['ok']) ? 'notice-success' : 'notice-error';
@@ -607,21 +607,21 @@ function cloudflare_ai_search_render_page()
     echo '<h2>Check the connection</h2>';
     echo '<p>Save first. This asks Cloudflare one question and tells you whether the address answers. An empty answer still counts as connected while Cloudflare is still reading the site.</p>';
     echo '<form method="post" action="' . esc_url(admin_url('admin-post.php')) . '">';
-    wp_nonce_field('cloudflare_ai_search_test');
-    echo '<input type="hidden" name="action" value="cloudflare_ai_search_test" />';
+    wp_nonce_field('skyphusion_ai_test');
+    echo '<input type="hidden" name="action" value="skyphusion_ai_test" />';
     submit_button('Check connection', 'secondary', 'submit', false);
     echo '</form>';
     echo '</div>';
 }
 
-function cloudflare_ai_search_handle_test()
+function skyphusion_ai_handle_test()
 {
     if (!current_user_can('manage_options')) {
         wp_die('You cannot check this connection.');
     }
-    check_admin_referer('cloudflare_ai_search_test');
+    check_admin_referer('skyphusion_ai_test');
 
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     $endpoint = $settings['endpoint'];
     $message = 'Add a Cloudflare address and save it before checking the connection.';
     $ok = false;
@@ -656,7 +656,7 @@ function cloudflare_ai_search_handle_test()
     }
 
     set_transient(
-        'cloudflare_ai_search_check_' . get_current_user_id(),
+        'skyphusion_ai_check_' . get_current_user_id(),
         array(
             'ok' => $ok,
             'message' => $message,
@@ -667,4 +667,4 @@ function cloudflare_ai_search_handle_test()
     wp_safe_redirect(admin_url('options-general.php?page=cloudflare-ai-search'));
     exit;
 }
-add_action('admin_post_cloudflare_ai_search_test', 'cloudflare_ai_search_handle_test');
+add_action('admin_post_skyphusion_ai_test', 'skyphusion_ai_handle_test');

@@ -1,9 +1,11 @@
 # skyphusion-ai (agent contract)
 
-WordPress plugin, public, GPL-2.0, a revenue item. The GitHub repo was renamed from
-`cloudflare-ai-search`; the plugin directory, main file, function prefix, option keys
-and release zip prefix still use the old name until the deep-rename issue lands. Do
-not change the shipped prefix as a side effect of other work.
+WordPress plugin, public, GPL-2.0, a revenue item. The release zip directory,
+the main file, the function prefix, the option key and the WP-CLI command are
+`skyphusion-ai` / `skyphusion_ai_`. `includes/deprecated.php` keeps the old
+`cloudflare_ai_search_*` names for one release so the storefront keeps working.
+Do not delete that file until the storefront has moved. Do not change the
+shipped prefix as a side effect of other work.
 
 ## Gates
 
@@ -23,7 +25,7 @@ not change the shipped prefix as a side effect of other work.
 The tree carries `tests/` and dotfiles that `.gitattributes` `export-ignore` strips
 from every archive. Measured 2026-10-23: the tree reports 38 errors and 104 warnings,
 the shipped archive 7 errors and 3 warnings. The script therefore builds the archive
-with `git archive` (prefix `cloudflare-ai-search/`, what the release zip uses today)
+with `git archive` (prefix `skyphusion-ai/`, the release zip prefix)
 and checks that. It archives a committed ref (`PLUGIN_CHECK_REF`, default HEAD), so
 commit before you run it.
 

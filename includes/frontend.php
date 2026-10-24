@@ -7,33 +7,33 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-function cloudflare_ai_search_ready()
+function skyphusion_ai_ready()
 {
     if (is_admin()) {
         return false;
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if ($settings['endpoint'] === '') {
         return false;
     }
     return $settings['search_bar'] || $settings['modal'] || $settings['chat'];
 }
 
-function cloudflare_ai_search_enqueue()
+function skyphusion_ai_enqueue()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     $lead = !is_admin() && $settings['lead_search'] && $settings['endpoint'] !== '';
-    if (!cloudflare_ai_search_ready() && !$lead) {
+    if (!skyphusion_ai_ready() && !$lead) {
         return;
     }
 
     wp_enqueue_style(
         'cloudflare-ai-search',
-        plugins_url('assets/search.css', CLOUDFLARE_AI_SEARCH_FILE),
+        plugins_url('assets/search.css', SKYPHUSION_AI_FILE),
         array(),
-        CLOUDFLARE_AI_SEARCH_VERSION
+        SKYPHUSION_AI_VERSION
     );
-    if (!cloudflare_ai_search_ready()) {
+    if (!skyphusion_ai_ready()) {
         return;
     }
     // THE ONE REAL OFFLOAD, and the Plugin Check sniff cannot see it (#16).
@@ -50,7 +50,7 @@ function cloudflare_ai_search_enqueue()
     // The position is published in `readme.txt` under `== External services ==`
     // and `tests/external-services-test.php` keeps that paragraph true,
     // including that it names the build this constant pins.
-    $src = cloudflare_ai_search_snippet_src($settings['endpoint']);
+    $src = skyphusion_ai_snippet_src($settings['endpoint']);
     if ($src === '') {
         return;
     }
@@ -62,9 +62,9 @@ function cloudflare_ai_search_enqueue()
         true
     );
 }
-add_action('wp_enqueue_scripts', 'cloudflare_ai_search_enqueue');
+add_action('wp_enqueue_scripts', 'skyphusion_ai_enqueue');
 
-function cloudflare_ai_search_script_tag($tag, $handle, $src)
+function skyphusion_ai_script_tag($tag, $handle, $src)
 {
     if ($handle !== 'cloudflare-ai-search') {
         return $tag;
@@ -73,11 +73,11 @@ function cloudflare_ai_search_script_tag($tag, $handle, $src)
     // phpcs:ignore WordPress.WP.EnqueuedResources.NonEnqueuedScript
     return '<script type="module" src="' . esc_url($src) . '"></script>' . "\n";
 }
-add_filter('script_loader_tag', 'cloudflare_ai_search_script_tag', 10, 3);
+add_filter('script_loader_tag', 'skyphusion_ai_script_tag', 10, 3);
 
-function cloudflare_ai_search_quiet_page()
+function skyphusion_ai_quiet_page()
 {
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if (!$settings['hide_checkout']) {
         return false;
     }
@@ -90,7 +90,7 @@ function cloudflare_ai_search_quiet_page()
     return false;
 }
 
-function cloudflare_ai_search_component($tag, $settings)
+function skyphusion_ai_component($tag, $settings)
 {
     $allowed = array('search-bar-snippet', 'search-modal-snippet', 'chat-bubble-snippet');
     if (!in_array($tag, $allowed, true)) {
@@ -110,7 +110,7 @@ function cloudflare_ai_search_component($tag, $settings)
     );
 }
 
-function cloudflare_ai_search_snippet_allowed_html()
+function skyphusion_ai_snippet_allowed_html()
 {
     $attributes = array(
         'api-url' => true,
@@ -127,60 +127,60 @@ function cloudflare_ai_search_snippet_allowed_html()
     );
 }
 
-function cloudflare_ai_search_render_bar()
+function skyphusion_ai_render_bar()
 {
-    if (!cloudflare_ai_search_ready() || cloudflare_ai_search_quiet_page()) {
+    if (!skyphusion_ai_ready() || skyphusion_ai_quiet_page()) {
         return;
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if (!$settings['search_bar'] || $settings['placement'] !== 'top') {
         return;
     }
     echo '<div class="cloudflare-ai-search-bar">';
     echo wp_kses(
-        cloudflare_ai_search_component('search-bar-snippet', $settings),
-        cloudflare_ai_search_snippet_allowed_html()
+        skyphusion_ai_component('search-bar-snippet', $settings),
+        skyphusion_ai_snippet_allowed_html()
     );
     echo '</div>';
 }
-add_action('wp_body_open', 'cloudflare_ai_search_render_bar', 5);
+add_action('wp_body_open', 'skyphusion_ai_render_bar', 5);
 
-function cloudflare_ai_search_render_footer()
+function skyphusion_ai_render_footer()
 {
-    if (!cloudflare_ai_search_ready()) {
+    if (!skyphusion_ai_ready()) {
         return;
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if ($settings['modal']) {
         echo wp_kses(
-            cloudflare_ai_search_component('search-modal-snippet', $settings),
-            cloudflare_ai_search_snippet_allowed_html()
+            skyphusion_ai_component('search-modal-snippet', $settings),
+            skyphusion_ai_snippet_allowed_html()
         );
     }
-    if ($settings['chat'] && !cloudflare_ai_search_quiet_page()) {
+    if ($settings['chat'] && !skyphusion_ai_quiet_page()) {
         echo wp_kses(
-            cloudflare_ai_search_component('chat-bubble-snippet', $settings),
-            cloudflare_ai_search_snippet_allowed_html()
+            skyphusion_ai_component('chat-bubble-snippet', $settings),
+            skyphusion_ai_snippet_allowed_html()
         );
     }
 }
-add_action('wp_footer', 'cloudflare_ai_search_render_footer', 30);
+add_action('wp_footer', 'skyphusion_ai_render_footer', 30);
 
-function cloudflare_ai_search_shortcode()
+function skyphusion_ai_shortcode()
 {
     if (is_admin() && !wp_doing_ajax()) {
         return '';
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if ($settings['endpoint'] === '' || !$settings['search_bar']) {
         return '';
     }
     return '<div class="cloudflare-ai-search-bar">' . wp_kses(
-        cloudflare_ai_search_component('search-bar-snippet', $settings),
-        cloudflare_ai_search_snippet_allowed_html()
+        skyphusion_ai_component('search-bar-snippet', $settings),
+        skyphusion_ai_snippet_allowed_html()
     ) . '</div>';
 }
-add_shortcode('cloudflare_ai_search', 'cloudflare_ai_search_shortcode');
+add_shortcode('cloudflare_ai_search', 'skyphusion_ai_shortcode');
 
 /**
  * Print one AI Search answer above the main search loop.
@@ -194,7 +194,7 @@ add_shortcode('cloudflare_ai_search', 'cloudflare_ai_search_shortcode');
  * @param mixed $query
  * @param bool  $from_block
  */
-function cloudflare_ai_search_render_lead($query = null, $from_block = false)
+function skyphusion_ai_render_lead($query = null, $from_block = false)
 {
     static $done = false;
     if ($done || is_admin()) {
@@ -206,10 +206,10 @@ function cloudflare_ai_search_render_lead($query = null, $from_block = false)
     if ($query instanceof WP_Query && !$query->is_main_query()) {
         return;
     }
-    if (!is_search() || is_feed() || is_embed() || cloudflare_ai_search_quiet_page()) {
+    if (!is_search() || is_feed() || is_embed() || skyphusion_ai_quiet_page()) {
         return;
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     if (!$settings['lead_search'] || $settings['endpoint'] === '') {
         return;
     }
@@ -224,7 +224,7 @@ function cloudflare_ai_search_render_lead($query = null, $from_block = false)
     // length cap, the cache and the call ceiling live between it and the
     // network. Null means print nothing, which every refusal and every error
     // already did.
-    $result = cloudflare_ai_search_lead_answer($question);
+    $result = skyphusion_ai_lead_answer($question);
     if ($result === null) {
         return;
     }
@@ -237,8 +237,8 @@ function cloudflare_ai_search_render_lead($query = null, $from_block = false)
     echo '<p>' . esc_html($answer) . '</p>';
     echo '</section>';
 }
-add_action('woocommerce_before_shop_loop', 'cloudflare_ai_search_render_lead', 5);
-add_action('loop_start', 'cloudflare_ai_search_render_lead', 5);
+add_action('woocommerce_before_shop_loop', 'skyphusion_ai_render_lead', 5);
+add_action('loop_start', 'skyphusion_ai_render_lead', 5);
 
 /**
  * Insert the search answer inside the results block on a block theme.
@@ -247,7 +247,7 @@ add_action('loop_start', 'cloudflare_ai_search_render_lead', 5);
  * @param array  $block
  * @return string
  */
-function cloudflare_ai_search_lead_block($html, $block)
+function skyphusion_ai_lead_block($html, $block)
 {
     if (!function_exists('wp_is_block_theme') || !wp_is_block_theme()) {
         return $html;
@@ -264,7 +264,7 @@ function cloudflare_ai_search_lead_block($html, $block)
         return $html;
     }
     ob_start();
-    cloudflare_ai_search_render_lead(null, true);
+    skyphusion_ai_render_lead(null, true);
     $lead = ob_get_clean();
     if (!is_string($lead) || $lead === '') {
         return $html;
@@ -272,7 +272,7 @@ function cloudflare_ai_search_lead_block($html, $block)
     $placed = true;
     return $lead . $html;
 }
-add_filter('render_block', 'cloudflare_ai_search_lead_block', 10, 2);
+add_filter('render_block', 'skyphusion_ai_lead_block', 10, 2);
 
 /**
  * Print stock text once, inside main, on the single product page.
@@ -282,36 +282,36 @@ add_filter('render_block', 'cloudflare_ai_search_lead_block', 10, 2);
  * woocommerce/add-to-cart-with-options is that same form slot on templates
  * that use the newer block. The legacy template renders inside main and
  * fires woocommerce_single_product_summary. The static flag in
- * cloudflare_ai_search_stock_markup() stops a second print.
+ * skyphusion_ai_stock_markup() stops a second print.
  *
  * @param string $html
  * @param array  $block
  * @return string
  */
-function cloudflare_ai_search_stock_block($html, $block)
+function skyphusion_ai_stock_block($html, $block)
 {
     $name = isset($block['blockName']) ? (string) $block['blockName'] : '';
     if ($name !== 'woocommerce/add-to-cart-form' && $name !== 'woocommerce/add-to-cart-with-options') {
         return $html;
     }
-    $stock = cloudflare_ai_search_stock_markup();
+    $stock = skyphusion_ai_stock_markup();
     if ($stock === '') {
         return $html;
     }
-    return $html . wp_kses($stock, cloudflare_ai_search_stock_allowed_html());
+    return $html . wp_kses($stock, skyphusion_ai_stock_allowed_html());
 }
-add_filter('render_block', 'cloudflare_ai_search_stock_block', 10, 2);
+add_filter('render_block', 'skyphusion_ai_stock_block', 10, 2);
 
 /**
  * Classic themes do not render the add to cart block. The summary hook
  * still runs inside main.
  */
-function cloudflare_ai_search_print_stock()
+function skyphusion_ai_print_stock()
 {
-    $html = cloudflare_ai_search_stock_markup();
+    $html = skyphusion_ai_stock_markup();
     if ($html === '') {
         return;
     }
-    echo wp_kses($html, cloudflare_ai_search_stock_allowed_html());
+    echo wp_kses($html, skyphusion_ai_stock_allowed_html());
 }
-add_action('woocommerce_single_product_summary', 'cloudflare_ai_search_print_stock', 35);
+add_action('woocommerce_single_product_summary', 'skyphusion_ai_print_stock', 35);

@@ -618,7 +618,7 @@ function cloudflare_ai_provider_catalog_entry($model_id)
 /**
  * Guards around the ONE unauthenticated path to a billable call (issue #14).
  *
- * `cloudflare_ai_search_query()` POSTs to /chat/completions, which GENERATES.
+ * `skyphusion_ai_query()` POSTs to /chat/completions, which GENERATES.
  * With `lead_search` on, `GET /?s=<anything>` reaches it, so an anonymous
  * visitor drives paid Workers AI generation one call per request. Measured on
  * a live store: the request takes about twelve seconds and the answer renders
@@ -648,7 +648,7 @@ function cloudflare_ai_provider_catalog_entry($model_id)
  */
 
 /** Longest question forwarded to the model. */
-function cloudflare_ai_search_lead_max_length()
+function skyphusion_ai_lead_max_length()
 {
     $default = 300;
     if (function_exists('apply_filters')) {
@@ -661,7 +661,7 @@ function cloudflare_ai_search_lead_max_length()
 }
 
 /** Seconds an answer is cached for. */
-function cloudflare_ai_search_lead_cache_ttl()
+function skyphusion_ai_lead_cache_ttl()
 {
     $default = 3600;
     if (function_exists('apply_filters')) {
@@ -674,7 +674,7 @@ function cloudflare_ai_search_lead_cache_ttl()
 }
 
 /** Generation calls allowed per window, and the window in seconds. */
-function cloudflare_ai_search_lead_ceiling()
+function skyphusion_ai_lead_ceiling()
 {
     $default = array('calls' => 60, 'window' => 3600);
     if (function_exists('apply_filters')) {
@@ -698,7 +698,7 @@ function cloudflare_ai_search_lead_ceiling()
  * @param string $question
  * @return string
  */
-function cloudflare_ai_search_lead_normalise($question)
+function skyphusion_ai_lead_normalise($question)
 {
     $question = (string) $question;
     $question = preg_replace('/\s+/u', ' ', $question);
@@ -714,11 +714,11 @@ function cloudflare_ai_search_lead_normalise($question)
  * @param string $question
  * @return bool
  */
-function cloudflare_ai_search_lead_too_long($question)
+function skyphusion_ai_lead_too_long($question)
 {
     $question = (string) $question;
     $length = function_exists('mb_strlen') ? mb_strlen($question, 'UTF-8') : strlen($question);
-    return $length > cloudflare_ai_search_lead_max_length();
+    return $length > skyphusion_ai_lead_max_length();
 }
 
 /**
@@ -728,7 +728,7 @@ function cloudflare_ai_search_lead_too_long($question)
  * @param string $question
  * @return string
  */
-function cloudflare_ai_search_lead_cache_key($question)
+function skyphusion_ai_lead_cache_key($question)
 {
-    return 'cfais_lead_' . md5(cloudflare_ai_search_lead_normalise($question));
+    return 'cfais_lead_' . md5(skyphusion_ai_lead_normalise($question));
 }

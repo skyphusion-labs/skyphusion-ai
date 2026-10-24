@@ -72,7 +72,7 @@ expect('frontend.php loads with one added stand-in and defines functions', count
  * THE DEFECT THIS CATCHES IS SILENT AND IT IS NOT HYPOTHETICAL.
  *
  * frontend.php registers ten callbacks and every one of them names its
- * function AS A STRING: add_action('wp_body_open', 'cloudflare_ai_search_
+ * function AS A STRING: add_action('wp_body_open', 'skyphusion_ai_
  * render_bar', 5). A string is not a reference, so renaming the function
  * without editing the string is accepted by PHP, accepted by php -l, accepted
  * by phpcs, and breaks only when WordPress fires the hook on a live page.
@@ -132,6 +132,6 @@ expect(
  */
 expect(
     'the shortcode handler is one of the resolved callbacks',
-    in_array('cloudflare_ai_search_shortcode', $fe_registered, true),
+    in_array('skyphusion_ai_shortcode', $fe_registered, true),
     true
 );

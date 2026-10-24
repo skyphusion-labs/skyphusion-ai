@@ -15,7 +15,7 @@
  * one, and the declared one wins when both arrive.
  */
 
-$ac = 'cloudflare_ai_search_cli_accent_color';
+$ac = 'skyphusion_ai_cli_accent_color';
 
 // --- the declared flag ------------------------------------------------------
 
@@ -27,7 +27,7 @@ expect('and is not deprecated', $r['deprecated'], false);
 // This is the real path: WP-CLI reserves --color and consumes it, so it never
 // reaches $assoc and only argv has it.
 
-$r = $ac(array(), array('wp', 'cloudflare-ai-search', 'set', '--color=#1B3A32'));
+$r = $ac(array(), array('wp', 'skyphusion-ai', 'set', '--color=#1B3A32'));
 expect('color is recovered from argv', $r['value'], '#1B3A32');
 expect('and is reported deprecated', $r['deprecated'], true);
 

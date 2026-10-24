@@ -20,7 +20,7 @@
 #                      One lock on this directory covers the whole run. A second
 #                      run waits and says so. See acquire_harness_lock.
 #   PLUGIN_CHECK_PREFIX  directory name inside the archive (default
-#                      cloudflare-ai-search, what the release zip uses today)
+#                      skyphusion-ai, what the release zip uses)
 #   PLUGIN_CHECK_REF   git ref to archive (default HEAD)
 #   PLUGIN_CHECK_BASELINE  baseline file (default tests/plugin-check-baseline.txt)
 #   PLUGIN_CHECK_ROOT  repo to archive (default: the repo holding this script)
@@ -33,7 +33,7 @@ set -o pipefail
 
 ROOT="${PLUGIN_CHECK_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
 HOME_DIR="${PLUGIN_CHECK_HOME:-$HOME/.cache/skyphusion-ai-plugin-check}"
-PREFIX="${PLUGIN_CHECK_PREFIX:-cloudflare-ai-search}"
+PREFIX="${PLUGIN_CHECK_PREFIX:-skyphusion-ai}"
 REF="${PLUGIN_CHECK_REF:-HEAD}"
 BASELINE="${PLUGIN_CHECK_BASELINE:-$ROOT/tests/plugin-check-baseline.txt}"
 WPDIR="$HOME_DIR/wordpress"

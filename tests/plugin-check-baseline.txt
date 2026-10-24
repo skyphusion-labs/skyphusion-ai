@@ -20,7 +20,7 @@
 # correct prose, and a guard that rejects it is a guard someone disables.
 #
 # =============================================================================
-# OWED: TextDomainMismatch, 77 calls across 7 files. Issue #38 clears it.
+# CLEARED: TextDomainMismatch. Issue #38 renamed the archive prefix to skyphusion-ai, which is the slug Plugin Check compares with the text domain. The data lines are gone.
 #
 # THE TOTAL IS MEASURED ON THE MERGED ARTIFACT, and it is neither side's
 # number. PR #53's heading said 70: it accounted for includes/cli.php moving
@@ -118,13 +118,6 @@
 # (issue #34). That adds six calls in includes/settings.php, 41 to 47. They
 # are correct calls on skyphusion-ai, the same root cause as the rest, and
 # they clear with #38. The heading is the only place the total is stated.
-includes/cli.php	WordPress.WP.I18n.TextDomainMismatch	7
-includes/provider-models.php	WordPress.WP.I18n.TextDomainMismatch	8
-includes/provider-speech.php	WordPress.WP.I18n.TextDomainMismatch	2
-includes/provider.php	WordPress.WP.I18n.TextDomainMismatch	6
-includes/routes.php	WordPress.WP.I18n.TextDomainMismatch	1
-includes/settings.php	WordPress.WP.I18n.TextDomainMismatch	47
-includes/stock.php	WordPress.WP.I18n.TextDomainMismatch	6
 #
 # =============================================================================
 # CLEARED. Recorded briefly so none of them is reintroduced.
@@ -169,7 +162,8 @@ includes/stock.php	WordPress.WP.I18n.TextDomainMismatch	6
 # assets/search.css is ours and is served through plugins_url(). The two
 # calls differ on purpose; do not "align" them.
 #
-# cloudflare-ai-search.php  trademarked_term
+# skyphusion-ai.php  trademarked_term
+# The old main file name is gone. The warning was the slug, and the archive prefix change is what clears it.
 # The slug contains "cloudflare", which wordpress.org does not allow a slug
 # to begin with. Measured above: #38 clears this warning along with the
 # errors, so #38 is a wordpress.org submission prerequisite and not only

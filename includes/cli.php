@@ -1,13 +1,13 @@
 <?php
 /**
- * wp cloudflare-ai-search. Same settings as Settings, then Skyphusion AI.
+ * wp skyphusion-ai. Same settings as Settings, then Skyphusion AI.
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-function cloudflare_ai_search_cli_truthy($value)
+function skyphusion_ai_cli_truthy($value)
 {
     $value = strtolower(trim((string) $value));
     return in_array($value, array('1', 'true', 'yes', 'on'), true);
@@ -31,7 +31,7 @@ function cloudflare_ai_search_cli_truthy($value)
  * @param array $argv  Raw process arguments, already sanitized.
  * @return array{value: string|null, deprecated: bool}
  */
-function cloudflare_ai_search_cli_accent_color($assoc, $argv)
+function skyphusion_ai_cli_accent_color($assoc, $argv)
 {
     if (array_key_exists('accent-color', $assoc)) {
         return array('value' => (string) $assoc['accent-color'], 'deprecated' => false);
@@ -50,21 +50,21 @@ function cloudflare_ai_search_cli_accent_color($assoc, $argv)
     return array('value' => null, 'deprecated' => false);
 }
 
-class Cloudflare_AI_Search_CLI
+class Skyphusion_AI_CLI
 {
     /**
      * Print the saved settings.
      *
      * ## EXAMPLES
      *
-     *     wp cloudflare-ai-search status
+     *     wp skyphusion-ai status
      *
      * @param array $args
      * @param array $assoc
      */
     public function status($args, $assoc)
     {
-        $settings = cloudflare_ai_search_settings();
+        $settings = skyphusion_ai_settings();
         foreach ($settings as $key => $value) {
             if (is_bool($value)) {
                 $value = $value ? '1' : '0';
@@ -127,15 +127,15 @@ class Cloudflare_AI_Search_CLI
      *
      * ## EXAMPLES
      *
-     *     wp cloudflare-ai-search set --endpoint=https://abc.search.ai.cloudflare.com/ --accent-color=#1B3A32 --chat=0
-     *     wp cloudflare-ai-search set --account-id=0123456789abcdef0123456789abcdef --gateway-id=store --lead-search=0
+     *     wp skyphusion-ai set --endpoint=https://abc.search.ai.cloudflare.com/ --accent-color=#1B3A32 --chat=0
+     *     wp skyphusion-ai set --account-id=0123456789abcdef0123456789abcdef --gateway-id=store --lead-search=0
      *
      * @param array $args
      * @param array $assoc
      */
     public function set($args, $assoc)
     {
-        $current = cloudflare_ai_search_settings();
+        $current = skyphusion_ai_settings();
         $input = array(
             'endpoint' => $current['endpoint'],
             'search_bar' => $current['search_bar'] ? '1' : '',
@@ -180,7 +180,7 @@ class Cloudflare_AI_Search_CLI
                 }
             }
         }
-        $accent = cloudflare_ai_search_cli_accent_color($assoc, $argv);
+        $accent = skyphusion_ai_cli_accent_color($assoc, $argv);
         if ($accent['value'] !== null) {
             $assoc['accent-color'] = $accent['value'];
             unset($assoc['color']);
@@ -194,7 +194,7 @@ class Cloudflare_AI_Search_CLI
                 continue;
             }
             if (in_array($key, $bools, true)) {
-                $input[$key] = cloudflare_ai_search_cli_truthy($assoc[$flag]) ? '1' : '';
+                $input[$key] = skyphusion_ai_cli_truthy($assoc[$flag]) ? '1' : '';
             } else {
                 $input[$key] = $assoc[$flag];
             }
@@ -202,7 +202,7 @@ class Cloudflare_AI_Search_CLI
 
         if (array_key_exists('endpoint', $assoc)) {
             $typed = trim((string) $assoc['endpoint']);
-            if ($typed !== '' && cloudflare_ai_search_normalize_endpoint($typed) === '') {
+            if ($typed !== '' && skyphusion_ai_normalize_endpoint($typed) === '') {
                 WP_CLI::error(__('That address has to be an https link ending in search.ai.cloudflare.com.', 'skyphusion-ai')); // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- names the required host. It does not load a file.
             }
         }
@@ -222,7 +222,7 @@ class Cloudflare_AI_Search_CLI
             // two repos.
             //
             // THE KEY IS `accent-color` AND NOT `color` (PR #48). The shim in
-            // cloudflare_ai_search_cli_accent_color() runs earlier, normalises
+            // skyphusion_ai_cli_accent_color() runs earlier, normalises
             // `--color` into `accent-color` and unsets `color`, so by here the
             // deprecated flag has already become the declared one. Fixing the
             // fail-open on the OLD key, which is what this change originally
@@ -247,12 +247,12 @@ class Cloudflare_AI_Search_CLI
             }
         }
 
-        $clean = cloudflare_ai_search_sanitize($input);
-        update_option('cloudflare_ai_search_settings', $clean);
+        $clean = skyphusion_ai_sanitize($input);
+        update_option('skyphusion_ai_settings', $clean);
         WP_CLI::success(__('Saved. Settings, then Skyphusion AI, shows the same values.', 'skyphusion-ai'));
     }
 }
 
 if (defined('WP_CLI') && WP_CLI) {
-    WP_CLI::add_command('cloudflare-ai-search', 'Cloudflare_AI_Search_CLI');
+    WP_CLI::add_command('skyphusion-ai', 'Skyphusion_AI_CLI');
 }

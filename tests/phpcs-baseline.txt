@@ -25,16 +25,16 @@
 #
 # =============================================================================
 # OWED: 5781 findings across 11 files.
-cloudflare-ai-search.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
-cloudflare-ai-search.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
-cloudflare-ai-search.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
-cloudflare-ai-search.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	6
-cloudflare-ai-search.php	Squiz.Commenting.FileComment.MissingPackageTag	1
-cloudflare-ai-search.php	Squiz.Commenting.FunctionComment.Missing	1
-cloudflare-ai-search.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	2
-cloudflare-ai-search.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	2
-cloudflare-ai-search.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	1
-cloudflare-ai-search.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	1
+skyphusion-ai.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
+skyphusion-ai.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
+skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
+skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	6
+skyphusion-ai.php	Squiz.Commenting.FileComment.MissingPackageTag	1
+skyphusion-ai.php	Squiz.Commenting.FunctionComment.Missing	1
+skyphusion-ai.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	2
+skyphusion-ai.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	2
+skyphusion-ai.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	1
+skyphusion-ai.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	1
 includes/cli.php	Generic.Classes.OpeningBraceSameLine.BraceOnNewLine	1
 includes/cli.php	Generic.CodeAnalysis.UnusedFunctionParameter.FoundAfterLastUsed	2
 includes/cli.php	Generic.Commenting.DocComment.ShortNotCapital	1

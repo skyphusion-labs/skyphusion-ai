@@ -53,7 +53,7 @@ function cloudflare_ai_provider_embeddings($texts)
     if (!is_array($texts)) {
         return new WP_Error('cloudflare_ai_embeddings', __('Embeddings need a list of texts.', 'skyphusion-ai'));
     }
-    $settings = cloudflare_ai_search_settings();
+    $settings = skyphusion_ai_settings();
     $key = cloudflare_ai_provider_connector_key();
     $credentials = cloudflare_ai_provider_resolve_credentials($key, $settings['account_id']);
     $url = cloudflare_ai_provider_run_url(
@@ -92,10 +92,10 @@ function cloudflare_ai_provider_embeddings($texts)
  * @param string $question
  * @return array{answer: string, sources: array<int, string>}|WP_Error
  */
-function cloudflare_ai_search_query($question)
+function skyphusion_ai_query($question)
 {
     $question = trim((string) $question);
-    $endpoint = cloudflare_ai_search_settings()['endpoint'];
+    $endpoint = skyphusion_ai_settings()['endpoint'];
     if ($question === '' || $endpoint === '') {
         return new WP_Error('cloudflare_ai_search', __('Add the AI Search address before searching.', 'skyphusion-ai'));
     }
@@ -120,7 +120,7 @@ function cloudflare_ai_search_query($question)
         /* translators: %d is an HTTP status code returned by Cloudflare. */
         return new WP_Error('cloudflare_ai_search', sprintf(__('Cloudflare answered HTTP %d.', 'skyphusion-ai'), (int) $status));
     }
-    return cloudflare_ai_search_read_answer($decoded);
+    return skyphusion_ai_read_answer($decoded);
 }
 
 /**
@@ -138,12 +138,12 @@ function cloudflare_ai_search_query($question)
  *
  * @return bool
  */
-function cloudflare_ai_search_lead_take_slot()
+function skyphusion_ai_lead_take_slot()
 {
     if (!function_exists('get_transient') || !function_exists('set_transient')) {
         return true;
     }
-    $limit = cloudflare_ai_search_lead_ceiling();
+    $limit = skyphusion_ai_lead_ceiling();
     $key = 'cfais_lead_calls';
     $state = get_transient($key);
     $now = time();
@@ -164,7 +164,7 @@ function cloudflare_ai_search_lead_take_slot()
 /**
  * The guarded entry point the search page uses.
  *
- * Returns the same shape as `cloudflare_ai_search_query()` on success, and
+ * Returns the same shape as `skyphusion_ai_query()` on success, and
  * null whenever nothing should be printed. Null rather than WP_Error because
  * every refusal here is deliberate and silent, and a caller that cannot tell
  * them apart cannot accidentally surface one.
@@ -172,13 +172,13 @@ function cloudflare_ai_search_lead_take_slot()
  * @param string $question
  * @return array{answer: string, sources: array<int, string>}|null
  */
-function cloudflare_ai_search_lead_answer($question)
+function skyphusion_ai_lead_answer($question)
 {
     $question = trim((string) $question);
-    if ($question === '' || cloudflare_ai_search_lead_too_long($question)) {
+    if ($question === '' || skyphusion_ai_lead_too_long($question)) {
         return null;
     }
-    $key = cloudflare_ai_search_lead_cache_key($question);
+    $key = skyphusion_ai_lead_cache_key($question);
     $have_cache = function_exists('get_transient') && function_exists('set_transient');
     if ($have_cache) {
         $cached = get_transient($key);
@@ -191,10 +191,10 @@ function cloudflare_ai_search_lead_answer($question)
             return null;
         }
     }
-    if (!cloudflare_ai_search_lead_take_slot()) {
+    if (!skyphusion_ai_lead_take_slot()) {
         return null;
     }
-    $result = cloudflare_ai_search_query($question);
+    $result = skyphusion_ai_query($question);
     if (is_wp_error($result) || !is_array($result) || trim((string) $result['answer']) === '') {
         if ($have_cache) {
             // Short, because an endpoint that is down should recover quickly,
@@ -205,7 +205,7 @@ function cloudflare_ai_search_lead_answer($question)
         return null;
     }
     if ($have_cache) {
-        set_transient($key, $result, cloudflare_ai_search_lead_cache_ttl());
+        set_transient($key, $result, skyphusion_ai_lead_cache_ttl());
     }
     return $result;
 }
@@ -213,7 +213,7 @@ function cloudflare_ai_search_lead_answer($question)
 function cloudflare_ai_provider_connector_key()
 {
 	// The settings screen reports this same decision via
-	// cloudflare_ai_search_token_source(). "Set" means a non-empty string.
+	// skyphusion_ai_token_source(). "Set" means a non-empty string.
 	// Environment, then the constant, then the Connectors option. A change
 	// to either function has to land in both, or the screen will name a
 	// source this function does not return.
