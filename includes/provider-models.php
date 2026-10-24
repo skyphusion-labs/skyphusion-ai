@@ -6,6 +6,27 @@
  * Connectors key (CLOUDFLARE_API_KEY). This file never writes that token.
  */
 
+/*
+ * NOT COVERED BY tests/endpoint-test.php, AND THAT IS A DECISION.
+ *
+ * Measured with pcov: this file is never loaded by the harness, so it has no
+ * coverage denominator at all rather than zero coverage. 19,553 bytes.
+ *
+ * Covering it would mean stubbing AbstractApiBasedModel and ModelMetadata,
+ * which belong to the WordPress AI Client and not to this repo. A stub of
+ * another package's class hierarchy encodes an assumption about that package,
+ * and when the package changes shape the test keeps passing against a shape
+ * the SDK no longer has. That is a fixture that lies later, quietly, in the
+ * reassuring direction, so it was declined rather than deferred.
+ *
+ * What IS covered is the path that protects a site without the SDK:
+ * tests/provider-guard-test.php asserts cloudflare_ai_provider_boot() never
+ * requires this file while the AI Client is absent. The risk this file
+ * carries is being loaded without its types, and that is the assertion.
+ *
+ * See skyphusion-ai issue 3. Do not read the gap as an oversight.
+ */
+
 if (!defined('ABSPATH')) {
     exit;
 }

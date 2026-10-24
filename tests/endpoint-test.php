@@ -110,6 +110,10 @@ require __DIR__ . '/lead-guard-test.php';
 // LAST on purpose. cold-path-test.php sets CLOUDFLARE_API_KEY and restores
 // it; running it last means no earlier file can read the value it sets.
 require __DIR__ . '/cold-path-test.php';
+// After cold-path-test.php: both set and restore CLOUDFLARE_API_KEY, and
+// provider-guard-test.php asserts the constant is still undefined, which
+// only holds while nothing in the parent run has defined it.
+require __DIR__ . '/provider-guard-test.php';
 
 /**
  * EVERY test file in this directory is actually required by this runner.
