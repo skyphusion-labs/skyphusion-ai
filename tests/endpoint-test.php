@@ -114,6 +114,10 @@ require __DIR__ . '/cold-path-test.php';
 // provider-guard-test.php asserts the constant is still undefined, which
 // only holds while nothing in the parent run has defined it.
 require __DIR__ . '/provider-guard-test.php';
+// LAST. frontend-load-test.php REQUIRES a plugin source rather than only
+// driving functions already in memory, so it runs after every file that
+// defines a WordPress stand-in it depends on.
+require __DIR__ . '/frontend-load-test.php';
 
 /**
  * EVERY test file in this directory is actually required by this runner.
