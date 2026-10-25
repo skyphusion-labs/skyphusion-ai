@@ -615,6 +615,124 @@ class Cfai_Stock_Test_Variation
     }
 }
 
+/* ---------- part five: the count on a search result ---------- */
+/*
+ * Decision path only. The objects are stubs. They prove which count is
+ * chosen, not that WooCommerce renders the loop.
+ */
+
+require_once dirname(__DIR__) . '/includes/search-stock.php';
+
+class Cfai_Stock_Test_Search_Product
+{
+    public $id;
+    public $type;
+    public $mode;
+    public $qty;
+    public $children;
+
+    public function __construct($id, $type, $mode, $qty, $children = array())
+    {
+        $this->id = $id;
+        $this->type = $type;
+        $this->mode = $mode;
+        $this->qty = $qty;
+        $this->children = $children;
+    }
+
+    public function get_id()
+    {
+        return $this->id;
+    }
+    public function is_type($type)
+    {
+        return $type === $this->type;
+    }
+    public function managing_stock()
+    {
+        return $this->mode;
+    }
+    public function get_stock_quantity()
+    {
+        return $this->qty;
+    }
+    public function get_children()
+    {
+        return $this->children;
+    }
+    public function get_stock_status()
+    {
+        return 'instock';
+    }
+    public function get_sku()
+    {
+        return '';
+    }
+    public function get_price()
+    {
+        return '';
+    }
+}
+
+$simple_search = new Cfai_Stock_Test_Search_Product(31, 'simple', true, 4);
+expect('search count for a managed simple product', skyphusion_ai_search_stock_count($simple_search), 4);
+$search_line = skyphusion_ai_stock_quantity_text(4);
+expect('search text reuses the stock sentence', skyphusion_ai_search_stock_text($simple_search), $search_line);
+expect('search text carries the count', strpos($search_line, '4') !== false, true);
+expect(
+    'search markup is one paragraph',
+    skyphusion_ai_search_stock_markup($simple_search),
+    '<p class="cloudflare-ai-search-stock-count">' . $search_line . '</p>'
+);
+
+$unmanaged = new Cfai_Stock_Test_Search_Product(32, 'simple', false, 9);
+expect('search count is empty when stock is not managed', skyphusion_ai_search_stock_count($unmanaged), null);
+expect('search text is empty when stock is not managed', skyphusion_ai_search_stock_text($unmanaged), '');
+
+$zero = new Cfai_Stock_Test_Search_Product(33, 'simple', true, 0);
+expect('search count keeps zero', skyphusion_ai_search_stock_count($zero), 0);
+expect('search text prints zero', skyphusion_ai_search_stock_text($zero), skyphusion_ai_stock_quantity_text(0));
+
+$negative = new Cfai_Stock_Test_Search_Product(34, 'simple', true, -3);
+expect('search count drops a negative', skyphusion_ai_search_stock_count($negative), null);
+
+$not_a_product = skyphusion_ai_search_stock_count('nope');
+expect('search count rejects a non object', $not_a_product, null);
+
+$GLOBALS['cfai_stock_test_products'][41] = new Cfai_Stock_Test_Search_Product(41, 'variation', true, 3);
+$GLOBALS['cfai_stock_test_products'][42] = new Cfai_Stock_Test_Search_Product(42, 'variation', true, 5);
+$GLOBALS['cfai_stock_test_products'][43] = new Cfai_Stock_Test_Variation('parent', 10);
+$variable_search = new Cfai_Stock_Test_Search_Product(40, 'variable', false, null, array(41, 42));
+expect('search count does not sum variations into one total', skyphusion_ai_search_stock_count($variable_search), null);
+
+$parent_manages = new Cfai_Stock_Test_Search_Product(44, 'variable', true, 9, array(41, 42));
+expect('search count uses the parent pool and does not add the children', skyphusion_ai_search_stock_count($parent_manages), 9);
+
+$pooled_only = new Cfai_Stock_Test_Search_Product(45, 'variable', false, null, array(43));
+expect('search count ignores a variation that defers to its parent', skyphusion_ai_search_stock_count($pooled_only), null);
+
+$grouped_search = new Cfai_Stock_Test_Search_Product(47, 'grouped', false, null, array(41));
+expect('search count does not sum a grouped product', skyphusion_ai_search_stock_count($grouped_search), null);
+
+$once_a = skyphusion_ai_search_stock_once($simple_search, 31);
+$once_b = skyphusion_ai_search_stock_once($simple_search, 31);
+expect('search markup prints once for a product id', $once_a !== '' && $once_b === '', true);
+
+$search_src = (string) file_get_contents(dirname(__DIR__) . '/includes/search-stock.php');
+preg_match_all(
+    '/add_(?:action|filter)\(\s*\'[^\']*\'\s*,\s*\'([A-Za-z0-9_]+)\'/',
+    $search_src,
+    $search_hits
+);
+$search_missing = array();
+foreach ((array) $search_hits[1] as $search_callback) {
+    if (!function_exists($search_callback)) {
+        $search_missing[] = $search_callback;
+    }
+}
+expect('search stock registers three callbacks', count($search_hits[1]), 3);
+expect('search stock callbacks exist', $search_missing, array());
+
 /* Deferred to the parent: the pooled count must NOT be claimed by this row. */
 $pooled = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10), true);
 expect('pooled stock is not treated as managed', $pooled['managing_stock'], false);

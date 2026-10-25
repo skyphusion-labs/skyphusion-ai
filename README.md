@@ -60,6 +60,14 @@ add_filter( 'cloudflare_ai_search_stock_max_variations', fn() => 400 );
 
 The visible strings go through `__()` and `_n()` on the `skyphusion-ai` text domain. Those strings are `Stock`, `In stock.`, `Out of stock.`, `On backorder.`, `SKU %s.` and the unit count. The `cloudflare-ai-search-stock` class name does not, because a stylesheet and a crawler match on it.
 
+Search results print that same count on each product. The line is `N available.` It is printed only when the product manages stock and the count is a whole number of zero or more. A product that does not manage stock prints nothing. A negative count is not printed. The class is `cloudflare-ai-search-stock-count`.
+
+A variable product that manages stock at the parent uses the parent count. When each variation manages its own stock, the search card does not add those counts together. That total is not the quantity of any one variation. The product page already lists each variation with its own count.
+
+The search box is Cloudflare's snippet. That snippet has no field for stock, and this plugin does not draw the dropdown. The count the shopper sees is on the search results list. The product page already contains the same sentence, so a crawl can index it and an answer can cite it.
+
+A single product page also prints `<meta name="stock_quantity" content="N">`. AI Search reads that tag only after the instance schema defines `stock_quantity` as a number. An instance allows five custom fields. Until the schema names the field, the tag is ignored. The snippet does not display it. The tag is for filtering, not for the dropdown.
+
 The default text model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A prompt that includes an image uses `@cf/mistralai/mistral-small-3.1-24b-instruct` first. `@cf/meta/llama-3.2-11b-vision-instruct` needs a one-time `{"prompt":"agree"}` request on that model before it will answer. It does not take tools or JSON.
 
 The default image model is `@cf/black-forest-labs/flux-1-schnell`, and it takes a JSON prompt. FLUX.2 dev and FLUX.2 klein 4B are also listed. Their docs say multipart. This plugin still sends a JSON prompt. So only those two fail if Cloudflare rejects it.
@@ -89,6 +97,44 @@ Use `0` or `1` for the on and off flags. Omitted flags stay as they are.
 `--accent-color` sets the accent colour. `--color` is a deprecated alias and still works. WP-CLI reserves `--color` as a global flag and consumes it, so the plugin reads that one from the raw arguments. Pass `--accent-color` instead and WP-CLI parses it normally. Passing both uses `--accent-color`.
 
 The search box only lists pages. The chat button answers in a sentence. It uses more of the Cloudflare allowance. Leave `--chat=0` unless that cost is accepted.
+
+## Cost
+
+This plugin does not charge a price. There is no subscription. The figures below are Cloudflare's, read 2026-10-25 from the pages linked at the end of this section. They are the marginal cost of search on the account that owns the AI Search instance. Confirm them on those pages before you budget, because Cloudflare changes them.
+
+AI Search billing begins on 2026-11-01. Until that date the meters below are not billed. After that date every account includes, each month, 5 million ingestion tokens, 10 GB-month of storage, 1,000 semantic queries, and 1,000 full-text queries. Image-processing tokens share the ingestion allotment.
+
+The derivation for a small catalog: indexing a few dozen product pages is far under 5 million tokens and under 10 GB. One thousand semantic queries a month is the included search allowance. A shop that stays inside those four caps adds $0 of AI Search usage. A larger catalog or a busier search pays the rates in the table. Embedding and reranking inside AI Search are included. They do not also appear on the Workers AI bill. Generation does. The chat button and the search-results answer are generation. Query rewriting and any external model are generation too.
+
+Workers AI is priced at $0.011 per 1,000 Neurons, with 10,000 Neurons per day included on the Free plan and on the Paid plan. The text model this plugin uses by default is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, at $0.293 per million input tokens and $2.253 per million output tokens. The embeddings helper uses `@cf/baai/bge-large-en-v1.5` at $0.204 per million input tokens. That embeddings call is Workers AI. It is separate from the embeddings AI Search runs while it indexes.
+
+| meter | included | this plugin | marginal |
+| --- | --- | --- | --- |
+| Plugin price | | no subscription | $0 |
+| AI Search ingestion | 5 million tokens / month | a crawl of the catalog | $0.75 / million tokens past the cap |
+| AI Search image processing | shares the ingestion cap | off unless you enable OCR | $0.50 / million tokens extra |
+| AI Search storage | 10 GB-month | the indexed pages | $2.00 / GB-month past the cap |
+| AI Search semantic, vector, or hybrid query | 1,000 / month | one per search | $0.75 / 1,000 past the cap |
+| AI Search full-text query | 1,000 / month | one per keyword search | $0.10 / 1,000 past the cap |
+| Workers AI Neurons | 10,000 / day | chat and the search-results answer | $0.011 / 1,000 past the daily cap |
+| Default text model | the Neuron cap above | `@cf/meta/llama-3.3-70b-instruct-fp8-fast` | $0.293 / $2.253 per million input / output tokens |
+| Embeddings helper | the Neuron cap above | `@cf/baai/bge-large-en-v1.5` | $0.204 per million input tokens |
+
+**At rest, with no crawl and no query, and with the index inside the included 10 GB, the AI Search marginal cost is $0.** The search box sends no API token. The token for Workers AI stays in the site owner's Cloudflare account. Nothing is sent to Skyphusion.
+
+Keyword search plugins charge their own licence. They are not semantic search. Prices below were read on 2026-10-25 from each vendor's own page. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms.
+
+| plugin | listed price | stock in its own results |
+| --- | --- | --- |
+| SearchWP Standard | $99 for the first year, 1 site. The page says the renewal is the full price, shown there as $199. | keyword search, not this plugin |
+| SearchWP Pro | $199 for the first year, 3 sites. WooCommerce product data is on this tier. The page says the renewal is $399. | keyword search |
+| SearchWP All Access | $399 for the first year. The page says the renewal is $699. | keyword search |
+| FiboSearch | free. Pro is $59, $99, or $249 for the first year, for 1, 3, or 25 sites. The page says renewals are 15% off those figures. | image, price, and SKU. Not a stock count on the free comparison table |
+| Relevanssi | free. Premium Annual is 109 EUR. Premium Permanent is 379 EUR. Unlimited sites. The page says prices exclude tax. | keyword search |
+| YITH WooCommerce Ajax Search | a free plugin, plus a premium licence. The product page did not print a number. | premium can show stock in its own result list |
+| Skyphusion AI | $0 | the count is on the search results page. The snippet dropdown has no stock field |
+
+Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>.
 
 ## External services
 
