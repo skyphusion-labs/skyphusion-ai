@@ -26,6 +26,7 @@ function skyphusion_ai_gateway_host( $url ) {
 	if ( ! is_array( $parts ) || empty( $parts['host'] ) ) {
 		return false;
 	}
+	// phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- AI Gateway API host, not a remote asset.
 	return 'gateway.ai.cloudflare.com' === strtolower( (string) $parts['host'] );
 }
 
