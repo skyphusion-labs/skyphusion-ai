@@ -195,9 +195,9 @@ This plugin uses Cloudflare. Cloudflare free plans include 10,000 neurons a day.
 
 ## Compared with other plugins
 
-Prices below were read on 2026-10-25 from each vendor's own page. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms. Confirm them before you budget.
+Prices below were read on 2026-10-25 from each vendor's own page, and checked again the same day. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms. Confirm them before you budget.
 
-This plugin is the harness for three jobs: search, chat, and the AI Client. It does not charge a licence for any of them. The other rows are plugins that sell one of those jobs. A blank cell means that page did not say.
+This plugin is the harness for three jobs: search, chat, and the AI Client. It does not charge a licence for any of them. The other rows are plugins that sell one of those jobs, plus AIPCF, which is also a Cloudflare provider. A blank cell means that page did not say.
 
 ### Search
 
@@ -220,18 +220,20 @@ The chat button in this plugin is the Cloudflare snippet. It answers in a senten
 | plugin | licence | what the visitor gets |
 | --- | --- | --- |
 | Tidio | Free is $0, with 50 billable conversations and 10 seats. Starter is $24.17 a month on annual billing, for 100 conversations. Growth starts at $49.17 a month, from 250 conversations. Plus starts at $300 a month plus usage. Premium did not print a price. Lyro, the AI agent, starts at $32.50 a month for 50 AI conversations. The first 50 Lyro conversations are one-off, not a monthly allowance | live chat, tickets, and an AI agent that can hand the thread to a person. Tidio ships a WordPress plugin. This is a help desk |
-| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox. You can expand that with Workers AI or with AI Gateway |
+| AIPCF | the plugin is free. The plugin page lists no paid tier. The site assistant spends neurons on your Cloudflare account | a chat that answers from the site's posts and pages. It is off until you turn it on. It is not a help desk |
+| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox. You can expand that with Workers AI or with AI Gateway. The plugin does not send the site to another company |
 
 ### Agents
 
-The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. A saved gateway id adds four fields to each Workers AI log. The fields are the site, the feature, the model, and the user id. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. You still do not pay a plugin fee to make the Cloudflare call. Cloudflare free plans work. Past those plans, you pay Cloudflare.
+The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour. A saved gateway id adds five fields to each Workers AI log. The fields are the site, the feature, the model, the user id, and the plugin version. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. You still do not pay a plugin fee to make the Cloudflare call. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
 | plugin | licence | what the agent can do |
 | --- | --- | --- |
 | AI Engine (Meow Apps) | the plugin is free. Pro is $69 a year for 1 site, $99 for 5 sites, or $179 for 20 sites. Lifetime is $499 for 5 sites, $799 for 20, $999 for 500, or $1,699 for 2,500. You still pay the model vendor. The Pro page says a refund is available within 14 days | a chatbot, and, on Pro, MCP so Claude or ChatGPT can act on the site. Pro also lists embeddings, AI forms, and voice |
-| Skyphusion AI | $0 for the plugin. Workers AI rates are in the table above | the Cloudflare provider those calls use. You can expand them with Workers AI or with AI Gateway. Tools are part of the provider. This release has no MCP server. An MCP server is planned |
+| AIPCF | the plugin is free. The plugin page lists no paid tier. You use your own Cloudflare account. Cloudflare free plans include 10,000 neurons a day. Past that, you pay Cloudflare. The readme also offers Qdrant and PostgreSQL as places to store embeddings | a Cloudflare provider for the WordPress AI Client. It needs WordPress 7.0 and PHP 8.2. It writes titles, excerpts, meta descriptions, and alt text, and a background job fills empty fields. It also has embeddings, a site assistant, related posts, and member search. The page lists version 1.11.2 |
+| Skyphusion AI | $0 for the plugin. Workers AI rates are in the table above. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company | the Cloudflare provider those calls use. You can expand them with Workers AI or with AI Gateway. Tools are part of the provider. This release has no MCP server. An MCP server is planned |
 
-Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>, <https://www.tidio.com/pricing/>, <https://meowapps.com/products/ai-engine-pro/>.
+Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>, <https://www.tidio.com/pricing/>, <https://meowapps.com/products/ai-engine-pro/>, <https://wordpress.org/plugins/aipcf-ai-provider-for-cloudflare/>.
 
 ## External services
 
