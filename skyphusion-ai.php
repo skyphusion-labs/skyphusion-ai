@@ -30,6 +30,7 @@ require_once __DIR__ . '/includes/frontend.php';
 require_once __DIR__ . '/includes/cli.php';
 require_once __DIR__ . '/includes/provider.php';
 require_once __DIR__ . '/includes/insights.php';
+require_once __DIR__ . '/includes/assistant.php';
 require_once __DIR__ . '/includes/deprecated.php';
 
 function skyphusion_ai_activate()

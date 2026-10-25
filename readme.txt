@@ -98,6 +98,10 @@ The list uses the stored vectors. A page view does not call the model. The setti
 
 The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
 
+= Can the site answer from its own pages? =
+
+The site assistant is off until you turn it on. It answers from the stored pages and lists those pages. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. Place `[skyphusion_ai_assistant]` on a page.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
