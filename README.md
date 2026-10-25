@@ -36,6 +36,8 @@ Search results stay as WordPress or WooCommerce left them by default. They chang
 
 A published post can be stored in Cloudflare Vectorize. The settings screen shows passages, neurons, days, and stored dimensions before the first run. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin removes the saved choice and leaves the index in the Cloudflare account.
 
+A signed-in member in a chosen role can search those stored pages with `[skyphusion_ai_member_search]`. The result is a list of pages. It is not a generated answer. A logged-out visitor keeps the normal search and spends nothing. A repeated search is remembered for one hour. The same list can sit above the normal search for those members.
+
 A single post or product can list related pages. The list uses the stored vectors. A page view does not call the model. The settings screen has a switch for this list. The shortcode is `[skyphusion_ai_related]`.
 
 The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
