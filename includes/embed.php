@@ -67,12 +67,17 @@ function skyphusion_ai_embed_config() {
 	if ( ! empty( $stored['created'] ) ) {
 		$created = 1;
 	}
+	$related = 0;
+	if ( ! empty( $stored['related'] ) ) {
+		$related = 1;
+	}
 	return array(
 		'index'      => $index,
 		'post_types' => $types,
 		'fields'     => $fields,
 		'model'      => $model,
 		'created'    => $created,
+		'related'    => $related,
 	);
 }
 
@@ -798,6 +803,9 @@ function skyphusion_ai_embed_apply( $posted ) {
 	if ( isset( $posted['fields'] ) && is_array( $posted['fields'] ) ) {
 		$config['fields'] = skyphusion_ai_embed_field_list( $posted['fields'] );
 	}
+	if ( isset( $posted['related'] ) ) {
+		$config['related'] = empty( $posted['related'] ) ? 0 : 1;
+	}
 	update_option( skyphusion_ai_embed_option_name(), $config, false );
 	return skyphusion_ai_embed_config();
 }
@@ -906,6 +914,11 @@ function skyphusion_ai_embed_render() {
 	}
 	echo '<p><label>' . esc_html__( 'Index name', 'skyphusion-ai' ) . ' ';
 	echo '<input type="text" name="skyphusion_ai_embed_index" value="' . esc_attr( (string) $config['index'] ) . '" /></label></p>';
+	echo '<p><label><input type="checkbox" name="skyphusion_ai_related" value="1"';
+	if ( ! empty( $config['related'] ) ) {
+		echo ' checked="checked"';
+	}
+	echo ' /> ' . esc_html__( 'Show related posts on a single post or product.', 'skyphusion-ai' ) . '</label></p>';
 	echo '<button type="submit">' . esc_html__( 'Save the embedding choice', 'skyphusion-ai' ) . '</button>';
 	echo '</form>';
 	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
@@ -931,7 +944,16 @@ function skyphusion_ai_embed_handle_save() {
 	if ( isset( $_POST['skyphusion_ai_embed_index'] ) ) {
 		$index = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_index'] ) );
 	}
-	skyphusion_ai_embed_apply( array( 'index' => $index ) );
+	$related = '';
+	if ( isset( $_POST['skyphusion_ai_related'] ) ) {
+		$related = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related'] ) );
+	}
+	skyphusion_ai_embed_apply(
+		array(
+			'index'   => $index,
+			'related' => $related,
+		)
+	);
 	skyphusion_ai_embed_redirect();
 }
 
@@ -1028,3 +1050,5 @@ add_action( 'before_delete_post', 'skyphusion_ai_embed_on_delete', 10, 1 );
 add_action( 'admin_post_skyphusion_ai_embed_save', 'skyphusion_ai_embed_handle_save' );
 add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_run' );
 add_action( 'admin_post_skyphusion_ai_embed_delete', 'skyphusion_ai_embed_handle_delete' );
+
+require_once __DIR__ . '/related.php';

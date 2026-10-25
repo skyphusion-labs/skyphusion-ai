@@ -90,6 +90,10 @@ Yes. The search results page lists the pages under the sentence. A page with an 
 
 The settings screen shows the neuron estimate before the first run. Run the sync there, or run `wp skyphusion-ai embed --yes`. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. Deleting the plugin leaves the index in the Cloudflare account.
 
+= Do single posts show related pages? =
+
+The list uses the stored vectors. A page view does not call the model. The settings screen has a switch. You can also place `[skyphusion_ai_related]`.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
