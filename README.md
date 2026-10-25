@@ -34,6 +34,8 @@ Search results stay as WordPress or WooCommerce left them by default. They chang
 
 A published post can be stored in Cloudflare Vectorize. The settings screen shows the neuron estimate before the first run. A post that did not change is not sent again. A password-protected post is left out. Deleting the plugin removes the saved choice and leaves the index in the Cloudflare account.
 
+A single post or product can list related pages. The list uses the stored vectors. A page view does not call the model. The settings screen has a switch for this list. The shortcode is `[skyphusion_ai_related]`.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce
