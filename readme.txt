@@ -102,7 +102,7 @@ The list uses the stored vectors. A page view does not call the model. The setti
 
 = Does the site record searches? =
 
-The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
+The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed. An admin can ask once for a topic to write.
 
 = Can the site answer from its own pages? =
 
@@ -122,7 +122,7 @@ Yes. The post editor lists a page when its title is already in the post. It also
 
 = Can I edit the prompts? =
 
-Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset restores one prompt. A test runs one call and shows the neuron cost. The empty text job, the site assistant, and the link chat use the saved text. The translation helper does not send its instruction.
+Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset restores one prompt. A test runs one call and shows the neuron cost. The empty text job, the site assistant, the link chat, and the search list use the saved text. The translation helper does not send its instruction.
 
 = Can I choose the model? =
 

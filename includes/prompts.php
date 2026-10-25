@@ -2,8 +2,9 @@
 /**
  * Prompts this plugin sends, with a reset and a one-call cost test.
  *
- * The empty text job, the site assistant, and the link chat use the saved
- * text. The translation helper does not send its row. The test does.
+ * The empty text job, the site assistant, the link chat, and the search
+ * list use the saved text. The translation helper does not send its row.
+ * The test does.
  * A spent neuron budget does not leave the site.
  *
  * @package skyphusion-ai
@@ -72,6 +73,11 @@ function skyphusion_ai_prompt_definitions() {
 			'note'    => __( 'The translation helper does not send this instruction. The test does. {text} is a sample sentence.', 'skyphusion-ai' ),
 			'default' => 'Translate the text. Keep the meaning. Text: {text}',
 		),
+		'write_next'           => array(
+			'label'   => __( 'Topics to write', 'skyphusion-ai' ),
+			'note'    => __( 'The search list sends this prompt when an admin asks. {gaps} is the empty searches.', 'skyphusion-ai' ),
+			'default' => "Group these empty searches into topics. Suggest one article to write or one post to extend.\n{gaps}",
+		),
 	);
 }
 
@@ -88,6 +94,7 @@ function skyphusion_ai_prompt_samples() {
 		'phrase'      => 'linen shirt',
 		'suggestions' => '- Linen shirt',
 		'text'        => 'Linen shirt',
+		'gaps'        => 'linen shirt',
 	);
 }
 
@@ -463,7 +470,7 @@ function skyphusion_ai_prompt_render() {
 	echo '<h2>' . esc_html__( 'Prompts', 'skyphusion-ai' ) . '</h2>';
 	echo '<p>' . esc_html__( 'These are the prompts this plugin sends on its own behalf.', 'skyphusion-ai' ) . '</p>';
 	echo '<p>' . esc_html__( 'Reset restores one prompt. A test runs one call and shows the neuron cost.', 'skyphusion-ai' ) . '</p>';
-	echo '<p>' . esc_html__( 'The empty text job, the site assistant, and the link chat use the saved text.', 'skyphusion-ai' ) . '</p>';
+	echo '<p>' . esc_html__( 'The empty text job, the site assistant, the link chat, and the search list use the saved text.', 'skyphusion-ai' ) . '</p>';
 	$last = skyphusion_ai_prompt_last();
 	if ( '' === $last['key'] && '' === $last['error'] ) {
 		echo '<p>' . esc_html__( 'No test has run.', 'skyphusion-ai' ) . '</p>';

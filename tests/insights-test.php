@@ -137,7 +137,9 @@ skyphusion_ai_insight_render();
 $insight_hidden = (string) ob_get_clean();
 expect('another role sees no list', $insight_hidden, '');
 
-$GLOBALS['skyphusion_ai_insight_rows'] = $insight_rows;
+$insight_screen_rows = $insight_rows;
+$insight_screen_rows[0]['searched_at'] = time();
+$GLOBALS['skyphusion_ai_insight_rows'] = $insight_screen_rows;
 $GLOBALS['cfais_can']['manage_options'] = true;
 ob_start();
 skyphusion_ai_insight_render();
@@ -158,3 +160,253 @@ expect('the outcome flag is kept for this request', strpos($insight_provider, 's
 unset($GLOBALS['skyphusion_ai_insight_rows']);
 unset($GLOBALS['cfais_can']['manage_options']);
 unset($GLOBALS['skyphusion_ai_search_outcome_last']);
+
+function insight_gap_row($words, $extra = array())
+{
+    global $insight_now;
+    return array_merge(array(
+        'words' => $words,
+        'searched_at' => $insight_now - 10,
+        'results' => 0,
+        'logged_in' => 0,
+        'outcome' => '',
+        'dedupe' => 'gap',
+    ), $extra);
+}
+
+function insight_live_gap($words, $extra = array())
+{
+    global $insight_visitor;
+    return array_merge(array(
+        'words' => $words,
+        'searched_at' => time(),
+        'results' => 0,
+        'logged_in' => 0,
+        'outcome' => '',
+        'dedupe' => 'live',
+        'ip' => '203.0.113.8',
+        'user_id' => 4,
+        'user_agent' => 'Mozilla/5.0',
+        'visitor' => $insight_visitor,
+    ), $extra);
+}
+
+$GLOBALS['cfais_calls'] = 0;
+expect('an empty list has no topic', skyphusion_ai_insight_gaps(array(), $insight_now), array());
+expect('an empty list makes no request', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['skyphusion_ai_insight_rows'] = array();
+expect('an empty stand-in has no topic', skyphusion_ai_insight_gaps(skyphusion_ai_insight_load(), $insight_now), array());
+expect('an empty stand-in makes no request', $GLOBALS['cfais_calls'], 0);
+
+$insight_same = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('Linen Shirt'),
+    insight_gap_row('linen shirt'),
+), $insight_now);
+expect('the same words are one topic', count($insight_same), 1);
+expect('the topic counts both searches', $insight_same[0]['count'], 2);
+expect('the topic folds case', strtolower($insight_same[0]['words']), 'linen shirt');
+
+$insight_two = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('Linen Shirt'),
+    insight_gap_row('linen shirt'),
+    insight_gap_row('wool coat'),
+), $insight_now);
+$insight_two_labels = array();
+foreach ($insight_two as $insight_group) {
+    $insight_two_labels[] = strtolower($insight_group['words']) . ':' . $insight_group['count'];
+}
+sort($insight_two_labels);
+expect('the topics are linen and wool', $insight_two_labels, array('linen shirt:2', 'wool coat:1'));
+
+$insight_spaces = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('linen shirt'),
+    insight_gap_row('linen  shirt'),
+), $insight_now);
+expect('spaces stay exact', count($insight_spaces), 2);
+expect('each spacing is one search', $insight_spaces[0]['count'] === 1 && $insight_spaces[1]['count'] === 1, true);
+
+$insight_found = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('wool coat', array('results' => 3, 'outcome' => 'ai')),
+    insight_gap_row('hats', array('results' => 2, 'outcome' => 'provider_error')),
+    insight_gap_row('caps', array('results' => 2, 'outcome' => 'no_endpoint')),
+    insight_gap_row('bags', array('results' => 2, 'outcome' => 'rate_limited')),
+), $insight_now);
+expect('a found page is not a topic', $insight_found, array());
+
+$insight_miss_ai = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('linen shirt', array('outcome' => 'ai')),
+), $insight_now);
+expect('a miss stays a topic when the outcome is ai', count($insight_miss_ai) === 1 && $insight_miss_ai[0]['count'] === 1, true);
+$insight_miss_blank = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('linen shirt', array('outcome' => '')),
+), $insight_now);
+expect('a miss stays a topic when the outcome is blank', count($insight_miss_blank) === 1 && $insight_miss_blank[0]['count'] === 1, true);
+
+$insight_aged = skyphusion_ai_insight_gaps(array(array(
+    'words' => 'old query',
+    'searched_at' => $insight_now - skyphusion_ai_insight_keep_seconds() - 1,
+    'results' => 0,
+    'logged_in' => 0,
+    'outcome' => '',
+    'dedupe' => 'old',
+)), $insight_now);
+expect('a row older than 90 days is not a topic', $insight_aged, array());
+expect('an old row makes no request', $GLOBALS['cfais_calls'], 0);
+$insight_edge = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('edge query', array('searched_at' => $insight_now - skyphusion_ai_insight_keep_seconds())),
+), $insight_now);
+expect('a row at 90 days is not a topic', $insight_edge, array());
+$insight_kept_gap = skyphusion_ai_insight_gaps(array(
+    insight_gap_row('still here', array('searched_at' => $insight_now - skyphusion_ai_insight_keep_seconds() + 10)),
+), $insight_now);
+expect('a row inside 90 days is a topic', count($insight_kept_gap) === 1 && $insight_kept_gap[0]['words'] === 'still here', true);
+
+expect('the repeat window stays one hour', skyphusion_ai_insight_repeat_seconds(), 3600);
+expect('the daily cap stays 100', skyphusion_ai_insight_daily_cap(), 100);
+expect('rows stay for 90 days', skyphusion_ai_insight_keep_seconds(), 90 * 86400);
+
+if (!function_exists('skyphusion_ai_prompt_fill')) {
+    require_once dirname(__DIR__) . '/includes/prompts.php';
+}
+expect('the prompt keeps the gaps marker', strpos(skyphusion_ai_prompt_definitions()['write_next']['default'], '{gaps}') !== false, true);
+$insight_filled = skyphusion_ai_prompt_fill('write_next', array('gaps' => 'linen shirt'));
+expect('the prompt receives the empty searches', strpos($insight_filled, 'linen shirt') !== false, true);
+expect('the prompt fills the gaps marker', strpos($insight_filled, '{gaps}') === false, true);
+
+$insight_prev_key = getenv('CLOUDFLARE_API_KEY');
+$insight_prev_account = getenv('CLOUDFLARE_ACCOUNT_ID');
+$insight_ask_token = 'sentinel-token-' . str_repeat('b', 30);
+putenv('CLOUDFLARE_API_KEY=' . $insight_ask_token);
+putenv('CLOUDFLARE_ACCOUNT_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+$insight_prev_stored = isset($GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored'] : null;
+$insight_stored = is_array($insight_prev_stored) ? $insight_prev_stored : array();
+$insight_stored['account_id'] = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+$insight_stored['gateway_id'] = '';
+unset($insight_stored['tool_caps']);
+$GLOBALS['cfais_stored'] = $insight_stored;
+$GLOBALS['cfais_settings'] = array(
+    'endpoint' => 'https://abc123.search.ai.cloudflare.com',
+    'lead_search' => true,
+    'account_id' => 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'gateway_id' => '',
+);
+$insight_prev_neurons = isset($GLOBALS['cfais_options']['skyphusion_ai_neurons']) ? $GLOBALS['cfais_options']['skyphusion_ai_neurons'] : null;
+unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+$GLOBALS['cfais_status'] = 200;
+$GLOBALS['cfais_transport_error'] = false;
+$insight_reply = '{"choices":[{"message":{"content":"Write a linen page."}}],"usage":{"neurons":4}}';
+$GLOBALS['cfais_bodies'] = array($insight_reply, $insight_reply);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_can']['manage_options'] = true;
+$GLOBALS['skyphusion_ai_insight_rows'] = array(insight_live_gap('linen shirt'));
+$insight_answer = skyphusion_ai_insight_write_next();
+expect('one ask returns the topic', $insight_answer, 'Write a linen page.');
+expect('one ask makes one request', $GLOBALS['cfais_calls'], 1);
+$insight_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+expect('one ask calls the writing model', strpos($insight_url, skyphusion_ai_prompt_model()) !== false, true);
+$insight_sent = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+expect('one ask sends the empty search', stripos($insight_sent, 'linen shirt') !== false, true);
+expect('one ask does not send an address', strpos($insight_sent, '203.0.113.8') === false, true);
+expect('one ask does not send a browser', strpos($insight_sent, 'Mozilla') === false, true);
+expect('one ask does not send the visitor', strpos($insight_sent, $insight_visitor) === false, true);
+expect('one ask does not send an account', strpos($insight_sent, 'user_id') === false, true);
+expect('one ask does not send the sentinel', strpos($insight_sent, $insight_ask_token) === false, true);
+expect('the ask url does not include the sentinel', strpos($insight_url, $insight_ask_token) === false, true);
+$insight_text_state = skyphusion_ai_neuron_state();
+expect('one ask counts as text', (int) $insight_text_state['features']['text'] >= 1, true);
+expect('one ask counts the writing tool', (int) $insight_text_state['tools']['text'] >= 1, true);
+
+$insight_again_answer = skyphusion_ai_insight_write_next();
+expect('a second ask returns the topic', $insight_again_answer, 'Write a linen page.');
+expect('a second ask makes a second request', $GLOBALS['cfais_calls'], 2);
+
+$GLOBALS['cfais_calls'] = 0;
+ob_start();
+skyphusion_ai_insight_render();
+$insight_view = (string) ob_get_clean();
+expect('the page view makes no request', $GLOBALS['cfais_calls'], 0);
+expect('the page view offers the ask', strpos($insight_view, 'skyphusion_ai_insight_write_next') !== false, true);
+expect('the page view shows the topic', strpos($insight_view, 'Write a linen page.') !== false, true);
+expect('the page view does not show the sentinel', strpos($insight_view, $insight_ask_token) === false, true);
+
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['skyphusion_ai_insight_rows'] = array(insight_live_gap('wool coat', array('results' => 3, 'outcome' => 'ai')));
+$insight_hit_only = skyphusion_ai_insight_write_next();
+expect('a found page makes no request', $GLOBALS['cfais_calls'], 0);
+expect('a found page is not a model reply', is_wp_error($insight_hit_only), true);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['skyphusion_ai_insight_rows'] = array();
+$insight_none = skyphusion_ai_insight_write_next();
+expect('an empty log makes no request', $GLOBALS['cfais_calls'], 0);
+expect('an empty log is not a model reply', is_wp_error($insight_none), true);
+
+$GLOBALS['skyphusion_ai_insight_rows'] = array(insight_live_gap('linen shirt'));
+$GLOBALS['cfais_can']['manage_options'] = false;
+$GLOBALS['cfais_calls'] = 0;
+skyphusion_ai_insight_handle_write_next();
+expect('another role makes no request', $GLOBALS['cfais_calls'], 0);
+$insight_denied = skyphusion_ai_insight_write_next();
+expect('another role cannot ask', is_wp_error($insight_denied), true);
+expect('another role still makes no request', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['cfais_can']['manage_options'] = true;
+
+update_option('skyphusion_ai_neurons', array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 10000,
+    'estimated' => 0,
+    'features' => array(),
+    'mailed_80' => 1,
+    'mailed_100' => 1,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+$insight_paused = skyphusion_ai_insight_write_next();
+expect('a spent budget pauses the topic list', is_wp_error($insight_paused) && strpos($insight_paused->message, 'paused') !== false, true);
+expect('a spent budget makes no topic request', $GLOBALS['cfais_calls'], 0);
+unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+$GLOBALS['cfais_stored']['tool_caps'] = array('text' => 1);
+update_option('skyphusion_ai_neurons', array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 0,
+    'estimated' => 0,
+    'features' => array(),
+    'tools' => array('text' => 1),
+    'mailed_80' => 0,
+    'mailed_100' => 0,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+$insight_tool = skyphusion_ai_insight_write_next();
+expect('a spent writing limit stops the topic list', is_wp_error($insight_tool) && strpos($insight_tool->message, 'daily limit') !== false, true);
+expect('a spent writing limit makes no topic request', $GLOBALS['cfais_calls'], 0);
+
+expect('the ask checks the nonce when that function exists', strpos($insight_src, "function_exists( 'check_admin_referer' )") !== false, true);
+expect('the ask uses the write next nonce', strpos($insight_src, "check_admin_referer( 'skyphusion_ai_insight_write_next' )") !== false, true);
+expect('the ask is one admin post', substr_count($insight_src, 'admin_post_skyphusion_ai_insight_write_next'), 1);
+expect('the ask is not open to logged out visitors', strpos($insight_src, 'admin_post_nopriv_skyphusion_ai_insight_write_next') === false, true);
+expect('the page view still records on shutdown', strpos($insight_src, 'skyphusion_ai_insight_on_shutdown') !== false, true);
+expect('uninstall removes the search log', strpos($insight_uninstall, 'skyphusion_ai_insights') !== false, true);
+
+if (null === $insight_prev_stored) {
+    unset($GLOBALS['cfais_stored']);
+} else {
+    $GLOBALS['cfais_stored'] = $insight_prev_stored;
+}
+if (null === $insight_prev_neurons) {
+    unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+} else {
+    $GLOBALS['cfais_options']['skyphusion_ai_neurons'] = $insight_prev_neurons;
+}
+unset($GLOBALS['cfais_settings']);
+unset($GLOBALS['cfais_bodies']);
+unset($GLOBALS['skyphusion_ai_insight_rows']);
+unset($GLOBALS['cfais_can']['manage_options']);
+unset($GLOBALS['cfais_store']['skyphusion_ai_write_next']);
+if (false === $insight_prev_key || '' === $insight_prev_key) {
+    putenv('CLOUDFLARE_API_KEY');
+} else {
+    putenv('CLOUDFLARE_API_KEY=' . $insight_prev_key);
+}
+if (false === $insight_prev_account || '' === $insight_prev_account) {
+    putenv('CLOUDFLARE_ACCOUNT_ID');
+} else {
+    putenv('CLOUDFLARE_ACCOUNT_ID=' . $insight_prev_account);
+}
