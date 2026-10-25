@@ -189,7 +189,8 @@ add_shortcode('cloudflare_ai_search', 'skyphusion_ai_shortcode');
  * woocommerce_before_shop_loop. The flag stops the second hook from printing again.
  * A block theme builds that loop before it prints the doctype, so those hooks
  * return and the block filter inserts the answer inside the results markup.
- * A transport error or an empty answer stays off the page.
+ * A transport error, an empty answer, or a missing address stays off the page.
+ * A missing address is still counted. An empty question is not.
  *
  * @param mixed $query
  * @param bool  $from_block
@@ -210,7 +211,7 @@ function skyphusion_ai_render_lead($query = null, $from_block = false)
         return;
     }
     $settings = skyphusion_ai_settings();
-    if (!$settings['lead_search'] || $settings['endpoint'] === '') {
+    if (!$settings['lead_search']) {
         return;
     }
     $question = trim((string) get_search_query(false));

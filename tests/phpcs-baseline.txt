@@ -24,7 +24,7 @@
 # the security sniffs, which do not fire on this tree.
 #
 # =============================================================================
-# OWED: 5781 findings across 11 files.
+# OWED: 5690 findings across 11 files.
 skyphusion-ai.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
 skyphusion-ai.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
 skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
@@ -96,7 +96,7 @@ includes/frontend.php	Squiz.Commenting.FunctionComment.MissingParamComment	6
 includes/frontend.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingAfterOpen	5
 includes/frontend.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingBeforeClose	5
 includes/frontend.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	7
-includes/frontend.php	WordPress.PHP.YodaConditions.NotYoda	17
+includes/frontend.php	WordPress.PHP.YodaConditions.NotYoda	16
 includes/frontend.php	WordPress.WP.EnqueuedResourceParameters.MissingVersion	1
 includes/frontend.php	WordPress.WhiteSpace.CastStructureSpacing.NoSpaceBeforeOpenParenthesis	2
 includes/frontend.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	34
@@ -170,31 +170,31 @@ includes/provider-speech.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpac
 includes/provider-speech.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	9
 includes/provider-speech.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	2
 includes/provider-speech.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	2
-includes/provider.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	10
-includes/provider.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	7
+includes/provider.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	9
+includes/provider.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	6
 includes/provider.php	Generic.WhiteSpace.ArbitraryParenthesesSpacing.SpaceAfterOpen	1
 includes/provider.php	Generic.WhiteSpace.ArbitraryParenthesesSpacing.SpaceBeforeClose	1
-includes/provider.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	150
+includes/provider.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	116
 includes/provider.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceAfterArrayOpenerSingleLine	3
 includes/provider.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceBeforeArrayCloserSingleLine	3
 includes/provider.php	PEAR.Functions.FunctionCallSignature.CloseBracketLine	3
 includes/provider.php	PEAR.Functions.FunctionCallSignature.ContentAfterOpenBracket	3
 includes/provider.php	PEAR.Functions.FunctionCallSignature.MultipleArguments	2
-includes/provider.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	69
-includes/provider.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	69
+includes/provider.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	55
+includes/provider.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	55
 includes/provider.php	Squiz.Commenting.FileComment.MissingPackageTag	1
 includes/provider.php	Squiz.Commenting.FunctionComment.Missing	3
-includes/provider.php	Squiz.Commenting.FunctionComment.MissingParamComment	3
-includes/provider.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingAfterOpen	3
-includes/provider.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingBeforeClose	3
+includes/provider.php	Squiz.Commenting.FunctionComment.MissingParamComment	2
+includes/provider.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingAfterOpen	2
+includes/provider.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingBeforeClose	2
 includes/provider.php	WordPress.Arrays.ArrayDeclarationSpacing.AssociativeArrayFound	2
 includes/provider.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	4
-includes/provider.php	WordPress.PHP.YodaConditions.NotYoda	9
-includes/provider.php	WordPress.WhiteSpace.CastStructureSpacing.NoSpaceBeforeOpenParenthesis	6
-includes/provider.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	29
-includes/provider.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	29
-includes/provider.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	15
-includes/provider.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	9
+includes/provider.php	WordPress.PHP.YodaConditions.NotYoda	7
+includes/provider.php	WordPress.WhiteSpace.CastStructureSpacing.NoSpaceBeforeOpenParenthesis	4
+includes/provider.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	21
+includes/provider.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	21
+includes/provider.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	13
+includes/provider.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	8
 includes/routes.php	Generic.Commenting.DocComment.MissingShort	7
 includes/routes.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	17
 includes/routes.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	26

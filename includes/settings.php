@@ -555,6 +555,107 @@ function skyphusion_ai_admin_notice()
 }
 add_action('admin_notices', 'skyphusion_ai_admin_notice');
 
+/**
+ * One plain line of search counts for the settings screen.
+ *
+ * Each sentence is one count. The numbers are the open 24 hour window.
+ *
+ * @return string Plain text. The caller escapes it.
+ */
+function skyphusion_ai_search_outcome_summary() {
+	$counts  = skyphusion_ai_search_outcomes();
+	$ai      = (int) $counts['ai'];
+	$errors  = (int) $counts['provider_error'];
+	$missing = (int) $counts['no_endpoint'];
+	$limited = (int) $counts['rate_limited'];
+
+	$sentences   = array();
+	$sentences[] = __( 'This count lasts 24 hours.', 'skyphusion-ai' );
+
+	/* translators: %d is the number of searches AI Search answered. */
+	$ai_text     = _n(
+		'AI Search answered %d search.',
+		'AI Search answered %d searches.',
+		$ai,
+		'skyphusion-ai'
+	);
+	$sentences[] = sprintf( $ai_text, $ai );
+
+	/* translators: %d is the number of searches a provider error sent to site results. */
+	$error_text  = _n(
+		'A provider error served %d search from the site results.',
+		'A provider error served %d searches from the site results.',
+		$errors,
+		'skyphusion-ai'
+	);
+	$sentences[] = sprintf( $error_text, $errors );
+
+	/* translators: %d is the number of searches served because the AI Search address is missing. */
+	$missing_text = _n(
+		'A missing address served %d search from the site results.',
+		'A missing address served %d searches from the site results.',
+		$missing,
+		'skyphusion-ai'
+	);
+	$sentences[]  = sprintf( $missing_text, $missing );
+
+	/* translators: %d is the number of searches the plugin call ceiling sent to site results. */
+	$limit_text  = _n(
+		'The safety limit served %d search from the site results.',
+		'The safety limit served %d searches from the site results.',
+		$limited,
+		'skyphusion-ai'
+	);
+	$sentences[] = sprintf( $limit_text, $limited );
+
+	return implode( ' ', $sentences );
+}
+
+/**
+ * Print the search counts under the settings intro.
+ *
+ * @return void
+ */
+function skyphusion_ai_render_search_outcomes() {
+	echo '<p>' . esc_html( skyphusion_ai_search_outcome_summary() ) . '</p>';
+}
+
+/**
+ * Warn when fallback is at least half of a busy window.
+ *
+ * Separate from the "not connected yet" notice. rate_limited is not part
+ * of the half. The notice does not name the token.
+ *
+ * @return void
+ */
+function skyphusion_ai_search_outcome_notice() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	$settings = skyphusion_ai_settings();
+	if ( empty( $settings['lead_search'] ) ) {
+		return;
+	}
+	if ( ! skyphusion_ai_search_outcome_sustained( skyphusion_ai_search_outcomes() ) ) {
+		return;
+	}
+	if ( ! function_exists( 'admin_url' ) ) {
+		return;
+	}
+	$url = admin_url( 'options-general.php?page=cloudflare-ai-search' );
+	/* translators: %s is the URL of this plugin's settings screen. */
+	$message = __( 'Most searches fell back from AI Search to the site results. <a href="%s">Check the AI Search settings</a>.', 'skyphusion-ai' );
+	echo '<div class="notice notice-warning"><p>' . wp_kses(
+		sprintf( $message, esc_url( $url ) ),
+		array(
+			'a' => array(
+				'href' => array(),
+			),
+		)
+	) . '</p></div>';
+}
+add_action( 'admin_notices', 'skyphusion_ai_search_outcome_notice' );
+
 function skyphusion_ai_render_product_links()
 {
     $settings = skyphusion_ai_settings();
@@ -589,6 +690,7 @@ function skyphusion_ai_render_page()
     echo '<div class="wrap">';
     echo '<h1>Skyphusion AI for Cloudflare</h1>';
     echo '<p>Workers AI, AI Gateway, and AI Search. Visitors can still search this site in their own words. WordPress and WooCommerce can call the same Cloudflare account for text, images, speech, and embeddings.</p>';
+	skyphusion_ai_render_search_outcomes();
     skyphusion_ai_render_product_links();
 
     if (is_array($check)) {
