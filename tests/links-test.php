@@ -124,7 +124,92 @@ expect('the scan reads published pages', strpos($link_src, 'get_posts') !== fals
 expect('the screen does not read a remote address', strpos($link_src, 'REMOTE_ADDR') === false, true);
 expect('the screen does not call the embeddings model', strpos($link_src, 'skyphusion_ai_embed_search') === false, true);
 expect('the screen does not save the post', strpos($link_src, 'wp_update_post') === false, true);
+expect('the screen does not insert a post', strpos($link_src, 'wp_insert_post') === false, true);
 expect('the screen uses the stored vectors', strpos($link_src, 'skyphusion_ai_related_rows') !== false, true);
+
+if (!function_exists('skyphusion_ai_prompt_fill')) {
+    require_once dirname(__DIR__) . '/includes/prompts.php';
+}
+$GLOBALS['cfais_can']['edit_posts'] = false;
+$GLOBALS['cfais_calls'] = 0;
+$link_denied = skyphusion_ai_link_ask(2, 'Where does this link go?');
+expect('another role cannot ask', is_wp_error($link_denied), true);
+expect('another role makes no request', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['cfais_can']['edit_posts'] = true;
+$link_blank = skyphusion_ai_link_ask(2, '  ');
+expect('an empty question makes no request', is_wp_error($link_blank), true);
+expect('an empty question stays on the site', $GLOBALS['cfais_calls'], 0);
+$link_prev_key = getenv('CLOUDFLARE_API_KEY');
+$link_prev_account = getenv('CLOUDFLARE_ACCOUNT_ID');
+putenv('CLOUDFLARE_API_KEY=sentinel-token-' . str_repeat('a', 30));
+putenv('CLOUDFLARE_ACCOUNT_ID=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+$GLOBALS['cfais_settings']['account_id'] = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+$GLOBALS['cfais_settings']['gateway_id'] = '';
+$GLOBALS['skyphusion_ai_link_rows'] = array(
+    array('id' => 'p6', 'title' => 'Linen shirt', 'url' => 'https://shop.example/linen'),
+);
+$GLOBALS['skyphusion_ai_link_content'] = 'The linen shirt is soft.';
+$GLOBALS['cfais_status'] = 200;
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array('{"choices":[{"message":{"content":"A linen shirt."}}],"usage":{"neurons":4}}');
+$link_text_before = skyphusion_ai_neuron_state();
+$link_reply = skyphusion_ai_link_ask(2, 'Where does this link go?');
+$link_text_after = skyphusion_ai_neuron_state();
+expect('the link chat returns the model sentence', $link_reply, 'A linen shirt.');
+expect('the link chat makes one request', $GLOBALS['cfais_calls'], 1);
+$link_sent = (string) $GLOBALS['cfais_last_post']['args']['body'];
+expect('the link chat sends the suggestion', strpos($link_sent, 'Linen shirt') !== false, true);
+expect('the link chat sends the question', strpos($link_sent, 'Where does this link go?') !== false, true);
+expect('the link chat counts the text feature', $link_text_after['features']['text'] > $link_text_before['features']['text'], true);
+expect('the link chat counts the writing tool', $link_text_after['tools']['text'] > $link_text_before['tools']['text'], true);
+$GLOBALS['cfai_stock_test_filters']['skyphusion_ai_prompt'] = 'Replaced prompt';
+expect('a filter can replace the link prompt', skyphusion_ai_prompt_fill('links', array('suggestions' => 'Linen shirt', 'question' => 'Where?')), 'Replaced prompt');
+unset($GLOBALS['cfai_stock_test_filters']['skyphusion_ai_prompt']);
+update_option('skyphusion_ai_neurons', array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 10000,
+    'estimated' => 0,
+    'features' => array(),
+    'mailed_80' => 1,
+    'mailed_100' => 1,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+$link_paused = skyphusion_ai_link_ask(2, 'Where does this link go?');
+expect('a spent budget pauses the link chat', is_wp_error($link_paused) && strpos($link_paused->message, 'paused') !== false, true);
+expect('a spent budget makes no link request', $GLOBALS['cfais_calls'], 0);
+unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+$GLOBALS['cfais_stored']['tool_caps'] = array('text' => 1);
+update_option('skyphusion_ai_neurons', array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 0,
+    'estimated' => 0,
+    'features' => array(),
+    'tools' => array('text' => 1),
+    'mailed_80' => 0,
+    'mailed_100' => 0,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+$link_tool = skyphusion_ai_link_ask(2, 'Where does this link go?');
+expect('a spent writing limit stops the link chat', is_wp_error($link_tool) && strpos($link_tool->message, 'daily limit') !== false, true);
+expect('a spent writing limit makes no link request', $GLOBALS['cfais_calls'], 0);
+unset($GLOBALS['cfais_stored']['tool_caps']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+$GLOBALS['cfais_calls'] = 0;
+ob_start();
+skyphusion_ai_link_render(array('ID' => 2));
+$link_quiet = (string) ob_get_clean();
+expect('the box still makes no request', $GLOBALS['cfais_calls'], 0);
+expect('the box offers the question', strpos($link_quiet, 'skyphusion_ai_link_question') !== false, true);
+if (false === $link_prev_key || '' === $link_prev_key) {
+    putenv('CLOUDFLARE_API_KEY');
+} else {
+    putenv('CLOUDFLARE_API_KEY=' . $link_prev_key);
+}
+if (false === $link_prev_account || '' === $link_prev_account) {
+    putenv('CLOUDFLARE_ACCOUNT_ID');
+} else {
+    putenv('CLOUDFLARE_ACCOUNT_ID=' . $link_prev_account);
+}
 
 unset($GLOBALS['skyphusion_ai_link_rows']);
 unset($GLOBALS['skyphusion_ai_link_content']);

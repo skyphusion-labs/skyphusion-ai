@@ -48,7 +48,7 @@ A theme or plugin can translate one string with `skyphusion_ai_translate()`. Pas
 
 The post editor can suggest an internal link when the phrase is already in the post. It can also suggest a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. Outbound suggestions still use the stored vectors. The editor does not call the model.
 
-The settings screen lists each prompt this plugin sends. You can reset one prompt. A test runs one call and shows the neuron cost. Developers can replace the text with the `skyphusion_ai_prompt` filter. The empty text job and the site assistant use the saved text. The editor does not send the link prompt. The translation helper does not send its instruction.
+The settings screen lists each prompt this plugin sends. You can reset one prompt. A test runs one call and shows the neuron cost. Developers can replace the text with the `skyphusion_ai_prompt` filter. The empty text job, the site assistant, and the link chat use the saved text. The translation helper does not send its instruction.
 
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 

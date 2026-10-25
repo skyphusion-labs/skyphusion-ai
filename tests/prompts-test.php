@@ -80,7 +80,7 @@ expect('a prompt drops tags', skyphusion_ai_prompt_raw('links'), 'Keep this');
 skyphusion_ai_prompt_assign('links', str_repeat('b', 4001));
 expect('a prompt stops at 4000 characters', strlen(skyphusion_ai_prompt_raw('links')), 4000);
 skyphusion_ai_prompt_reset('links');
-expect('reset restores the link prompt', skyphusion_ai_prompt_raw('links'), 'Suggest an internal link only when the phrase is already in the post. Phrase: {phrase}');
+expect('reset restores the link prompt', skyphusion_ai_prompt_raw('links'), "Answer only from these suggestions. Do not change the post.\n{suggestions}\nQuestion: {question}");
 skyphusion_ai_prompt_reset('backfill_alt');
 expect('reset restores the alt prompt', skyphusion_ai_backfill_prompt('alt', 'Linen shirt'), 'Write one alt sentence for this image. Title: Linen shirt');
 
@@ -166,7 +166,7 @@ $prompt_screen = (string) ob_get_clean();
 expect('the screen names the prompts', strpos($prompt_screen, 'Prompts') !== false, true);
 expect('the screen shows the alt prompt', strpos($prompt_screen, 'Write one alt sentence for this image.') !== false, true);
 expect('the screen says no test has run', strpos($prompt_screen, 'No test has run.') !== false, true);
-expect('the screen says the editor does not send the link prompt', strpos($prompt_screen, 'The editor does not send this prompt.') !== false, true);
+expect('the screen says the link chat sends this prompt', strpos($prompt_screen, 'The link chat sends this prompt.') !== false, true);
 expect('the screen says the helper does not send the instruction', strpos($prompt_screen, 'The translation helper does not send this instruction.') !== false, true);
 expect('the screen offers a save', strpos($prompt_screen, 'Save the prompts') !== false, true);
 expect('the screen offers a reset', strpos($prompt_screen, 'Reset Alt text') !== false, true);

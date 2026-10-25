@@ -2,8 +2,8 @@
 /**
  * Prompts this plugin sends, with a reset and a one-call cost test.
  *
- * The empty text job and the site assistant use the saved text. The link
- * screen and the translation helper do not send their rows. The test does.
+ * The empty text job, the site assistant, and the link chat use the saved
+ * text. The translation helper does not send its row. The test does.
  * A spent neuron budget does not leave the site.
  *
  * @package skyphusion-ai
@@ -64,8 +64,8 @@ function skyphusion_ai_prompt_definitions() {
 		),
 		'links'                => array(
 			'label'   => __( 'Internal links', 'skyphusion-ai' ),
-			'note'    => __( 'The editor does not send this prompt. The test does. {phrase} is a sample phrase.', 'skyphusion-ai' ),
-			'default' => 'Suggest an internal link only when the phrase is already in the post. Phrase: {phrase}',
+			'note'    => __( 'The link chat sends this prompt. {suggestions} is the suggestion list. {question} is the editor question.', 'skyphusion-ai' ),
+			'default' => "Answer only from these suggestions. Do not change the post.\n{suggestions}\nQuestion: {question}",
 		),
 		'translate'            => array(
 			'label'   => __( 'Translation', 'skyphusion-ai' ),
@@ -82,11 +82,12 @@ function skyphusion_ai_prompt_definitions() {
  */
 function skyphusion_ai_prompt_samples() {
 	return array(
-		'title'    => 'Linen shirt',
-		'pages'    => '- Linen shirt',
-		'question' => 'Is this linen?',
-		'phrase'   => 'linen shirt',
-		'text'     => 'Linen shirt',
+		'title'       => 'Linen shirt',
+		'pages'       => '- Linen shirt',
+		'question'    => 'Is this linen?',
+		'phrase'      => 'linen shirt',
+		'suggestions' => '- Linen shirt',
+		'text'        => 'Linen shirt',
 	);
 }
 
@@ -462,7 +463,7 @@ function skyphusion_ai_prompt_render() {
 	echo '<h2>' . esc_html__( 'Prompts', 'skyphusion-ai' ) . '</h2>';
 	echo '<p>' . esc_html__( 'These are the prompts this plugin sends on its own behalf.', 'skyphusion-ai' ) . '</p>';
 	echo '<p>' . esc_html__( 'Reset restores one prompt. A test runs one call and shows the neuron cost.', 'skyphusion-ai' ) . '</p>';
-	echo '<p>' . esc_html__( 'The empty text job and the site assistant use the saved text.', 'skyphusion-ai' ) . '</p>';
+	echo '<p>' . esc_html__( 'The empty text job, the site assistant, and the link chat use the saved text.', 'skyphusion-ai' ) . '</p>';
 	$last = skyphusion_ai_prompt_last();
 	if ( '' === $last['key'] && '' === $last['error'] ) {
 		echo '<p>' . esc_html__( 'No test has run.', 'skyphusion-ai' ) . '</p>';

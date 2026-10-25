@@ -541,7 +541,160 @@ function skyphusion_ai_link_render( $post = null ) {
 		}
 		echo '</ul>';
 	}
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+	echo '<input type="hidden" name="action" value="skyphusion_ai_link_ask" />';
+	echo '<input type="hidden" name="post_id" value="' . esc_attr( (string) $post_id ) . '" />';
+	if ( function_exists( 'wp_nonce_field' ) ) {
+		wp_nonce_field( 'skyphusion_ai_link_ask' );
+	}
+	echo '<p><label>' . esc_html__( 'Ask about these suggestions.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="text" name="skyphusion_ai_link_question" value="" /></label></p>';
+	echo '<button type="submit">' . esc_html__( 'Ask', 'skyphusion-ai' ) . '</button>';
+	echo '</form>';
 	echo '</section>';
+}
+
+/**
+ * Suggestion list sent with the question.
+ *
+ * @param int $post_id Post id.
+ * @return string
+ */
+function skyphusion_ai_link_suggestion_text( $post_id ) {
+	$rows  = skyphusion_ai_link_rows(
+		array(
+			'ID' => (int) $post_id,
+		)
+	);
+	$found = skyphusion_ai_link_suggestions( skyphusion_ai_link_content( $post_id ), $rows, (int) $post_id );
+	$lines = array();
+	foreach ( $found as $row ) {
+		if ( '' !== $row['title'] ) {
+			$lines[] = $row['title'];
+		}
+	}
+	return implode( "\n", $lines );
+}
+
+/**
+ * Ask about the suggestions. The post is not changed.
+ *
+ * @param int    $post_id  Post id.
+ * @param string $question Editor question.
+ * @return string|WP_Error
+ */
+function skyphusion_ai_link_ask( $post_id, $question ) {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'edit_posts' ) ) {
+		return new WP_Error( 'skyphusion_ai_link_cap', __( 'You cannot edit posts.', 'skyphusion-ai' ) );
+	}
+	$question = trim( (string) $question );
+	if ( '' === $question ) {
+		return new WP_Error( 'skyphusion_ai_link_empty', __( 'The question is empty.', 'skyphusion-ai' ) );
+	}
+	$prompt = '';
+	if ( function_exists( 'skyphusion_ai_prompt_fill' ) ) {
+		$prompt = trim(
+			skyphusion_ai_prompt_fill(
+				'links',
+				array(
+					'suggestions' => skyphusion_ai_link_suggestion_text( $post_id ),
+					'question'    => $question,
+				)
+			)
+		);
+	}
+	if ( '' === $prompt ) {
+		return new WP_Error( 'skyphusion_ai_link_empty', __( 'The prompt is empty.', 'skyphusion-ai' ) );
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
+		$refusal = skyphusion_ai_neuron_refusal();
+		if ( is_wp_error( $refusal ) ) {
+			return $refusal;
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'text' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return $tool_refusal;
+		}
+	}
+	$model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+	if ( function_exists( 'skyphusion_ai_prompt_model' ) ) {
+		$model = skyphusion_ai_prompt_model();
+	}
+	$credentials = array(
+		'account_id' => '',
+		'token'      => '',
+	);
+	if ( function_exists( 'skyphusion_ai_embed_credentials' ) ) {
+		$credentials = skyphusion_ai_embed_credentials();
+	}
+	$gateway = '';
+	if ( function_exists( 'skyphusion_ai_settings' ) ) {
+		$settings = skyphusion_ai_settings();
+		if ( isset( $settings['gateway_id'] ) ) {
+			$gateway = (string) $settings['gateway_id'];
+		}
+	}
+	$url = '';
+	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
+	}
+	$failed = __( 'The link chat could not run.', 'skyphusion-ai' );
+	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_remote_post' ) ) {
+		return new WP_Error( 'skyphusion_ai_link_http', $failed );
+	}
+	$body = array();
+	if ( function_exists( 'cloudflare_ai_provider_chat_body' ) ) {
+		$body = cloudflare_ai_provider_chat_body(
+			array(
+				'model'    => $model,
+				'messages' => array(
+					array(
+						'role' => 'user',
+						'text' => $prompt,
+					),
+				),
+			)
+		);
+	}
+	$headers = array(
+		'Content-Type'  => 'application/json',
+		'Authorization' => 'Bearer ' . $credentials['token'],
+	);
+	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+	}
+	$response = wp_remote_post(
+		$url,
+		array(
+			'timeout' => 30,
+			'headers' => $headers,
+			'body'    => wp_json_encode( $body ),
+		)
+	);
+	if ( is_wp_error( $response ) ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
+		return new WP_Error( 'skyphusion_ai_link_http', $failed );
+	}
+	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+		skyphusion_ai_neuron_record( 'text', $model, $decoded, 'text' );
+	}
+	$status = (int) wp_remote_retrieve_response_code( $response );
+	if ( $status < 200 || $status >= 300 ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
+		return new WP_Error( 'skyphusion_ai_link_http', $failed );
+	}
+	$text = '';
+	if ( function_exists( 'skyphusion_ai_prompt_read' ) ) {
+		$text = skyphusion_ai_prompt_read( $decoded );
+	}
+	return $text;
 }
 
 /**
@@ -563,3 +716,26 @@ function skyphusion_ai_link_boot() {
 }
 
 add_action( 'add_meta_boxes', 'skyphusion_ai_link_boot' );
+
+/**
+ * Read the ask form. The post is not changed.
+ *
+ * @return void
+ */
+function skyphusion_ai_link_handle_ask() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'edit_posts' ) ) {
+		return;
+	}
+	check_admin_referer( 'skyphusion_ai_link_ask' );
+	$post_id = 0;
+	if ( isset( $_POST['post_id'] ) ) {
+		$post_id = (int) sanitize_text_field( wp_unslash( $_POST['post_id'] ) );
+	}
+	$question = '';
+	if ( isset( $_POST['skyphusion_ai_link_question'] ) ) {
+		$question = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_link_question'] ) );
+	}
+	skyphusion_ai_link_ask( $post_id, $question );
+}
+
+add_action( 'admin_post_skyphusion_ai_link_ask', 'skyphusion_ai_link_handle_ask' );
