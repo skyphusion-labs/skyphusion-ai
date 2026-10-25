@@ -37,6 +37,97 @@ function skyphusion_ai_link_phrase_in( $phrase, $content ) {
 }
 
 /**
+ * True when the phrase is a whole word, and not inside an email.
+ *
+ * @param string $phrase  Candidate phrase.
+ * @param string $content Post text.
+ * @return bool
+ */
+function skyphusion_ai_link_phrase_word( $phrase, $content ) {
+	$phrase = trim( (string) $phrase );
+	if ( ! skyphusion_ai_link_phrase_in( $phrase, $content ) ) {
+		return false;
+	}
+	$pattern = '/(?<![\p{L}\p{N}])' . preg_quote( $phrase, '/' ) . '(?![\p{L}\p{N}])/iu';
+	$found   = preg_match_all( $pattern, (string) $content, $matches, PREG_OFFSET_CAPTURE );
+	if ( ! is_int( $found ) || 1 > $found ) {
+		return false;
+	}
+	foreach ( $matches[0] as $hit ) {
+		$offset = (int) $hit[1];
+		$length = strlen( (string) $hit[0] );
+		$before = substr( (string) $content, 0, $offset );
+		$start  = strrpos( $before, ' ' );
+		$start  = false === $start ? 0 : $start + 1;
+		$after  = strpos( (string) $content, ' ', $offset + $length );
+		$end    = false === $after ? strlen( (string) $content ) : $after;
+		$token  = substr( (string) $content, $start, $end - $start );
+		if ( false === strpos( $token, '@' ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Sentence that already contains the phrase.
+ *
+ * @param string $phrase  Candidate phrase.
+ * @param string $content Post text.
+ * @return string
+ */
+function skyphusion_ai_link_sentence( $phrase, $content ) {
+	$text = preg_replace( '/\s+/', ' ', trim( (string) $content ) );
+	if ( ! is_string( $text ) || '' === $text ) {
+		return '';
+	}
+	$parts = preg_split( '/(?<=[.!?])\s+/', $text );
+	if ( ! is_array( $parts ) ) {
+		return '';
+	}
+	foreach ( $parts as $part ) {
+		if ( ! skyphusion_ai_link_phrase_word( $phrase, $part ) ) {
+			continue;
+		}
+		if ( 240 < strlen( $part ) ) {
+			return substr( $part, 0, 240 );
+		}
+		return $part;
+	}
+	return '';
+}
+
+/**
+ * True when the content already links to this address.
+ *
+ * A bare slash is not a link. It would match every page.
+ *
+ * @param string $url     Page address.
+ * @param string $content Post text.
+ * @return bool
+ */
+function skyphusion_ai_link_url_in( $url, $content ) {
+	$url = trim( (string) $url );
+	if ( 8 > strlen( $url ) ) {
+		return false;
+	}
+	if ( false !== strpos( (string) $content, $url ) ) {
+		return true;
+	}
+	$path = '';
+	if ( function_exists( 'wp_parse_url' ) ) {
+		$parts = wp_parse_url( $url );
+		if ( is_array( $parts ) && isset( $parts['path'] ) ) {
+			$path = (string) $parts['path'];
+		}
+	}
+	if ( 2 > strlen( $path ) || '/' === $path ) {
+		return false;
+	}
+	return false !== strpos( (string) $content, $path );
+}
+
+/**
  * Post id from a related row. The vector id is p plus the post id.
  *
  * @param array<string, mixed> $row Related row.
@@ -171,6 +262,133 @@ function skyphusion_ai_link_content( $post_id ) {
 }
 
 /**
+ * Return links whose phrase is already in the other page.
+ *
+ * The current page is skipped. Nothing is written.
+ *
+ * @param string                           $title   Current title.
+ * @param array<int, array<string, mixed>> $posts   Published pages.
+ * @param int                              $post_id Current post id.
+ * @return array<int, array{phrase: string, title: string, url: string, post_id: int, sentence: string}>
+ */
+function skyphusion_ai_link_returns( $title, $posts, $post_id ) {
+	$found   = array();
+	$title   = trim( (string) $title );
+	$post_id = (int) $post_id;
+	if ( ! is_array( $posts ) ) {
+		return $found;
+	}
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$other = isset( $post['post_id'] ) ? (int) $post['post_id'] : 0;
+		if ( 1 > $other || $other === $post_id ) {
+			continue;
+		}
+		$content = isset( $post['content'] ) ? (string) $post['content'] : '';
+		if ( ! skyphusion_ai_link_phrase_word( $title, $content ) ) {
+			continue;
+		}
+		$found[] = array(
+			'phrase'   => $title,
+			'title'    => isset( $post['title'] ) ? (string) $post['title'] : '',
+			'url'      => isset( $post['url'] ) ? (string) $post['url'] : '',
+			'post_id'  => $other,
+			'sentence' => skyphusion_ai_link_sentence( $title, $content ),
+		);
+		if ( count( $found ) >= 5 ) {
+			break;
+		}
+	}
+	return $found;
+}
+
+/**
+ * Ids that another page already links to.
+ *
+ * @param array<int, array<string, mixed>> $posts Published pages.
+ * @return array<int, int>
+ */
+function skyphusion_ai_link_inbound_ids( $posts ) {
+	$ids = array();
+	if ( ! is_array( $posts ) ) {
+		return $ids;
+	}
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$from    = isset( $post['post_id'] ) ? (int) $post['post_id'] : 0;
+		$content = isset( $post['content'] ) ? (string) $post['content'] : '';
+		if ( '' === $content ) {
+			continue;
+		}
+		foreach ( $posts as $other ) {
+			if ( ! is_array( $other ) ) {
+				continue;
+			}
+			$to = isset( $other['post_id'] ) ? (int) $other['post_id'] : 0;
+			if ( 1 > $to || $to === $from ) {
+				continue;
+			}
+			$url = isset( $other['url'] ) ? (string) $other['url'] : '';
+			if ( skyphusion_ai_link_url_in( $url, $content ) ) {
+				$ids[ $to ] = $to;
+			}
+		}
+	}
+	return array_values( $ids );
+}
+
+/**
+ * Rows the editor can scan. A password-protected page stays out.
+ *
+ * @param array<int, mixed> $posts Raw posts.
+ * @return array<int, array<string, mixed>>
+ */
+function skyphusion_ai_link_public_rows( $posts ) {
+	$rows = array();
+	if ( ! is_array( $posts ) ) {
+		return $rows;
+	}
+	foreach ( $posts as $post ) {
+		if ( is_object( $post ) ) {
+			$post = get_object_vars( $post );
+		}
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$password = isset( $post['post_password'] ) ? (string) $post['post_password'] : '';
+		if ( '' !== $password ) {
+			continue;
+		}
+		$status = isset( $post['post_status'] ) ? (string) $post['post_status'] : '';
+		$type   = isset( $post['post_type'] ) ? (string) $post['post_type'] : '';
+		if ( 'publish' !== $status || ( 'post' !== $type && 'page' !== $type ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		if ( 1 > $post_id ) {
+			continue;
+		}
+		$url = '';
+		if ( function_exists( 'get_permalink' ) ) {
+			$url = (string) get_permalink( $post_id );
+		} elseif ( isset( $post['url'] ) ) {
+			$url = (string) $post['url'];
+		}
+		$rows[] = array(
+			'post_id' => $post_id,
+			'title'   => isset( $post['post_title'] ) ? (string) $post['post_title'] : '',
+			'url'     => $url,
+			'content' => isset( $post['post_content'] ) ? (string) $post['post_content'] : '',
+		);
+	}
+	return $rows;
+}
+
+/**
  * Pages to check for inbound links. The test stand-in is $GLOBALS['skyphusion_ai_link_posts'].
  *
  * @return array<int, array<string, mixed>>
@@ -179,7 +397,20 @@ function skyphusion_ai_link_posts() {
 	if ( isset( $GLOBALS['skyphusion_ai_link_posts'] ) && is_array( $GLOBALS['skyphusion_ai_link_posts'] ) ) {
 		return $GLOBALS['skyphusion_ai_link_posts'];
 	}
-	return array();
+	if ( ! function_exists( 'get_posts' ) ) {
+		return array();
+	}
+	$loaded = get_posts(
+		array(
+			'post_type'   => array( 'post', 'page' ),
+			'post_status' => 'publish',
+			'numberposts' => -1,
+		)
+	);
+	if ( ! is_array( $loaded ) ) {
+		return array();
+	}
+	return skyphusion_ai_link_public_rows( $loaded );
 }
 
 /**
@@ -191,7 +422,30 @@ function skyphusion_ai_link_linked() {
 	if ( isset( $GLOBALS['skyphusion_ai_link_linked'] ) && is_array( $GLOBALS['skyphusion_ai_link_linked'] ) ) {
 		return $GLOBALS['skyphusion_ai_link_linked'];
 	}
-	return array();
+	return skyphusion_ai_link_inbound_ids( skyphusion_ai_link_posts() );
+}
+
+/**
+ * Title of the post on the screen.
+ *
+ * @param int $post_id Post id.
+ * @return string
+ */
+function skyphusion_ai_link_title( $post_id ) {
+	if ( isset( $GLOBALS['skyphusion_ai_link_title'] ) && is_string( $GLOBALS['skyphusion_ai_link_title'] ) ) {
+		return $GLOBALS['skyphusion_ai_link_title'];
+	}
+	if ( ! function_exists( 'get_post' ) ) {
+		return '';
+	}
+	$post = get_post( (int) $post_id );
+	if ( is_object( $post ) && isset( $post->post_title ) ) {
+		return (string) $post->post_title;
+	}
+	if ( is_array( $post ) && isset( $post['post_title'] ) ) {
+		return (string) $post['post_title'];
+	}
+	return '';
 }
 
 /**
@@ -241,9 +495,44 @@ function skyphusion_ai_link_render( $post = null ) {
 		}
 		echo '</ul>';
 	}
+	$title = '';
+	if ( is_object( $post ) && isset( $post->post_title ) ) {
+		$title = (string) $post->post_title;
+	} elseif ( is_array( $post ) && isset( $post['post_title'] ) ) {
+		$title = (string) $post['post_title'];
+	}
+	if ( '' === $title ) {
+		$title = skyphusion_ai_link_title( $post_id );
+	}
+	echo '<h3>' . esc_html__( 'Return links', 'skyphusion-ai' ) . '</h3>';
+	echo '<p>' . esc_html__( 'A return link is a phrase already in the other page. Nothing is inserted.', 'skyphusion-ai' ) . '</p>';
+	$returns = skyphusion_ai_link_returns( $title, skyphusion_ai_link_posts(), $post_id );
+	if ( array() === $returns ) {
+		echo '<p>' . esc_html__( 'No other page already contains this title.', 'skyphusion-ai' ) . '</p>';
+	} else {
+		echo '<ul>';
+		foreach ( $returns as $row ) {
+			echo '<li>';
+			echo esc_html( $row['phrase'] );
+			echo ' ';
+			if ( '' !== $row['url'] ) {
+				echo '<a href="' . esc_url( $row['url'] ) . '">' . esc_html( $row['title'] ) . '</a>';
+			} else {
+				echo esc_html( $row['title'] );
+			}
+			if ( '' !== $row['sentence'] ) {
+				echo ' ' . esc_html( $row['sentence'] );
+			}
+			echo '</li>';
+		}
+		echo '</ul>';
+	}
 	echo '<h3>' . esc_html__( 'Pages that nothing links to', 'skyphusion-ai' ) . '</h3>';
-	$orphans = skyphusion_ai_link_orphans( skyphusion_ai_link_posts(), skyphusion_ai_link_linked() );
-	if ( array() === $orphans ) {
+	$pages   = skyphusion_ai_link_posts();
+	$orphans = skyphusion_ai_link_orphans( $pages, skyphusion_ai_link_linked() );
+	if ( array() === $pages ) {
+		echo '<p>' . esc_html__( 'No published page was found.', 'skyphusion-ai' ) . '</p>';
+	} elseif ( array() === $orphans ) {
 		echo '<p>' . esc_html__( 'Every stored page has a link.', 'skyphusion-ai' ) . '</p>';
 	} else {
 		echo '<ul>';
@@ -268,7 +557,7 @@ function skyphusion_ai_link_boot() {
 		'skyphusion_ai_links',
 		__( 'Internal links', 'skyphusion-ai' ),
 		'skyphusion_ai_link_render',
-		array( 'post', 'product' ),
+		array( 'post', 'page', 'product' ),
 		'side'
 	);
 }
