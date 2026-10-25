@@ -104,7 +104,7 @@ The site assistant is off until you turn it on. It answers from the stored pages
 
 = Can empty alt text be filled? =
 
-An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent. The screen shows a skipped item and a retry. The SEO job sends the title and the page text. It skips a page with fewer than 40 characters of text. It cuts the text at 6000 characters. The alt text job reads the image. A decorative image is marked and the alt field stays empty.
+An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent. Each hour continues until the empty fields are done or today's backfill limit is reached. That limit does not stop the other tools. The screen shows a skipped item and a retry. The SEO job sends the title and the page text. It skips a page with fewer than 40 characters of text. It cuts the text at 6000 characters. The alt text job reads the image. A decorative image is marked and the alt field stays empty.
 
 = Can a theme translate a string? =
 

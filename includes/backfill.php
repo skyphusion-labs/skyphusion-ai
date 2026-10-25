@@ -2,8 +2,10 @@
 /**
  * Fill empty alt text and an empty SEO description.
  *
- * The job is off until an admin turns it on. One batch runs each hour.
- * Text the admin wrote is left as it is. A spent neuron budget stops the batch.
+ * The job is off until an admin turns it on. One batch runs each hour
+ * until the empty fields are done or today's backfill limit is reached.
+ * That limit does not stop the other tools. Text the admin wrote is left
+ * as it is. A spent neuron budget still stops a call.
  *
  * @package skyphusion-ai
  */
@@ -13,7 +15,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Option that holds the switch, the last run, and the skips.
+ * Option that holds the switch, the daily limit, the last run, and the skips.
  *
  * It is not autoloaded.
  *
@@ -42,9 +44,106 @@ function skyphusion_ai_backfill_interval() {
 }
 
 /**
- * Saved switch, last run, and skip rows.
+ * Neurons this job may spend in one UTC day when no limit is saved.
  *
- * @return array{enabled: int, last_at: int, skips: array<int, array{post_id: int, kind: string, reason: string}>}
+ * Zero, once saved, means this job has no limit of its own.
+ *
+ * @return int
+ */
+function skyphusion_ai_backfill_daily_default() {
+	return 3000;
+}
+
+/**
+ * A whole number of neurons, including zero. Anything else is refused.
+ *
+ * @param mixed $value Raw value.
+ * @return int|null
+ */
+function skyphusion_ai_backfill_limit_value( $value ) {
+	if ( is_int( $value ) && $value >= 0 ) {
+		return $value;
+	}
+	if ( is_string( $value ) && 1 === preg_match( '/^(0|[1-9][0-9]{0,8})$/', $value ) ) {
+		return (int) $value;
+	}
+	return null;
+}
+
+/**
+ * Neurons this job has spent today. A row from another UTC day counts as zero.
+ *
+ * @param array<string, mixed> $config Saved config.
+ * @return int
+ */
+function skyphusion_ai_backfill_used( $config ) {
+	$today = function_exists( 'skyphusion_ai_neuron_today' ) ? skyphusion_ai_neuron_today() : gmdate( 'Y-m-d' );
+	if ( ! is_array( $config ) || ! isset( $config['day'] ) || (string) $config['day'] !== $today ) {
+		return 0;
+	}
+	$used = isset( $config['neurons'] ) ? (int) $config['neurons'] : 0;
+	if ( $used < 0 ) {
+		return 0;
+	}
+	return $used;
+}
+
+/**
+ * True when today's backfill neurons have reached the saved limit.
+ *
+ * A limit of zero does not stop this job. The site neuron budget is separate.
+ *
+ * @param array<string, mixed> $config Saved config.
+ * @return bool
+ */
+function skyphusion_ai_backfill_blocked( $config ) {
+	if ( ! is_array( $config ) ) {
+		return false;
+	}
+	$limit = isset( $config['limit'] ) ? (int) $config['limit'] : skyphusion_ai_backfill_daily_default();
+	if ( $limit < 1 ) {
+		return false;
+	}
+	return skyphusion_ai_backfill_used( $config ) >= $limit;
+}
+
+/**
+ * Add neurons from one backfill response to today's row.
+ *
+ * A figure Cloudflare did not send adds nothing. The site ledger is unchanged
+ * by this write. Another tool keeps its own room.
+ *
+ * @param string $model   Model id.
+ * @param mixed  $decoded Response JSON.
+ * @return void
+ */
+function skyphusion_ai_backfill_add_neurons( $model, $decoded ) {
+	$neurons = 0;
+	if ( function_exists( 'skyphusion_ai_neuron_measure' ) ) {
+		$measured = skyphusion_ai_neuron_measure( (string) $model, $decoded );
+		if ( ! empty( $measured['known'] ) ) {
+			$neurons = (int) $measured['neurons'];
+		}
+	}
+	if ( $neurons < 0 ) {
+		$neurons = 0;
+	}
+	$config = skyphusion_ai_backfill_config();
+	$today  = function_exists( 'skyphusion_ai_neuron_today' ) ? skyphusion_ai_neuron_today() : gmdate( 'Y-m-d' );
+	if ( (string) $config['day'] !== $today ) {
+		$config['neurons'] = 0;
+		$config['day']     = $today;
+	}
+	$config['neurons'] = (int) $config['neurons'] + $neurons;
+	if ( function_exists( 'update_option' ) ) {
+		update_option( skyphusion_ai_backfill_option_name(), $config, false );
+	}
+}
+
+/**
+ * Saved switch, daily limit, last run, and skip rows.
+ *
+ * @return array{enabled: int, last_at: int, limit: int, day: string, neurons: int, skips: array<int, array{post_id: int, kind: string, reason: string}>}
  */
 function skyphusion_ai_backfill_config() {
 	$stored = array();
@@ -63,9 +162,27 @@ function skyphusion_ai_backfill_config() {
 			}
 		}
 	}
+	$limit = skyphusion_ai_backfill_daily_default();
+	if ( array_key_exists( 'limit', $stored ) ) {
+		$parsed = skyphusion_ai_backfill_limit_value( $stored['limit'] );
+		if ( null !== $parsed ) {
+			$limit = $parsed;
+		}
+	}
+	$day = '';
+	if ( isset( $stored['day'] ) && is_string( $stored['day'] ) && 1 === preg_match( '/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/', $stored['day'] ) ) {
+		$day = $stored['day'];
+	}
+	$neurons = isset( $stored['neurons'] ) ? (int) $stored['neurons'] : 0;
+	if ( $neurons < 0 ) {
+		$neurons = 0;
+	}
 	return array(
 		'enabled' => empty( $stored['enabled'] ) ? 0 : 1,
 		'last_at' => isset( $stored['last_at'] ) ? (int) $stored['last_at'] : 0,
+		'limit'   => $limit,
+		'day'     => $day,
+		'neurons' => $neurons,
 		'skips'   => $skips,
 	);
 }
@@ -85,7 +202,7 @@ function skyphusion_ai_backfill_public_skip( $row ) {
 		$kind = 'alt';
 	}
 	$reason = isset( $row['reason'] ) ? (string) $row['reason'] : '';
-	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing', 'short', 'noimage' ), true ) ) {
+	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing', 'short', 'noimage', 'limit' ), true ) ) {
 		$reason = 'missing';
 	}
 	return array(
@@ -96,10 +213,10 @@ function skyphusion_ai_backfill_public_skip( $row ) {
 }
 
 /**
- * Store the switch. An omitted key keeps the previous value.
+ * Store the switch and the daily limit. An omitted key keeps the previous value.
  *
  * @param array<string, mixed> $posted Posted fields.
- * @return array{enabled: int, last_at: int, skips: array<int, array{post_id: int, kind: string, reason: string}>}
+ * @return array{enabled: int, last_at: int, limit: int, day: string, neurons: int, skips: array<int, array{post_id: int, kind: string, reason: string}>}
  */
 function skyphusion_ai_backfill_apply( $posted ) {
 	$config = skyphusion_ai_backfill_config();
@@ -108,6 +225,12 @@ function skyphusion_ai_backfill_apply( $posted ) {
 	}
 	if ( array_key_exists( 'enabled', $posted ) ) {
 		$config['enabled'] = empty( $posted['enabled'] ) ? 0 : 1;
+	}
+	if ( array_key_exists( 'limit', $posted ) ) {
+		$parsed = skyphusion_ai_backfill_limit_value( $posted['limit'] );
+		if ( null !== $parsed ) {
+			$config['limit'] = $parsed;
+		}
 	}
 	if ( function_exists( 'update_option' ) ) {
 		update_option( skyphusion_ai_backfill_option_name(), $config, false );
@@ -744,6 +867,7 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image ) {
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
 		skyphusion_ai_neuron_record( $feature, $model, $decoded );
 	}
+	skyphusion_ai_backfill_add_neurons( $model, $decoded );
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
 		return new WP_Error( 'skyphusion_ai_backfill', __( 'The text could not be written.', 'skyphusion-ai' ) );
@@ -913,7 +1037,7 @@ function skyphusion_ai_backfill_forget_skip( $skips, $post_id, $kind ) {
 }
 
 /**
- * Run one batch. A retry ignores the hour and still stops at the budget.
+ * Run one batch. A retry ignores the hour. The backfill limit and the site budget still stop a call.
  *
  * @param bool $force True when the admin asks to retry.
  * @return string off, waiting, or ran.
@@ -971,6 +1095,10 @@ function skyphusion_ai_backfill_run( $force ) {
 				continue;
 			}
 		}
+		if ( skyphusion_ai_backfill_blocked( skyphusion_ai_backfill_config() ) ) {
+			$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'limit' );
+			break;
+		}
 		++$attempts;
 		if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
 			$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'budget' );
@@ -1011,6 +1139,10 @@ function skyphusion_ai_backfill_run( $force ) {
 		}
 		$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'missing' );
 	}
+	$fresh             = skyphusion_ai_backfill_config();
+	$config['limit']   = $fresh['limit'];
+	$config['day']     = $fresh['day'];
+	$config['neurons'] = $fresh['neurons'];
 	$config['skips']   = $skips;
 	$config['last_at'] = $now;
 	if ( function_exists( 'update_option' ) ) {
@@ -1040,6 +1172,9 @@ function skyphusion_ai_backfill_skip_label( $row ) {
 	if ( 'alt' === $kind && 'noimage' === $reason ) {
 		return __( 'Alt text was skipped. The image could not be read.', 'skyphusion-ai' );
 	}
+	if ( 'alt' === $kind && 'limit' === $reason ) {
+		return __( 'Alt text was skipped. Today\'s backfill limit stopped this item.', 'skyphusion-ai' );
+	}
 	if ( 'alt' === $kind ) {
 		return __( 'Alt text was skipped. This item has no empty field.', 'skyphusion-ai' );
 	}
@@ -1054,6 +1189,9 @@ function skyphusion_ai_backfill_skip_label( $row ) {
 	}
 	if ( 'short' === $reason ) {
 		return __( 'The SEO description was skipped. The page text is under 40 characters.', 'skyphusion-ai' );
+	}
+	if ( 'limit' === $reason ) {
+		return __( 'The SEO description was skipped. Today\'s backfill limit stopped this item.', 'skyphusion-ai' );
 	}
 	return __( 'The SEO description was skipped. This item has no empty field.', 'skyphusion-ai' );
 }
@@ -1074,6 +1212,7 @@ function skyphusion_ai_backfill_render() {
 	echo '<hr />';
 	echo '<h2>' . esc_html__( 'Empty text', 'skyphusion-ai' ) . '</h2>';
 	echo '<p>' . esc_html__( 'This job is off until you turn it on. It fills empty alt text and an empty SEO description. It does not replace text you wrote.', 'skyphusion-ai' ) . '</p>';
+	echo '<p>' . esc_html__( 'One batch runs each hour until the empty fields are done or today\'s limit is reached. This limit does not stop the other tools. The site neuron budget still stops a call.', 'skyphusion-ai' ) . '</p>';
 	$seo = skyphusion_ai_backfill_seo_plugin();
 	if ( 'yoast' === $seo ) {
 		echo '<p>' . esc_html__( 'Writes Yoast.', 'skyphusion-ai' ) . '</p>';
@@ -1096,6 +1235,28 @@ function skyphusion_ai_backfill_render() {
 		echo ' checked="checked"';
 	}
 	echo ' /> ' . esc_html__( 'Fill empty alt text and SEO descriptions.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p><label>' . esc_html__( 'Daily backfill limit, in neurons.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="number" name="skyphusion_ai_backfill_limit" min="0" step="1" value="' . esc_attr( (string) (int) $config['limit'] ) . '" />';
+	echo '</label></p>';
+	if ( (int) $config['limit'] < 1 ) {
+		echo '<p>' . esc_html(
+			sprintf(
+				/* translators: %d: neurons this job has spent today. */
+				__( 'Today this job has used %d neurons. It has no limit of its own.', 'skyphusion-ai' ),
+				skyphusion_ai_backfill_used( $config )
+			)
+		) . '</p>';
+	} else {
+		echo '<p>' . esc_html(
+			sprintf(
+				/* translators: 1: neurons this job has spent today, 2: daily backfill limit. */
+				__( 'Today this job has used %1$d of %2$d neurons.', 'skyphusion-ai' ),
+				skyphusion_ai_backfill_used( $config ),
+				(int) $config['limit']
+			)
+		) . '</p>';
+	}
+	echo '<p>' . esc_html__( 'Zero means this job has no limit of its own.', 'skyphusion-ai' ) . '</p>';
 	echo '<button type="submit">' . esc_html__( 'Save the empty text choice', 'skyphusion-ai' ) . '</button>';
 	echo '</form>';
 	if ( array() === $config['skips'] ) {
@@ -1132,7 +1293,13 @@ function skyphusion_ai_backfill_handle_save() {
 	if ( isset( $_POST['skyphusion_ai_backfill_enabled'] ) ) {
 		$enabled = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_backfill_enabled'] ) );
 	}
-	skyphusion_ai_backfill_apply( array( 'enabled' => $enabled ) );
+	$posted = array(
+		'enabled' => $enabled,
+	);
+	if ( isset( $_POST['skyphusion_ai_backfill_limit'] ) ) {
+		$posted['limit'] = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_backfill_limit'] ) );
+	}
+	skyphusion_ai_backfill_apply( $posted );
 	if ( function_exists( 'wp_safe_redirect' ) ) {
 		wp_safe_redirect( admin_url( 'options-general.php?page=cloudflare-ai-search' ) );
 		exit;
@@ -1140,7 +1307,7 @@ function skyphusion_ai_backfill_handle_save() {
 }
 
 /**
- * Run one batch now. The hour wait does not apply. The budget still does.
+ * Run one batch now. The hour wait does not apply. The backfill limit and the site budget still do.
  *
  * @return void
  */
