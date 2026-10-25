@@ -71,6 +71,9 @@ class Skyphusion_AI_CLI
             }
             WP_CLI::log($key . '=' . $value);
         }
+		foreach ( skyphusion_ai_search_outcome_status_lines() as $line ) {
+			WP_CLI::log( $line );
+		}
     }
 
     /**

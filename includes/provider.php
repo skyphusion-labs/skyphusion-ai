@@ -162,52 +162,308 @@ function skyphusion_ai_lead_take_slot()
 }
 
 /**
+ * Option that stores the 24 hour search counts.
+ *
+ * Counts only. The question, the answer, the sources, the address, the
+ * token, and the error text are not stored.
+ *
+ * @return string
+ */
+function skyphusion_ai_search_outcome_option() {
+	return 'skyphusion_ai_search_outcomes';
+}
+
+/**
+ * Seconds in one search-count window.
+ *
+ * @return int
+ */
+function skyphusion_ai_search_outcome_window() {
+	return 86400;
+}
+
+/**
+ * Outcome names that are counted.
+ *
+ * The rate_limited name is the plugin call ceiling. It is not a provider failure.
+ *
+ * @return string[]
+ */
+function skyphusion_ai_search_outcome_keys() {
+	return array(
+		'ai',
+		'provider_error',
+		'no_endpoint',
+		'rate_limited',
+	);
+}
+
+/**
+ * A new window with every count at zero.
+ *
+ * @param int $now Unix time for window_start. Zero means no open window.
+ * @return array{window_start: int, ai: int, provider_error: int, no_endpoint: int, rate_limited: int}
+ */
+function skyphusion_ai_search_outcome_fresh( $now ) {
+	$row = array(
+		'window_start' => (int) $now,
+	);
+	foreach ( skyphusion_ai_search_outcome_keys() as $key ) {
+		$row[ $key ] = 0;
+	}
+	return $row;
+}
+
+/**
+ * The open window, or null when the stored value is missing or expired.
+ *
+ * Reading does not write. The next decision starts the new window.
+ *
+ * @param mixed $stored Value from the option.
+ * @param int   $now    Unix time.
+ * @return array{window_start: int, ai: int, provider_error: int, no_endpoint: int, rate_limited: int}|null
+ */
+function skyphusion_ai_search_outcome_current( $stored, $now ) {
+	if ( ! is_array( $stored ) || ! isset( $stored['window_start'] ) ) {
+		return null;
+	}
+	$start = (int) $stored['window_start'];
+	$age   = (int) $now - $start;
+	if ( $start <= 0 || $age < 0 || $age >= skyphusion_ai_search_outcome_window() ) {
+		return null;
+	}
+	$row = array(
+		'window_start' => $start,
+	);
+	foreach ( skyphusion_ai_search_outcome_keys() as $key ) {
+		$value = isset( $stored[ $key ] ) ? (int) $stored[ $key ] : 0;
+		if ( $value < 0 ) {
+			$value = 0;
+		}
+		$row[ $key ] = $value;
+	}
+	return $row;
+}
+
+/**
+ * Counts for the open window.
+ *
+ * An expired window reads as zeros. The stored row is left until the next
+ * decision replaces it, so this function does not hide a write.
+ *
+ * @return array{window_start: int, ai: int, provider_error: int, no_endpoint: int, rate_limited: int}
+ */
+function skyphusion_ai_search_outcomes() {
+	$now = time();
+	if ( ! function_exists( 'get_option' ) ) {
+		return skyphusion_ai_search_outcome_fresh( 0 );
+	}
+	$row = skyphusion_ai_search_outcome_current(
+		get_option( skyphusion_ai_search_outcome_option(), array() ),
+		$now
+	);
+	if ( null === $row ) {
+		return skyphusion_ai_search_outcome_fresh( 0 );
+	}
+	return $row;
+}
+
+/**
+ * Record one search decision.
+ *
+ * Browser snippets do not call this. They do not pass through PHP.
+ *
+ * Unknown names are ignored, so a question cannot be stored by being passed
+ * as the outcome. The call ceiling is its own name and is not folded into
+ * provider_error.
+ *
+ * @param string $outcome One of ai, provider_error, no_endpoint, rate_limited.
+ * @return void
+ */
+function skyphusion_ai_search_outcome_record( $outcome ) {
+	if ( ! in_array( $outcome, skyphusion_ai_search_outcome_keys(), true ) ) {
+		return;
+	}
+	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+		return;
+	}
+	$now = time();
+	$row = skyphusion_ai_search_outcome_current(
+		get_option( skyphusion_ai_search_outcome_option(), array() ),
+		$now
+	);
+	if ( null === $row ) {
+		$row = skyphusion_ai_search_outcome_fresh( $now );
+	}
+	$row[ $outcome ] = (int) $row[ $outcome ] + 1;
+	// Not autoloaded. The row changes on search, and autoload would rewrite
+	// the alloptions cache on every one of those writes.
+	update_option( skyphusion_ai_search_outcome_option(), $row, false );
+}
+
+/**
+ * Cached-miss marker.
+ *
+ * The value is the outcome name only. It is not the question and not the
+ * error text. A later hit counts that same outcome and does not dial again.
+ *
+ * @param string $outcome provider_error. no_endpoint is accepted and not written.
+ * @return array{miss: string}
+ */
+function skyphusion_ai_search_outcome_miss( $outcome ) {
+	return array(
+		'miss' => $outcome,
+	);
+}
+
+/**
+ * Outcome stored on a cached miss, or an empty string when this is not one.
+ *
+ * A cached answer has an answer key and is not a miss.
+ *
+ * @param mixed $cached Value from the question transient.
+ * @return string
+ */
+function skyphusion_ai_search_outcome_miss_name( $cached ) {
+	if ( ! is_array( $cached ) || isset( $cached['answer'] ) || ! isset( $cached['miss'] ) ) {
+		return '';
+	}
+	$miss = $cached['miss'];
+	if ( ! is_string( $miss ) ) {
+		return '';
+	}
+	if ( 'provider_error' !== $miss && 'no_endpoint' !== $miss ) {
+		return '';
+	}
+	return $miss;
+}
+
+/**
+ * True when fallback is at least half of a large enough window.
+ *
+ * The half is provider_error plus no_endpoint. rate_limited is part of the
+ * count and is not part of that half. The ceiling is the plugin protecting
+ * the bill.
+ *
+ * @param mixed $counts Outcome row, or any array with those keys.
+ * @return bool
+ */
+function skyphusion_ai_search_outcome_sustained( $counts ) {
+	if ( ! is_array( $counts ) ) {
+		return false;
+	}
+	$total = 0;
+	$bad   = 0;
+	foreach ( skyphusion_ai_search_outcome_keys() as $key ) {
+		$value = isset( $counts[ $key ] ) ? (int) $counts[ $key ] : 0;
+		if ( $value < 0 ) {
+			$value = 0;
+		}
+		$total += $value;
+		if ( 'provider_error' === $key || 'no_endpoint' === $key ) {
+			$bad += $value;
+		}
+	}
+	if ( $total < 20 ) {
+		return false;
+	}
+	return ( $bad * 2 ) >= $total;
+}
+
+/**
+ * Lines for wp skyphusion-ai status.
+ *
+ * Counts only. The question is not included.
+ *
+ * @return string[]
+ */
+function skyphusion_ai_search_outcome_status_lines() {
+	$counts = skyphusion_ai_search_outcomes();
+	return array(
+		'search_ai=' . (int) $counts['ai'],
+		'search_provider_error=' . (int) $counts['provider_error'],
+		'search_no_endpoint=' . (int) $counts['no_endpoint'],
+		'search_rate_limited=' . (int) $counts['rate_limited'],
+	);
+}
+
+/**
  * The guarded entry point the search page uses.
  *
- * Returns the same shape as `skyphusion_ai_query()` on success, and
- * null whenever nothing should be printed. Null rather than WP_Error because
+ * Returns the same shape as skyphusion_ai_query() on success, and null
+ * whenever nothing should be printed. Null rather than WP_Error because
  * every refusal here is deliberate and silent, and a caller that cannot tell
  * them apart cannot accidentally surface one.
  *
- * @param string $question
+ * A decision a visitor got is counted: an answer, a provider failure, a
+ * missing address, or the plugin call ceiling. An empty question and a
+ * question over the length cap are guards and are not counted.
+ *
+ * @param string $question Search text.
  * @return array{answer: string, sources: array<int, string>}|null
  */
-function skyphusion_ai_lead_answer($question)
-{
-    $question = trim((string) $question);
-    if ($question === '' || skyphusion_ai_lead_too_long($question)) {
-        return null;
-    }
-    $key = skyphusion_ai_lead_cache_key($question);
-    $have_cache = function_exists('get_transient') && function_exists('set_transient');
-    if ($have_cache) {
-        $cached = get_transient($key);
-        if (is_array($cached) && isset($cached['answer'])) {
-            return $cached;
-        }
-        // A cached MISS is still a cache entry. Without it a question the
-        // model answers emptily is re-asked, and paid for, on every view.
-        if ($cached === 'none') {
-            return null;
-        }
-    }
-    if (!skyphusion_ai_lead_take_slot()) {
-        return null;
-    }
-    $result = skyphusion_ai_query($question);
-    if (is_wp_error($result) || !is_array($result) || trim((string) $result['answer']) === '') {
-        if ($have_cache) {
-            // Short, because an endpoint that is down should recover quickly,
-            // but long enough that a failing endpoint is not re-dialled on
-            // every page view while it holds a worker for twenty seconds.
-            set_transient($key, 'none', 300);
-        }
-        return null;
-    }
-    if ($have_cache) {
-        set_transient($key, $result, skyphusion_ai_lead_cache_ttl());
-    }
-    return $result;
+function skyphusion_ai_lead_answer( $question ) {
+	$question = trim( (string) $question );
+	if ( '' === $question || skyphusion_ai_lead_too_long( $question ) ) {
+		return null;
+	}
+
+	$settings = skyphusion_ai_settings();
+	$endpoint = isset( $settings['endpoint'] ) ? (string) $settings['endpoint'] : '';
+	if ( '' === $endpoint ) {
+		// Not cached. Adding the address should answer the next search.
+		// The call ceiling is not used, because nothing was sent.
+		skyphusion_ai_search_outcome_record( 'no_endpoint' );
+		return null;
+	}
+
+	$key        = skyphusion_ai_lead_cache_key( $question );
+	$have_cache = function_exists( 'get_transient' ) && function_exists( 'set_transient' );
+	if ( $have_cache ) {
+		$cached = get_transient( $key );
+		if ( is_array( $cached ) && isset( $cached['answer'] ) ) {
+			skyphusion_ai_search_outcome_record( 'ai' );
+			return $cached;
+		}
+		// A cached miss keeps the outcome that caused it. A later view
+		// counts that outcome again and does not dial the network.
+		$miss = skyphusion_ai_search_outcome_miss_name( $cached );
+		if ( '' !== $miss ) {
+			skyphusion_ai_search_outcome_record( $miss );
+			return null;
+		}
+	}
+
+	if ( ! skyphusion_ai_lead_take_slot() ) {
+		// Do not cache a ceiling refusal. One busy window would then
+		// hide this question for 300 seconds after the window opens.
+		skyphusion_ai_search_outcome_record( 'rate_limited' );
+		return null;
+	}
+
+	$result = skyphusion_ai_query( $question );
+	$answer = '';
+	if ( is_array( $result ) && isset( $result['answer'] ) ) {
+		$answer = trim( (string) $result['answer'] );
+	}
+	// Transport failure, a non-200, and an empty answer are the same
+	// outcome. The error text is not stored and is not consulted.
+	if ( is_wp_error( $result ) || '' === $answer ) {
+		if ( $have_cache ) {
+			// Short, because an endpoint that is down should recover quickly,
+			// but long enough that a failing endpoint is not re-dialled on
+			// every page view while it holds a worker for twenty seconds.
+			set_transient( $key, skyphusion_ai_search_outcome_miss( 'provider_error' ), 300 );
+		}
+		skyphusion_ai_search_outcome_record( 'provider_error' );
+		return null;
+	}
+
+	if ( $have_cache ) {
+		set_transient( $key, $result, skyphusion_ai_lead_cache_ttl() );
+	}
+	skyphusion_ai_search_outcome_record( 'ai' );
+	return $result;
 }
 
 function cloudflare_ai_provider_connector_key()

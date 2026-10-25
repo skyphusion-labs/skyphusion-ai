@@ -44,7 +44,17 @@ if (!function_exists('add_settings_error')) {
 if (!function_exists('get_option')) {
     function get_option($name, $default = false)
     {
-        return $name === 'skyphusion_ai_settings' ? $GLOBALS['cfais_stored'] : $default;
+        // Settings stay on this fixture. Other keys, including the search
+        // outcome counts, are written by update_option() into cfais_options.
+        // lead-guard-test.php defines that writer. This function is already
+        // defined by then, so the store has to live here.
+        if ($name === 'skyphusion_ai_settings') {
+            return $GLOBALS['cfais_stored'];
+        }
+        if (isset($GLOBALS['cfais_options']) && is_array($GLOBALS['cfais_options']) && array_key_exists($name, $GLOBALS['cfais_options'])) {
+            return $GLOBALS['cfais_options'][$name];
+        }
+        return $default;
     }
 }
 if (!function_exists('sanitize_text_field')) {

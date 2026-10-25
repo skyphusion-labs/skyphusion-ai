@@ -30,7 +30,7 @@ Then open **Settings, then Connectors**. Save the Workers AI API token for the C
 
 Put the search box in one spot with the shortcode `[cloudflare_ai_search]`. Then set placement to "Only where I place the shortcode".
 
-Search results stay as WordPress or WooCommerce left them by default. They change once you turn on **Show an AI Search answer above WordPress and WooCommerce search results**. That switch is off by default. Visitors never see a failed request. The cart and checkout stay quiet when that option is on.
+Search results stay as WordPress or WooCommerce left them by default. They change once you turn on **Show an AI Search answer above WordPress and WooCommerce search results**. That switch is off by default. Visitors never see a failed request. The cart and checkout stay quiet when that option is on. The settings screen and `wp skyphusion-ai status` show how many searches used AI Search or the site results.
 
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
