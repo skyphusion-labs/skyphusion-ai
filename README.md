@@ -36,6 +36,8 @@ A published post can be stored in Cloudflare Vectorize. The settings screen show
 
 A single post or product can list related pages. The list uses the stored vectors. A page view does not call the model. The settings screen has a switch for this list. The shortcode is `[skyphusion_ai_related]`.
 
+The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce

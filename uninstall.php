@@ -13,4 +13,5 @@ delete_option( 'skyphusion_ai_db_version' );
 delete_option( 'skyphusion_ai_search_outcomes' );
 delete_option( 'skyphusion_ai_neurons' );
 	delete_option( 'skyphusion_ai_vectorize' );
+	delete_option( 'skyphusion_ai_insights' );
 delete_transient( 'skyphusion_ai_models' );
