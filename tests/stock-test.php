@@ -703,18 +703,13 @@ $GLOBALS['cfai_stock_test_products'][41] = new Cfai_Stock_Test_Search_Product(41
 $GLOBALS['cfai_stock_test_products'][42] = new Cfai_Stock_Test_Search_Product(42, 'variation', true, 5);
 $GLOBALS['cfai_stock_test_products'][43] = new Cfai_Stock_Test_Variation('parent', 10);
 $variable_search = new Cfai_Stock_Test_Search_Product(40, 'variable', false, null, array(41, 42));
-expect('search count sums own-level variations', skyphusion_ai_search_stock_count($variable_search), 8);
+expect('search count does not sum variations into one total', skyphusion_ai_search_stock_count($variable_search), null);
 
 $parent_manages = new Cfai_Stock_Test_Search_Product(44, 'variable', true, 9, array(41, 42));
 expect('search count uses the parent pool and does not add the children', skyphusion_ai_search_stock_count($parent_manages), 9);
 
 $pooled_only = new Cfai_Stock_Test_Search_Product(45, 'variable', false, null, array(43));
 expect('search count ignores a variation that defers to its parent', skyphusion_ai_search_stock_count($pooled_only), null);
-
-$GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 1;
-$over_cap = new Cfai_Stock_Test_Search_Product(46, 'variable', false, null, array(41, 42));
-expect('search count refuses a partial variation sum', skyphusion_ai_search_stock_count($over_cap), null);
-$GLOBALS['cfai_stock_test_filters']['cloudflare_ai_search_stock_max_variations'] = 100;
 
 $grouped_search = new Cfai_Stock_Test_Search_Product(47, 'grouped', false, null, array(41));
 expect('search count does not sum a grouped product', skyphusion_ai_search_stock_count($grouped_search), null);

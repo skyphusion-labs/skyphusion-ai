@@ -62,7 +62,7 @@ The visible strings go through `__()` and `_n()` on the `skyphusion-ai` text dom
 
 Search results print that same count on each product. The line is `N available.` It is printed only when the product manages stock and the count is a whole number of zero or more. A product that does not manage stock prints nothing. A negative count is not printed. The class is `cloudflare-ai-search-stock-count`.
 
-A variable product that manages stock at the parent uses the parent count. When the parent does not manage stock, the line is the sum of variations that manage their own stock. A variation that defers to the parent is not added, because that figure is the pool and not the variation. If the variation list is longer than the row cap, the sum would be short, so the line is left off.
+A variable product that manages stock at the parent uses the parent count. When each variation manages its own stock, the search card does not add those counts together. That total is not the quantity of any one variation. The product page already lists each variation with its own count.
 
 The search box is Cloudflare's snippet. That snippet has no field for stock, and this plugin does not draw the dropdown. The count the shopper sees is on the search results list. The product page already contains the same sentence, so a crawl can index it and an answer can cite it.
 

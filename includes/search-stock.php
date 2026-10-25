@@ -30,10 +30,9 @@ function skyphusion_ai_search_stock_allowed_html() {
  * Managed unit count for one product, or null when there is no count to show.
  *
  * A product that manages its own stock uses that count. A variable product
- * that does not manage stock at the parent sums variations that manage their
- * own stock. A variation that defers to the parent is not a count. If the
- * variation list is longer than the row cap, the sum would be partial, so
- * this returns null instead of a short total.
+ * that stocks each variation separately does not get a summed total on the
+ * search card. That sum is not the count of any one variation. The product
+ * page already lists each variation.
  *
  * @param mixed $product Product object, or anything else.
  * @return int|null
@@ -54,52 +53,7 @@ function skyphusion_ai_search_stock_count( $product ) {
 		return $row['quantity'];
 	}
 
-	if ( ! method_exists( $product, 'is_type' ) || ! $product->is_type( 'variable' ) ) {
-		return null;
-	}
-	if ( ! method_exists( $product, 'get_children' ) ) {
-		return null;
-	}
-
-	$children = $product->get_children();
-	if ( ! is_array( $children ) ) {
-		return null;
-	}
-
-	$max = skyphusion_ai_stock_max_variations();
-	if ( count( $children ) > $max ) {
-		return null;
-	}
-
-	$sum = 0;
-	$any = false;
-	foreach ( $children as $child_id ) {
-		if ( ! function_exists( 'wc_get_product' ) ) {
-			return null;
-		}
-		$child = wc_get_product( $child_id );
-		if ( ! is_object( $child ) ) {
-			continue;
-		}
-		$child_row = skyphusion_ai_stock_row_from_product( $child, false );
-		if (
-			! is_array( $child_row )
-			|| empty( $child_row['managing_stock'] )
-			|| ! isset( $child_row['quantity'] )
-			|| ! is_int( $child_row['quantity'] )
-			|| $child_row['quantity'] < 0
-		) {
-			continue;
-		}
-		$any  = true;
-		$sum += $child_row['quantity'];
-	}
-
-	if ( ! $any ) {
-		return null;
-	}
-
-	return $sum;
+	return null;
 }
 
 /**

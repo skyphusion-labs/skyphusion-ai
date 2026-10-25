@@ -75,7 +75,7 @@ No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 = 0.5.0 =
 
 * Search results print the managed stock count on each product. The sentence is the same "N available." line the product page already uses.
-* A product that does not manage stock prints no count. A negative count is not printed. A variable product sums its own variations when the parent does not manage stock and the full list fits under the row cap.
+* A product that does not manage stock prints no count. A negative count is not printed. A variable product prints a count only when the parent manages stock. Variation counts are not added together on the search card.
 * A single product page adds a stock_quantity meta tag. AI Search reads it only after the instance schema defines that number field. The search snippet still does not display the tag.
 
 = 0.4.1 =
