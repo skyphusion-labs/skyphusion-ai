@@ -118,7 +118,7 @@ Yes. The post editor lists a page when its title is already in the post. It also
 
 = Can I edit the prompts? =
 
-Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset restores one prompt. A test runs one call and shows the neuron cost. The empty text job and the site assistant use the saved text. The editor does not send the link prompt. The translation helper does not send its instruction.
+Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset restores one prompt. A test runs one call and shows the neuron cost. The empty text job, the site assistant, and the link chat use the saved text. The translation helper does not send its instruction.
 
 = Can I choose the model? =
 
