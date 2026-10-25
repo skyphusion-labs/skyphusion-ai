@@ -114,7 +114,7 @@ An hourly job can fill empty alt text and an empty SEO description. It is off un
 
 = Can a theme translate a string? =
 
-Yes. Call `skyphusion_ai_translate()` with the text and a two letter language code. The call uses a Cloudflare translation model. It stops when the daily neuron budget is spent. The error text does not include the API token.
+Yes. Call `skyphusion_ai_translate()` with the text and a language code. See docs/translate.md. The call stops when the daily neuron budget is spent. The error text does not include the API token.
 
 = Can the editor suggest internal links? =
 
