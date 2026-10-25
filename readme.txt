@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.5.0
+Stable tag: 0.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -89,6 +89,10 @@ If you use the API, add `{"field_name": "stock_quantity", "data_type": "number"}
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.5.1 =
+
+* The readme tells you how to add the stock_quantity field on your AI Search instance. You add that field in the Cloudflare account that owns the instance. The plugin already prints the meta tag. Nothing else changed.
 
 = 0.5.0 =
 
