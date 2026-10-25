@@ -717,6 +717,10 @@ function skyphusion_ai_render_page()
 		require_once __DIR__ . '/embed.php';
 	}
 	skyphusion_ai_embed_render();
+	if ( ! function_exists( 'skyphusion_ai_insight_render' ) ) {
+		require_once __DIR__ . '/insights.php';
+	}
+	skyphusion_ai_insight_render();
     echo '</div>';
 }
 

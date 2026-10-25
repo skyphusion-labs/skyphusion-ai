@@ -296,6 +296,8 @@ function skyphusion_ai_search_outcome_record( $outcome ) {
 	if ( ! in_array( $outcome, skyphusion_ai_search_outcome_keys(), true ) ) {
 		return;
 	}
+	// Flag name for this request. The search words are not stored here.
+	$GLOBALS['skyphusion_ai_search_outcome_last'] = $outcome;
 	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 		return;
 	}

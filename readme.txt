@@ -94,6 +94,10 @@ The settings screen shows the neuron estimate before the first run. Run the sync
 
 The list uses the stored vectors. A page view does not call the model. The settings screen has a switch. You can also place `[skyphusion_ai_related]`.
 
+= Does the site record searches? =
+
+The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
