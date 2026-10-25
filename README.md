@@ -66,7 +66,27 @@ A variable product that manages stock at the parent uses the parent count. When 
 
 The search box is Cloudflare's snippet. That snippet has no field for stock, and this plugin does not draw the dropdown. The count the shopper sees is on the search results list. The product page already contains the same sentence, so a crawl can index it and an answer can cite it.
 
-A single product page also prints `<meta name="stock_quantity" content="N">`. AI Search reads that tag only after the instance schema defines `stock_quantity` as a number. An instance allows five custom fields. Until the schema names the field, the tag is ignored. The snippet does not display it. The tag is for filtering, not for the dropdown.
+A single product page prints `<meta name="stock_quantity" content="N">` in the page head. The plugin prints that tag only when the product manages stock and the count is a whole number of zero or more. A product that does not manage stock prints no tag.
+
+AI Search does not read the tag until you add the field on the instance. You do this in the Cloudflare account that owns the instance. The plugin cannot do it. The plugin has no token for that account.
+
+1. In WooCommerce, open the product. Turn on stock management. Enter the quantity. Save the product.
+2. In the Cloudflare dashboard, go to AI, then AI Search, then your instance.
+3. Open Parser options, then Custom metadata. These controls are in the instance settings.
+4. Add a field. Set the name to `stock_quantity`. Set the type to `number`. Keep every field you already have.
+5. Save. Cloudflare indexes the site again. This is not instant.
+
+An instance allows five custom fields. This field uses one of them. The name is stored in lowercase. Do not use the names `timestamp`, `folder`, or `filename`.
+
+The search box does not show this field. The field is a filter on the search API. The sentence on the product page is what an answer can quote. That sentence is inside `main`.
+
+If you set the field with the API, add this object to `custom_metadata` together with the fields you already have:
+
+```json
+{ "field_name": "stock_quantity", "data_type": "number" }
+```
+
+Do not send this object as the only field. That removes the other fields. Cloudflare documents the control at https://developers.cloudflare.com/ai-search/configuration/indexing/metadata/ and the page tag at https://developers.cloudflare.com/ai-search/configuration/data-source/website/custom-metadata/.
 
 The default text model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A prompt that includes an image uses `@cf/mistralai/mistral-small-3.1-24b-instruct` first. `@cf/meta/llama-3.2-11b-vision-instruct` needs a one-time `{"prompt":"agree"}` request on that model before it will answer. It does not take tools or JSON.
 
