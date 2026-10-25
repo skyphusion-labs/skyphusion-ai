@@ -271,6 +271,9 @@ function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
 		)
 	);
 	if ( is_wp_error( $response ) ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
 		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
@@ -279,6 +282,9 @@ function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
 	}
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
 		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
 	}
 	$read = array();

@@ -874,6 +874,9 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 		)
 	);
 	if ( is_wp_error( $response ) ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, $feature, $response );
+		}
 		return new WP_Error( 'skyphusion_ai_backfill', __( 'The text could not be written.', 'skyphusion-ai' ) );
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
@@ -883,6 +886,9 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 	skyphusion_ai_backfill_add_neurons( $model, $decoded );
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, $feature, $response );
+		}
 		return new WP_Error( 'skyphusion_ai_backfill', __( 'The text could not be written.', 'skyphusion-ai' ) );
 	}
 	$read = array();

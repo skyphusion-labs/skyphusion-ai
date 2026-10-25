@@ -33,6 +33,9 @@ function cloudflare_ai_provider_gateway_id($value)
     if (!preg_match('/^[a-z0-9][a-z0-9_-]{0,63}$/', $value)) {
         return '';
     }
+	if ( function_exists( 'skyphusion_ai_gateway_fallback_active' ) && skyphusion_ai_gateway_fallback_active() ) {
+		return '';
+	}
     return $value;
 }
 

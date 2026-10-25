@@ -26,7 +26,7 @@ The license is GPL-2.0-or-later. The plugin needs WordPress 6.4 and PHP 8.0. The
 
 The same screen links to Workers AI, AI Gateway, and AI Search. It links to both the dashboard and the docs. Paste the account id there. The account id is 32 hex characters.
 
-Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id to send model calls through `gateway.ai.cloudflare.com` instead.
+Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id to send model calls through `gateway.ai.cloudflare.com` instead. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log includes the plugin version. An image failure on a saved dynamic route does not start the hour.
 
 Then open **Settings, then Connectors**. Save the Workers AI API token for the Cloudflare provider. You can also put the account id in front of the token as `account-id:api-token`. Only the token half is sent. The plugin accepts `CLOUDFLARE_ACCOUNT_ID` from the environment, then from a PHP constant, when the setting is empty.
 
