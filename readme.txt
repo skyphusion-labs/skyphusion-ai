@@ -102,7 +102,7 @@ The settings screen lists searches that found no page. The words stay in this si
 
 = Can the site answer from its own pages? =
 
-The site assistant is off until you turn it on. It answers from the stored pages and lists those pages. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. Place `[skyphusion_ai_assistant]` on a page.
+The site assistant is off until you turn it on. It answers from the stored pages and lists those pages. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own. Place `[skyphusion_ai_assistant]` on a page.
 
 = Can empty alt text be filled? =
 
