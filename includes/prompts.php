@@ -416,6 +416,9 @@ function skyphusion_ai_prompt_test( $key ) {
 		)
 	);
 	if ( is_wp_error( $response ) ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
 		return skyphusion_ai_prompt_remember( $key, 0, '', $failed );
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
@@ -435,6 +438,9 @@ function skyphusion_ai_prompt_test( $key ) {
 	}
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
 		return skyphusion_ai_prompt_remember( $key, $neurons, '', $failed );
 	}
 	return skyphusion_ai_prompt_remember( $key, $neurons, skyphusion_ai_prompt_read( $decoded ), '' );

@@ -255,6 +255,13 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
     $response = $model->getHttpTransporter()->send($request, $model->getRequestOptions());
 	$data = skyphusion_ai_neuron_note( $response->getData() );
     if (!$response->isSuccessful()) {
+		if ( function_exists( 'skyphusion_ai_gateway_mark' ) ) {
+			$skyphusion_ai_gateway_feature = 'text';
+			if ( isset( $GLOBALS['skyphusion_ai_neuron_call']['feature'] ) ) {
+				$skyphusion_ai_gateway_feature = (string) $GLOBALS['skyphusion_ai_neuron_call']['feature'];
+			}
+			skyphusion_ai_gateway_mark( $url, $skyphusion_ai_gateway_feature );
+		}
         throw new RuntimeException(esc_html(cloudflare_ai_provider_error_message($response->getStatusCode(), $data)));
     }
     $type = $response->getHeaderAsString('Content-Type');

@@ -1683,6 +1683,9 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 			'body'    => wp_json_encode( $body ),
 		)
 	);
+	if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+		skyphusion_ai_gateway_note( $url, 'embeddings', $response );
+	}
 	if ( is_wp_error( $response ) || ! function_exists( 'wp_remote_retrieve_body' ) ) {
 		return $response;
 	}
