@@ -12,4 +12,5 @@ delete_option( 'cloudflare_ai_search_settings' );
 delete_option( 'skyphusion_ai_db_version' );
 delete_option( 'skyphusion_ai_search_outcomes' );
 delete_option( 'skyphusion_ai_neurons' );
+	delete_option( 'skyphusion_ai_vectorize' );
 delete_transient( 'skyphusion_ai_models' );

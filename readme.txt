@@ -86,6 +86,10 @@ Yes, when a gateway id is saved. Each Workers AI call sends the site, the featur
 
 Yes. The search results page lists the pages under the sentence. A page with an address is a link. A page with no address stays as text. A failed search shows no sentence and no list.
 
+= Does a saved post get an embedding? =
+
+The settings screen shows the neuron estimate before the first run. Run the sync there, or run `wp skyphusion-ai embed --yes`. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. Deleting the plugin leaves the index in the Cloudflare account.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
