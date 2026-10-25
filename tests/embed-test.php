@@ -287,6 +287,8 @@ skyphusion_ai_embed_render();
 $embed_html = (string) ob_get_clean();
 expect('the screen shows the neuron estimate', strpos($embed_html, '19') !== false, true);
 expect('the screen says the model was not called', strpos($embed_html, 'has not been called') !== false, true);
+expect('the screen says the embeddings limit stays on this job', strpos($embed_html, 'does not stop the other tools') !== false, true);
+expect('the screen names the daily limit', strpos($embed_html, 'skyphusion_ai_embed_limit') !== false, true);
 expect('the screen makes no request', $GLOBALS['cfais_calls'], 0);
 expect('the screen does not show the token', strpos($embed_html, $embed_token) === false, true);
 
@@ -297,6 +299,131 @@ expect('uninstall removes the vectorize option', strpos($embed_uninstall, 'skyph
 expect('uninstall does not call vectorize', strpos($embed_uninstall, 'vectorize/v2') === false, true);
 $embed_cli = (string) file_get_contents(dirname(__DIR__) . '/includes/cli.php');
 expect('the cli command reaches the helper', strpos($embed_cli, 'skyphusion_ai_embed_cli') !== false, true);
+
+$embed_private = embed_post(60, 'Quiet', 'Private text', array('post_status' => 'private'));
+expect('a private post stays out', skyphusion_ai_embed_included($embed_private, skyphusion_ai_embed_config()), false);
+$embed_private_config = skyphusion_ai_embed_config();
+$embed_private_config['statuses'] = array('publish', 'private');
+expect('a private post is included when chosen', skyphusion_ai_embed_included($embed_private, $embed_private_config), true);
+$embed_locked_private = embed_post(61, 'Locked', 'Hidden', array('post_status' => 'private', 'post_password' => 'locked'));
+expect('a password protected private post stays out', skyphusion_ai_embed_included($embed_locked_private, $embed_private_config), false);
+$embed_old = embed_post(62, 'Old', 'Dated text', array('post_date_gmt' => '2020-01-01 00:00:00'));
+$embed_dated = skyphusion_ai_embed_config();
+$embed_dated['after'] = '2024-01-01';
+expect('a post before the cutoff stays out', skyphusion_ai_embed_included($embed_old, $embed_dated), false);
+$embed_match = embed_post(63, 'Kept', 'Category text', array('categories' => array('linen')));
+$embed_other = embed_post(64, 'Dropped', 'Other text', array('categories' => array('wool')));
+$embed_tax = skyphusion_ai_embed_config();
+$embed_tax['tax_mode'] = 'include';
+$embed_tax['terms'] = array('linen');
+expect('an included category stays', skyphusion_ai_embed_included($embed_match, $embed_tax), true);
+expect('another category stays out', skyphusion_ai_embed_included($embed_other, $embed_tax), false);
+$embed_tax_out = $embed_tax;
+$embed_tax_out['tax_mode'] = 'exclude';
+expect('an excluded category stays out', skyphusion_ai_embed_included($embed_match, $embed_tax_out), false);
+expect('a different category stays when others are excluded', skyphusion_ai_embed_included($embed_other, $embed_tax_out), true);
+$embed_image = embed_post(66, 'Pic', 'Image text', array('post_type' => 'attachment', 'post_status' => 'inherit'));
+expect('an image stays out until chosen', skyphusion_ai_embed_included($embed_image, skyphusion_ai_embed_config()), false);
+$embed_images_on = skyphusion_ai_embed_config();
+$embed_images_on['images'] = 1;
+expect('a chosen image is included', skyphusion_ai_embed_included($embed_image, $embed_images_on), true);
+$GLOBALS['cfais_embed_meta'][65]['skyphusion_ai_embed_exclude'] = '1';
+$embed_left = embed_post(65, 'Left out', 'Editor text');
+expect('an editor can leave one post out', skyphusion_ai_embed_included($embed_left, skyphusion_ai_embed_config()), false);
+$GLOBALS['cfais_calls'] = 0;
+$embed_choice = skyphusion_ai_embed_estimate(array($embed_long), skyphusion_ai_embed_config());
+expect('the estimate counts one passage', $embed_choice['passages'], 1);
+expect('the estimate names the days', $embed_choice['days'], 1);
+expect('the estimate names stored dimensions', $embed_choice['stored'], 1024);
+expect('the estimate does not call the model', $GLOBALS['cfais_calls'], 0);
+$embed_span = skyphusion_ai_embed_config();
+$embed_span['limit'] = 10;
+$embed_span_est = skyphusion_ai_embed_estimate(array($embed_long), $embed_span);
+expect('a large estimate is split across days', $embed_span_est['days'], 2);
+$embed_query = skyphusion_ai_embed_query_args(skyphusion_ai_embed_config());
+expect('the run asks for published posts', $embed_query['post_status'], array('publish'));
+$embed_query_more_config = skyphusion_ai_embed_config();
+$embed_query_more_config['statuses'] = array('publish', 'private');
+$embed_query_more_config['images'] = 1;
+$embed_query_more = skyphusion_ai_embed_query_args($embed_query_more_config);
+expect('the run asks for private posts when chosen', in_array('private', $embed_query_more['post_status'], true), true);
+expect('the run asks for images when chosen', in_array('attachment', $embed_query_more['post_type'], true), true);
+$embed_old_day = skyphusion_ai_embed_config();
+$embed_old_day['limit'] = 10;
+$embed_old_day['day'] = '2000-01-01';
+$embed_old_day['neurons'] = 50;
+expect('yesterday does not spend today', skyphusion_ai_embed_limit_blocked($embed_old_day), false);
+$embed_old_day['day'] = skyphusion_ai_neuron_today();
+expect('today at the limit stops embeddings', skyphusion_ai_embed_limit_blocked($embed_old_day), true);
+$embed_old_day['limit'] = 0;
+expect('a zero limit does not stop embeddings', skyphusion_ai_embed_limit_blocked($embed_old_day), false);
+update_option('skyphusion_ai_vectorize', array(
+    'index' => 'skyphusion-ai',
+    'post_types' => array('post', 'product'),
+    'fields' => array('title', 'content', 'excerpt'),
+    'model' => '@cf/baai/bge-large-en-v1.5',
+    'created' => 1,
+    'limit' => 10,
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 10,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+unset($GLOBALS['cfais_bodies']);
+$embed_limited = skyphusion_ai_embed_sync_post(embed_post(70, 'Cap', 'Over the embeddings limit'));
+expect('a spent embeddings limit does not call the model', $embed_limited['state'], 'limit');
+expect('a spent embeddings limit makes no request', $GLOBALS['cfais_calls'], 0);
+update_option('skyphusion_ai_vectorize', array(
+    'index' => 'skyphusion-ai',
+    'post_types' => array('post', 'product'),
+    'fields' => array('title', 'content', 'excerpt'),
+    'model' => '@cf/baai/bge-large-en-v1.5',
+    'created' => 1,
+    'limit' => 0,
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 10,
+), false);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"mutationId":"m3"}}',
+);
+$embed_open = skyphusion_ai_embed_sync_post(embed_post(71, 'Open', 'No own limit'));
+expect('a zero embeddings limit does not stop the job', $embed_open['state'], 'embedded');
+expect('a zero embeddings limit still stores the post', $GLOBALS['cfais_calls'], 2);
+$embed_form = skyphusion_ai_embed_apply(array(
+    'private' => '1',
+    'images' => '1',
+    'after' => '2024-06-01',
+    'tax_mode' => 'exclude',
+    'terms' => array('wool', 'no spaces'),
+    'limit' => 0,
+));
+expect('private can be saved', in_array('private', $embed_form['statuses'], true), true);
+expect('images can be saved', $embed_form['images'], 1);
+expect('a date cutoff can be saved', $embed_form['after'], '2024-06-01');
+expect('exclude can be saved', $embed_form['tax_mode'], 'exclude');
+expect('a bad slug is dropped', $embed_form['terms'], array('wool'));
+expect('a zero limit is saved', $embed_form['limit'], 0);
+update_option('skyphusion_ai_vectorize', array(
+    'index' => 'skyphusion-ai',
+    'post_types' => array('post', 'product'),
+    'fields' => array('title', 'content', 'excerpt'),
+    'model' => '@cf/baai/bge-large-en-v1.5',
+    'created' => 1,
+    'limit' => 3000,
+    'neurons' => 0,
+), false);
+skyphusion_ai_embed_add_neurons(4);
+expect('the embeddings total keeps the call', skyphusion_ai_embed_config()['neurons'], 4);
+skyphusion_ai_embed_add_neurons(1);
+expect('a second call adds to today', skyphusion_ai_embed_config()['neurons'], 5);
+$embed_search_fn = substr($embed_src, (int) strpos($embed_src, 'function skyphusion_ai_embed_search'), 1800);
+expect('a test search does not write the index', strpos($embed_search_fn, 'upsert') === false && strpos($embed_search_fn, 'delete_by_ids') === false, true);
+$embed_related = (string) file_get_contents(dirname(__DIR__) . '/includes/related.php');
+$embed_links = (string) file_get_contents(dirname(__DIR__) . '/includes/links.php');
+expect('related posts do not call the embeddings model', strpos($embed_related, 'cloudflare_ai_provider_embeddings') === false, true);
+expect('the link box does not call the embeddings model', strpos($embed_links, 'cloudflare_ai_provider_embeddings') === false && strpos($embed_links, 'skyphusion_ai_embed_search') === false, true);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);

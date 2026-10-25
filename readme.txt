@@ -90,7 +90,7 @@ Yes. The search results page lists the pages under the sentence. A page with an 
 
 = Does a saved post get an embedding? =
 
-The settings screen shows the neuron estimate before the first run. Run the sync there, or run `wp skyphusion-ai embed --yes`. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. Deleting the plugin leaves the index in the Cloudflare account.
+The settings screen shows passages, neurons, days, and stored dimensions before the first run. Run the sync there, or run `wp skyphusion-ai embed --yes`. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
 
 = Do single posts show related pages? =
 
