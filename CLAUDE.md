@@ -14,9 +14,19 @@ shipped prefix as a side effect of other work.
   It checks the shipped PHP only. Findings already listed in
   `tests/phpcs-baseline.txt` are owed. A new pair, or a higher count, fails.
   Never raise a count to get green.
-- CI job `coverage` is `php -l` over every tracked PHP file (`git ls-files '*.php'`).
-  It is a syntax gate. The job is named `coverage` because that is the required
-  status check. Do not rename the job without a branch-protection change.
+- `bash tests/php-lint.sh` is the syntax gate that runs. It lints every
+  tracked PHP file (`git ls-files '*.php'`, floor 15) and installs
+  `tests/hooks/pre-push` at `.git/hooks/pre-push` so a push runs it.
+  Do not set `core.hooksPath` to `tests/hooks`. A seat that already has
+  the estate hook would lose that hook. Exit 0 parses, exit 1 does not,
+  exit 2 could not measure. Exit 2 is never a pass.
+  Prove it: `PHP_LINT_PLANT='uninstall.php:this is not php {' bash tests/php-lint.sh`
+  must exit 1 and name `uninstall.php`. Without the variable it must exit 0.
+- CI job `coverage` is the same `php -l` check. The workflow stays, and it
+  does not call the script. The job is named `coverage` because that is the
+  required status check. Do not rename it without a branch-protection change,
+  and do not delete the workflow because a run currently fails before any
+  step. When Actions starts jobs again, that job should pass unchanged.
 - `tests/plugin-check.sh` is the WordPress Plugin Check gate. **Run it on every change
   to the plugin, before opening the PR.** Conrad's standard (2026-10-23).
 

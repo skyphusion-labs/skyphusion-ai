@@ -123,7 +123,11 @@ It exits 0 when no error is new, 1 when a new error appears, and 2 when it could
 
 ### Syntax
 
-CI runs `php -l` on every PHP file that git tracks. A file that does not parse fails that job. The job is named `coverage` because branch protection requires a check by that name.
+Run `bash tests/php-lint.sh` before you open a pull request. It checks every PHP file that git tracks. A file that does not parse fails the run. The first run installs a pre-push hook, so a later push runs the same check.
+
+The script exits 0 when every file parses, 1 when a file does not parse or the file list is too short, and 2 when it could not measure. Exit 2 is never a pass.
+
+The CI job named `coverage` runs the same check. The job stays in the workflow. Branch protection requires a check by that name.
 
 ### Coding standards
 

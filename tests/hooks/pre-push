@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Syntax gate on push. tests/php-lint.sh installs this at .git/hooks/pre-push.
+# The coverage job in .github/workflows/ci.yml is the same check. Leave that
+# workflow in place. It does not call this hook.
+set -u
+cat >/dev/null || true
+root="$(git rev-parse --show-toplevel)" || exit 2
+exec bash "$root/tests/php-lint.sh"
