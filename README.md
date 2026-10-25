@@ -40,7 +40,7 @@ A signed-in member in a chosen role can search those stored pages with `[skyphus
 
 A single post or product can list related pages. The list uses the stored vectors. A page view does not call the model. The settings screen has a switch for this list. The shortcode is `[skyphusion_ai_related]`.
 
-The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed.
+The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed. An admin can ask once for a topic to write.
 
 A site assistant can answer from the stored pages and list those pages. It is off until you turn it on. You can deploy an assistant Worker from this screen, or with `wp skyphusion-ai worker deploy`. A blank address keeps the PHP call. The page does not show the token. The answer streams from that Worker. The Worker also finds the pages and asks the site each hour for the next empty text. See `docs/worker.md`. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own.
 
@@ -50,7 +50,7 @@ A theme or plugin can translate one string with `skyphusion_ai_translate()`. Pas
 
 The post editor can suggest an internal link when the phrase is already in the post. It can also suggest a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. Outbound suggestions still use the stored vectors. The editor does not call the model.
 
-The settings screen lists each prompt this plugin sends. You can reset one prompt. A test runs one call and shows the neuron cost. Developers can replace the text with the `skyphusion_ai_prompt` filter. The empty text job, the site assistant, and the link chat use the saved text. The translation helper does not send its instruction.
+The settings screen lists each prompt this plugin sends. You can reset one prompt. A test runs one call and shows the neuron cost. Developers can replace the text with the `skyphusion_ai_prompt` filter. The empty text job, the site assistant, the link chat, and the search list use the saved text. The translation helper does not send its instruction.
 
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 

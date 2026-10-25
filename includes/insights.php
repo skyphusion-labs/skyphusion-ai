@@ -4,7 +4,8 @@
  *
  * A row keeps the words, the time, the result count, and whether the
  * visitor was logged in. It does not keep an IP address, an account,
- * or a browser. Rows older than 90 days are removed.
+ * or a browser. Rows older than 90 days are removed. An admin can ask
+ * once to group the empty searches.
  *
  * @package skyphusion-ai
  */
@@ -266,6 +267,192 @@ function skyphusion_ai_insight_capture( $event ) {
 }
 
 /**
+ * Case fold used to group the same search.
+ *
+ * This matches the fold used for the repeat hash. It does not stem.
+ *
+ * @param string $words Search text.
+ * @return string
+ */
+function skyphusion_ai_insight_fold( $words ) {
+	return strtolower( (string) $words );
+}
+
+/**
+ * Empty searches grouped by the same words. No request leaves the site.
+ *
+ * A search that found a page is left out. Rows older than 90 days are
+ * left out. Case does not split a group. The words are not trimmed here.
+ *
+ * @param mixed $rows Stored rows.
+ * @param int   $now  Unix time. Zero uses the current time.
+ * @return array<int, array{words: string, count: int}>
+ */
+function skyphusion_ai_insight_gaps( $rows, $now = 0 ) {
+	if ( ! is_array( $rows ) ) {
+		return array();
+	}
+	$now = (int) $now;
+	if ( 0 >= $now ) {
+		$now = time();
+	}
+	$keep_after = $now - skyphusion_ai_insight_keep_seconds();
+	$groups     = array();
+	foreach ( $rows as $row ) {
+		$clean = skyphusion_ai_insight_public_row( $row );
+		if ( 0 !== $clean['results'] ) {
+			continue;
+		}
+		if ( $clean['searched_at'] <= $keep_after ) {
+			continue;
+		}
+		$words = $clean['words'];
+		if ( '' === $words ) {
+			continue;
+		}
+		$key = skyphusion_ai_insight_fold( $words );
+		if ( ! isset( $groups[ $key ] ) ) {
+			$groups[ $key ] = array(
+				'words' => $words,
+				'count' => 0,
+			);
+		}
+		++$groups[ $key ]['count'];
+	}
+	$out = array_values( $groups );
+	usort( $out, 'skyphusion_ai_insight_gap_sort' );
+	if ( count( $out ) > 20 ) {
+		$out = array_slice( $out, 0, 20 );
+	}
+	return $out;
+}
+
+/**
+ * Order groups by count, then by the folded words.
+ *
+ * @param array{words: string, count: int} $left  One group.
+ * @param array{words: string, count: int} $right One group.
+ * @return int
+ */
+function skyphusion_ai_insight_gap_sort( $left, $right ) {
+	$left_count  = isset( $left['count'] ) ? (int) $left['count'] : 0;
+	$right_count = isset( $right['count'] ) ? (int) $right['count'] : 0;
+	if ( $left_count === $right_count ) {
+		$left_words  = isset( $left['words'] ) ? skyphusion_ai_insight_fold( $left['words'] ) : '';
+		$right_words = isset( $right['words'] ) ? skyphusion_ai_insight_fold( $right['words'] ) : '';
+		return strcmp( $left_words, $right_words );
+	}
+	if ( $left_count < $right_count ) {
+		return 1;
+	}
+	return -1;
+}
+
+/**
+ * Lines sent for one ask. Each line is a count and the words.
+ *
+ * @param array<int, array{words: string, count: int}> $gaps Groups.
+ * @return string
+ */
+function skyphusion_ai_insight_gap_text( $gaps ) {
+	if ( ! is_array( $gaps ) ) {
+		return '';
+	}
+	$lines = array();
+	foreach ( $gaps as $gap ) {
+		if ( ! is_array( $gap ) ) {
+			continue;
+		}
+		$words = isset( $gap['words'] ) ? (string) $gap['words'] : '';
+		if ( '' === $words ) {
+			continue;
+		}
+		$count   = isset( $gap['count'] ) ? (int) $gap['count'] : 0;
+		$lines[] = (string) $count . ' ' . $words;
+	}
+	return implode( "\n", $lines );
+}
+
+/**
+ * Transient that holds the last suggestion. It has no user id.
+ *
+ * @return string
+ */
+function skyphusion_ai_insight_next_key() {
+	return 'skyphusion_ai_write_next';
+}
+
+/**
+ * Cut stored suggestion text. Tags are removed.
+ *
+ * @param string $text Raw text.
+ * @return string
+ */
+function skyphusion_ai_insight_clip( $text ) {
+	$text     = trim( (string) $text );
+	$stripped = preg_replace( '/<[^>]*>/', '', $text );
+	$text     = trim( is_string( $stripped ) ? $stripped : $text );
+	$cap      = 1000;
+	if ( function_exists( 'mb_strlen' ) && function_exists( 'mb_substr' ) ) {
+		if ( mb_strlen( $text ) > $cap ) {
+			return (string) mb_substr( $text, 0, $cap );
+		}
+		return $text;
+	}
+	if ( strlen( $text ) > $cap ) {
+		return substr( $text, 0, $cap );
+	}
+	return $text;
+}
+
+/**
+ * Store the last suggestion, or clear it.
+ *
+ * The value is the model text and an error sentence. It does not store
+ * an IP address, an account, or a browser.
+ *
+ * @param string $text  Suggestion.
+ * @param string $error Error sentence.
+ * @return array{text: string, error: string}
+ */
+function skyphusion_ai_insight_remember( $text, $error ) {
+	$row = array(
+		'text'  => skyphusion_ai_insight_clip( $text ),
+		'error' => skyphusion_ai_insight_clip( $error ),
+	);
+	if ( '' === $row['text'] && '' === $row['error'] && function_exists( 'delete_transient' ) ) {
+		delete_transient( skyphusion_ai_insight_next_key() );
+		return $row;
+	}
+	if ( function_exists( 'set_transient' ) ) {
+		set_transient( skyphusion_ai_insight_next_key(), $row, 600 );
+	}
+	return $row;
+}
+
+/**
+ * Last suggestion, or two empty strings.
+ *
+ * @return array{text: string, error: string}
+ */
+function skyphusion_ai_insight_next() {
+	$blank = array(
+		'text'  => '',
+		'error' => '',
+	);
+	if ( ! function_exists( 'get_transient' ) ) {
+		return $blank;
+	}
+	$stored = get_transient( skyphusion_ai_insight_next_key() );
+	if ( ! is_array( $stored ) ) {
+		return $blank;
+	}
+	$blank['text']  = isset( $stored['text'] ) ? (string) $stored['text'] : '';
+	$blank['error'] = isset( $stored['error'] ) ? (string) $stored['error'] : '';
+	return $blank;
+}
+
+/**
  * HTML for the settings screen.
  *
  * @param mixed $rows Stored rows.
@@ -275,24 +462,8 @@ function skyphusion_ai_insight_html( $rows ) {
 	if ( ! is_array( $rows ) ) {
 		$rows = array();
 	}
-	$gaps = array();
-	foreach ( $rows as $row ) {
-		if ( ! is_array( $row ) ) {
-			continue;
-		}
-		$results = isset( $row['results'] ) ? (int) $row['results'] : 0;
-		if ( 0 !== $results ) {
-			continue;
-		}
-		$words = isset( $row['words'] ) ? (string) $row['words'] : '';
-		if ( '' === $words ) {
-			continue;
-		}
-		$gaps[] = $words;
-	}
-	if ( count( $gaps ) > 20 ) {
-		$gaps = array_slice( $gaps, -20 );
-	}
+	$gaps  = skyphusion_ai_insight_gaps( $rows, time() );
+	$next  = skyphusion_ai_insight_next();
 	$html  = '<section class="skyphusion-ai-insights">';
 	$html .= '<h2>' . esc_html__( 'Searches', 'skyphusion-ai' ) . '</h2>';
 	$html .= '<p>' . esc_html__( 'Searches stay on this site. An IP address is not stored.', 'skyphusion-ai' ) . '</p>';
@@ -302,10 +473,30 @@ function skyphusion_ai_insight_html( $rows ) {
 		$html .= '<p>' . esc_html__( 'Every stored search found a page.', 'skyphusion-ai' ) . '</p>';
 	} else {
 		$html .= '<ul>';
-		foreach ( $gaps as $words ) {
-			$html .= '<li>' . esc_html( $words ) . '</li>';
+		foreach ( $gaps as $gap ) {
+			$label = $gap['words'];
+			if ( 1 < $gap['count'] ) {
+				$label .= ' (' . (string) (int) $gap['count'] . ')';
+			}
+			$html .= '<li>' . esc_html( $label ) . '</li>';
 		}
 		$html .= '</ul>';
+		$html .= '<p>' . esc_html__( 'This asks once for a topic to write.', 'skyphusion-ai' ) . '</p>';
+		if ( function_exists( 'admin_url' ) && function_exists( 'esc_url' ) && function_exists( 'esc_attr' ) ) {
+			$html .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+			$html .= '<input type="hidden" name="action" value="skyphusion_ai_insight_write_next" />';
+			if ( function_exists( 'wp_nonce_field' ) ) {
+				$html .= wp_nonce_field( 'skyphusion_ai_insight_write_next', '_wpnonce', true, false );
+			}
+			$html .= '<button type="submit">' . esc_html__( 'Suggest what to write', 'skyphusion-ai' ) . '</button>';
+			$html .= '</form>';
+		}
+	}
+	if ( '' !== $next['error'] ) {
+		$html .= '<p>' . esc_html( $next['error'] ) . '</p>';
+	}
+	if ( '' !== $next['text'] ) {
+		$html .= '<p>' . esc_html( $next['text'] ) . '</p>';
 	}
 	$html .= '</section>';
 	return $html;
@@ -333,8 +524,166 @@ function skyphusion_ai_insight_render() {
 			'p'       => array(),
 			'ul'      => array(),
 			'li'      => array(),
+			'form'    => array(
+				'method' => true,
+				'action' => true,
+			),
+			'input'   => array(
+				'type'  => true,
+				'name'  => true,
+				'id'    => true,
+				'value' => true,
+			),
+			'button'  => array(
+				'type' => true,
+			),
 		)
 	);
+}
+
+/**
+ * Ask once for a topic to write. The page view does not call this.
+ *
+ * @return string|WP_Error
+ */
+function skyphusion_ai_insight_write_next() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+		return new WP_Error( 'skyphusion_ai_insight_cap', __( 'You cannot manage these settings.', 'skyphusion-ai' ) );
+	}
+	$gaps = skyphusion_ai_insight_gaps( skyphusion_ai_insight_load(), time() );
+	if ( array() === $gaps ) {
+		skyphusion_ai_insight_remember( '', '' );
+		return new WP_Error( 'skyphusion_ai_insight_empty', __( 'Every stored search found a page.', 'skyphusion-ai' ) );
+	}
+	$prompt = '';
+	if ( function_exists( 'skyphusion_ai_prompt_fill' ) ) {
+		$prompt = trim(
+			skyphusion_ai_prompt_fill(
+				'write_next',
+				array(
+					'gaps' => skyphusion_ai_insight_gap_text( $gaps ),
+				)
+			)
+		);
+	}
+	if ( '' === $prompt ) {
+		return new WP_Error( 'skyphusion_ai_insight_empty', __( 'The prompt is empty.', 'skyphusion-ai' ) );
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
+		$refusal = skyphusion_ai_neuron_refusal();
+		if ( is_wp_error( $refusal ) ) {
+			return $refusal;
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'text' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return $tool_refusal;
+		}
+	}
+	$model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+	if ( function_exists( 'skyphusion_ai_prompt_model' ) ) {
+		$model = skyphusion_ai_prompt_model();
+	}
+	$credentials = array(
+		'account_id' => '',
+		'token'      => '',
+	);
+	if ( function_exists( 'skyphusion_ai_embed_credentials' ) ) {
+		$credentials = skyphusion_ai_embed_credentials();
+	}
+	$gateway = '';
+	if ( function_exists( 'skyphusion_ai_settings' ) ) {
+		$settings = skyphusion_ai_settings();
+		if ( isset( $settings['gateway_id'] ) ) {
+			$gateway = (string) $settings['gateway_id'];
+		}
+	}
+	$url    = '';
+	$failed = __( 'The topic list could not run.', 'skyphusion-ai' );
+	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
+	}
+	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_remote_post' ) ) {
+		return new WP_Error( 'skyphusion_ai_insight_http', $failed );
+	}
+	$body = array();
+	if ( function_exists( 'cloudflare_ai_provider_chat_body' ) ) {
+		$body = cloudflare_ai_provider_chat_body(
+			array(
+				'model'    => $model,
+				'messages' => array(
+					array(
+						'role' => 'user',
+						'text' => $prompt,
+					),
+				),
+			)
+		);
+	}
+	$headers = array(
+		'Content-Type'  => 'application/json',
+		'Authorization' => 'Bearer ' . $credentials['token'],
+	);
+	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+	}
+	$response = wp_remote_post(
+		$url,
+		array(
+			'timeout' => 30,
+			'headers' => $headers,
+			'body'    => wp_json_encode( $body ),
+		)
+	);
+	if ( is_wp_error( $response ) ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
+		skyphusion_ai_insight_remember( '', $failed );
+		return new WP_Error( 'skyphusion_ai_insight_http', $failed );
+	}
+	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+		skyphusion_ai_neuron_record( 'text', $model, $decoded, 'text' );
+	}
+	$status = (int) wp_remote_retrieve_response_code( $response );
+	if ( $status < 200 || $status >= 300 ) {
+		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+			skyphusion_ai_gateway_note( $url, 'text', $response );
+		}
+		skyphusion_ai_insight_remember( '', $failed );
+		return new WP_Error( 'skyphusion_ai_insight_http', $failed );
+	}
+	$text = '';
+	if ( function_exists( 'skyphusion_ai_prompt_read' ) ) {
+		$text = skyphusion_ai_insight_clip( skyphusion_ai_prompt_read( $decoded ) );
+	}
+	if ( '' === $text ) {
+		skyphusion_ai_insight_remember( '', $failed );
+		return new WP_Error( 'skyphusion_ai_insight_http', $failed );
+	}
+	skyphusion_ai_insight_remember( $text, '' );
+	return $text;
+}
+
+/**
+ * Read the ask form. The page view does not call the model.
+ *
+ * @return void
+ */
+function skyphusion_ai_insight_handle_write_next() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	if ( function_exists( 'check_admin_referer' ) ) {
+		check_admin_referer( 'skyphusion_ai_insight_write_next' );
+	}
+	skyphusion_ai_insight_write_next();
+	if ( function_exists( 'wp_safe_redirect' ) ) {
+		wp_safe_redirect( admin_url( 'options-general.php?page=cloudflare-ai-search' ) );
+		exit;
+	}
 }
 
 /**
@@ -398,3 +747,4 @@ function skyphusion_ai_insight_on_shutdown() {
 }
 
 add_action( 'shutdown', 'skyphusion_ai_insight_on_shutdown' );
+add_action( 'admin_post_skyphusion_ai_insight_write_next', 'skyphusion_ai_insight_handle_write_next' );
