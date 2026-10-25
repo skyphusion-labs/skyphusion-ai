@@ -99,7 +99,7 @@ The search box only lists pages. The chat button answers in a sentence. It uses 
 
 The display name is Skyphusion AI for Cloudflare. Submit it under the permalink `skyphusion-ai`. That permalink is permanent, and it must not begin with `cloudflare`. The text domain is `skyphusion-ai`, the same as that permalink.
 
-The settings page slug stays `cloudflare-ai-search`. The saved option is `skyphusion_ai_settings`. An install that still has `cloudflare_ai_search_settings` is read from that key until a save writes the new one. `Contributors` in readme.txt stays the wordpress.org username `skyphusion`.
+The settings page slug stays `cloudflare-ai-search`. The saved option is `skyphusion_ai_settings`. An install that has only `cloudflare_ai_search_settings` is copied to `skyphusion_ai_settings` on the first request after an update. Until that copy, a read uses the old key. A save on the settings screen writes the new key. `wp skyphusion-ai` writes it too. `Contributors` in readme.txt stays the wordpress.org username `skyphusion`.
 
 ## Develop
 
