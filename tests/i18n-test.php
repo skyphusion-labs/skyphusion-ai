@@ -174,6 +174,7 @@ foreach (array_merge(array_keys($i18n_floors), array(
     'includes/insights.php',
     'includes/assistant.php',
     'includes/backfill.php',
+    'includes/translate.php',
     'uninstall.php',
 )) as $rel) {
     $i18n_files[$rel] = (string) file_get_contents($i18n_root . '/' . $rel);
