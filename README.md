@@ -44,6 +44,8 @@ An hourly job can fill empty alt text and an empty SEO description. It is off un
 
 A theme or plugin can translate one string with `skyphusion_ai_translate()`. Pass a two letter language code. The call stops when the daily neuron budget is spent.
 
+The post editor can suggest an internal link when the phrase is already in the post. The post is not changed. The same screen lists pages that nothing links to. The list uses the stored vectors.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce
