@@ -254,6 +254,22 @@ class Skyphusion_AI_CLI
         update_option('skyphusion_ai_settings', $clean);
         WP_CLI::success(__('Saved. Settings, then Skyphusion AI, shows the same values.', 'skyphusion-ai'));
     }
+
+	/**
+	 * Estimate, run, search, or delete the Vectorize index.
+	 *
+	 * Without the yes flag the model is not called.
+	 *
+	 * @param array<int, string>    $args       Positional arguments.
+	 * @param array<string, string> $assoc_args Flags.
+	 * @return void
+	 */
+	public function embed( $args, $assoc_args ) {
+		if ( ! function_exists( 'skyphusion_ai_embed_cli' ) ) {
+			require_once __DIR__ . '/embed.php';
+		}
+		skyphusion_ai_embed_cli( $args, $assoc_args );
+	}
 }
 
 if (defined('WP_CLI') && WP_CLI) {

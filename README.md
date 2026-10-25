@@ -32,6 +32,8 @@ Put the search box in one spot with the shortcode `[cloudflare_ai_search]`. Then
 
 Search results stay as WordPress or WooCommerce left them by default. They change once you turn on **Show an AI Search answer above WordPress and WooCommerce search results**. That switch is off by default. Visitors never see a failed request. The search results page lists the pages under the sentence. A page with an address is a link. A page with no address stays as text. The cart and checkout stay quiet when that option is on. The settings screen and `wp skyphusion-ai status` show how many searches used AI Search or the site results.
 
+A published post can be stored in Cloudflare Vectorize. The settings screen shows the neuron estimate before the first run. A post that did not change is not sent again. A password-protected post is left out. Deleting the plugin removes the saved choice and leaves the index in the Cloudflare account.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce

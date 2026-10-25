@@ -128,6 +128,7 @@ if (!function_exists('wp_remote_post')) {
     function wp_remote_post($url, $args = array())
     {
         $GLOBALS['cfais_calls']++;
+        $GLOBALS['cfais_last_post'] = array('url' => $url, 'args' => $args);
         if (!empty($GLOBALS['cfais_transport_error'])) {
             return new WP_Error('http_request_failed', 'The site could not reach Cloudflare.');
         }
@@ -177,6 +178,9 @@ if (!function_exists('wp_remote_retrieve_response_code')) {
 if (!function_exists('wp_remote_retrieve_body')) {
     function wp_remote_retrieve_body($response)
     {
+        if (isset($GLOBALS['cfais_bodies']) && is_array($GLOBALS['cfais_bodies']) && array() !== $GLOBALS['cfais_bodies']) {
+            return (string) array_shift($GLOBALS['cfais_bodies']);
+        }
         if (isset($GLOBALS['cfais_body'])) {
             return (string) $GLOBALS['cfais_body'];
         }
@@ -188,6 +192,9 @@ if (!function_exists('wp_remote_retrieve_body')) {
 if (!function_exists('skyphusion_ai_settings')) {
     function skyphusion_ai_settings()
     {
+        if (isset($GLOBALS['cfais_settings']) && is_array($GLOBALS['cfais_settings'])) {
+            return $GLOBALS['cfais_settings'];
+        }
         return array('endpoint' => 'https://abc123.search.ai.cloudflare.com', 'lead_search' => true);
     }
 }
@@ -202,6 +209,8 @@ function cfais_reset()
     $GLOBALS['cfais_answer'] = 'An answer.';
     $GLOBALS['cfais_options'] = array();
     $GLOBALS['cfais_transport_error'] = false;
+    unset($GLOBALS['cfais_bodies']);
+    $GLOBALS['cfais_last_post'] = array();
 }
 
 function cfais_count($outcome)

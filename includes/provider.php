@@ -501,3 +501,5 @@ function cloudflare_ai_provider_connector_key()
     }
     return $stored;
 }
+
+require_once __DIR__ . '/embed.php';

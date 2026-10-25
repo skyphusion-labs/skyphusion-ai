@@ -713,6 +713,10 @@ function skyphusion_ai_render_page()
     echo '<input type="hidden" name="action" value="skyphusion_ai_test" />';
     submit_button('Check connection', 'secondary', 'submit', false);
     echo '</form>';
+	if ( ! function_exists( 'skyphusion_ai_embed_render' ) ) {
+		require_once __DIR__ . '/embed.php';
+	}
+	skyphusion_ai_embed_render();
     echo '</div>';
 }
 
