@@ -405,7 +405,16 @@ function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
 		}
 		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
 	}
-	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	$raw = (string) wp_remote_retrieve_body( $response );
+	if ( function_exists( 'skyphusion_ai_worker_sse_text' ) && '' !== skyphusion_ai_worker_sse_text( $raw ) ) {
+		$decoded = array(
+			'usage' => array(
+				'neurons' => skyphusion_ai_worker_sse_neurons( $raw ),
+			),
+		);
+	} else {
+		$decoded = json_decode( $raw, true );
+	}
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
 		skyphusion_ai_neuron_record( 'text', $model, $decoded, 'assistant' );
 	}
@@ -421,7 +430,10 @@ function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
 		$read = cloudflare_ai_provider_read_text( is_array( $decoded ) ? $decoded : array() );
 	}
 	$text = '';
-	if ( isset( $read['candidates'][0]['text'] ) ) {
+	if ( function_exists( 'skyphusion_ai_worker_sse_text' ) ) {
+		$text = trim( skyphusion_ai_worker_sse_text( $raw ) );
+	}
+	if ( '' === $text && isset( $read['candidates'][0]['text'] ) ) {
 		$text = trim( (string) $read['candidates'][0]['text'] );
 	}
 	if ( '' !== $text && function_exists( 'skyphusion_ai_prompt_cache_write' ) ) {
@@ -1020,6 +1032,13 @@ function skyphusion_ai_assistant_shortcode() {
 	$config = skyphusion_ai_assistant_config();
 	if ( empty( $config['enabled'] ) || ! skyphusion_ai_assistant_allowed( $config ) ) {
 		return '';
+	}
+	if ( function_exists( 'skyphusion_ai_worker_url' ) && function_exists( 'skyphusion_ai_worker_edge_html' ) ) {
+		$worker_url = skyphusion_ai_worker_url();
+		if ( '' !== $worker_url ) {
+			$model = function_exists( 'skyphusion_ai_assistant_model' ) ? skyphusion_ai_assistant_model() : '';
+			return skyphusion_ai_worker_edge_html( $worker_url, $model );
+		}
 	}
 	$html = '';
 	if ( function_exists( 'get_transient' ) ) {
