@@ -356,6 +356,7 @@ $cfais_query = cfais_fn_body($cfais_provider, 'skyphusion_ai_query');
 expect('search still performs its own HTTP request', strpos($cfais_query, 'wp_remote_post') !== false, true);
 expect('search counts a usage figure', strpos($cfais_query, 'skyphusion_ai_neuron_count_search') !== false, true);
 expect('search does not refuse on the neuron cap', strpos($cfais_query, 'skyphusion_ai_neuron_refusal'), false);
+expect('search does not refuse on a tool cap', strpos($cfais_query, 'skyphusion_ai_tool_refusal'), false);
 
 if (!isset($GLOBALS['cfais_stored']) || !is_array($GLOBALS['cfais_stored'])) {
     $GLOBALS['cfais_stored'] = array();
@@ -432,6 +433,218 @@ if (null === $cfais_stored_over) {
     $GLOBALS['cfais_stored']['neuron_over'] = $cfais_stored_over;
 }
 unset($GLOBALS['skyphusion_ai_models_runtime']);
+
+unset($GLOBALS['cfais_stored']['tool_caps']);
+expect('embeddings start at 3000', skyphusion_ai_tool_default('embeddings'), 3000);
+expect('the site assistant starts at 1000', skyphusion_ai_tool_default('assistant'), 1000);
+expect('writing has no limit until one is saved', skyphusion_ai_tool_cap('text'), 0);
+expect('an unsaved writing limit does not stop the tool', skyphusion_ai_tool_blocked('text'), false);
+
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => gmdate('Y-m-d'),
+    'neurons' => 9,
+    'tools' => array(
+        'text' => 4,
+        'vision' => 1,
+        'embeddings' => 2,
+        'assistant' => 7,
+    ),
+);
+$GLOBALS['cfais_stored']['tool_caps'] = array(
+    'text' => 4,
+    'vision' => 0,
+    'embeddings' => 2,
+    'assistant' => 7,
+);
+expect('writing stops when its own limit is spent', skyphusion_ai_tool_blocked('text'), true);
+expect('image reading with no limit of its own continues', skyphusion_ai_tool_blocked('vision'), false);
+expect('embeddings stop when their own limit is spent', skyphusion_ai_tool_blocked('embeddings'), true);
+$cfais_tool_text_url = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+expect(
+    'a writing call at its tool limit is the tool refusal',
+    skyphusion_ai_neuron_closed_message($cfais_tool_text_url, array('prompt' => 'hello')),
+    skyphusion_ai_tool_refusal_text()
+);
+$cfais_tool_vision_url = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/mistralai/mistral-small-3.1-24b-instruct';
+$cfais_tool_vision_body = array('messages' => array(array('content' => array(array('type' => 'image_url')))));
+expect(
+    'image reading continues while writing is stopped',
+    skyphusion_ai_neuron_closed_message($cfais_tool_vision_url, $cfais_tool_vision_body),
+    ''
+);
+$cfais_tool_embed = skyphusion_ai_neuron_embeddings_post(
+    'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/baai/bge-large-en-v1.5',
+    'sentinel-token-must-not-appear-in-any-message',
+    array('text' => array('unique-embedding-text'))
+);
+expect('embeddings stop on their own limit while the site total is under the budget', is_wp_error($cfais_tool_embed), true);
+
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => '2000-01-01',
+    'neurons' => 50,
+    'tools' => array('text' => 50),
+);
+expect('a row from another UTC day does not count as writing use', skyphusion_ai_tool_used('text'), 0);
+expect('a row from another UTC day does not stop writing', skyphusion_ai_tool_blocked('text'), false);
+expect('that row leaves the saved writing limit in place', skyphusion_ai_tool_cap('text'), 4);
+
+$cfais_assistant_state = skyphusion_ai_neuron_record(
+    'text',
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    array('usage' => array('neurons' => 4)),
+    'assistant'
+);
+expect('an assistant call spends the assistant limit', skyphusion_ai_tool_used('assistant'), 4);
+expect('an assistant call does not spend writing', skyphusion_ai_tool_used('text'), 0);
+expect('an assistant call still adds to the site total', $cfais_assistant_state['neurons'], 4);
+$cfais_text_before_backfill = skyphusion_ai_tool_used('text');
+skyphusion_ai_neuron_record(
+    'text',
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    array('usage' => array('neurons' => 3)),
+    'backfill'
+);
+expect('backfill does not spend writing', skyphusion_ai_tool_used('text'), $cfais_text_before_backfill);
+expect('the neuron row does not store an ip', array_key_exists('ip', skyphusion_ai_neuron_state()), false);
+
+$GLOBALS['cfais_stored']['neuron_over'] = 'cheapest';
+$GLOBALS['cfais_stored']['tool_caps'] = array('text' => 5);
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => gmdate('Y-m-d'),
+    'neurons' => 10000,
+    'tools' => array('text' => 5),
+);
+$GLOBALS['skyphusion_ai_models_runtime'] = array(
+    array(
+        'id' => '@cf/meta/llama-3.2-1b-instruct',
+        'name' => 'Small',
+        'task' => 'text generation',
+        'price_in' => 0.027,
+        'price_out' => 0.201,
+    ),
+);
+$cfais_tool_swapped = skyphusion_ai_neuron_cheap_request($cfais_tool_text_url, array('prompt' => 'hello'));
+expect(
+    'a spent writing limit still moves a plain text call to the cheapest model',
+    $cfais_tool_swapped[0],
+    'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/meta/llama-3.2-1b-instruct'
+);
+expect(
+    'the cheapest switch does not bypass a spent writing limit',
+    skyphusion_ai_neuron_closed_message($cfais_tool_swapped[0], $cfais_tool_swapped[1]),
+    skyphusion_ai_tool_refusal_text()
+);
+$GLOBALS['cfais_stored']['neuron_over'] = 'pause';
+$GLOBALS['cfais_stored']['tool_caps'] = array('text' => 100);
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => gmdate('Y-m-d'),
+    'neurons' => 10000,
+    'tools' => array('text' => 0),
+);
+expect(
+    'the site budget still stops every tool',
+    skyphusion_ai_neuron_closed_message($cfais_tool_text_url, array('prompt' => 'hello')),
+    skyphusion_ai_neuron_refusal_text()
+);
+
+unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
+$GLOBALS['cfais_stored']['tool_caps'] = array('text' => 8000);
+expect(
+    'tool limits over the daily budget are named',
+    strpos(skyphusion_ai_tool_warning(), 'more than the daily budget') !== false,
+    true
+);
+$GLOBALS['cfais_stored']['tool_caps'] = array(
+    'text' => 0,
+    'embeddings' => 3000,
+);
+expect('limits inside the daily budget do not warn', skyphusion_ai_tool_warning(), '');
+
+require_once dirname(__DIR__) . '/includes/backfill.php';
+require_once dirname(__DIR__) . '/includes/assistant.php';
+$GLOBALS['cfais_options']['skyphusion_ai_backfill'] = array(
+    'enabled' => 1,
+    'limit' => 3000,
+);
+$GLOBALS['cfais_options']['skyphusion_ai_assistant'] = array(
+    'enabled' => 1,
+);
+$GLOBALS['cfais_stored']['tool_caps'] = array(
+    'text' => 8000,
+    'embeddings' => 3000,
+);
+expect('backfill and the assistant add to the shared total', skyphusion_ai_tool_limit_sum(), 15000);
+$GLOBALS['cfais_options']['skyphusion_ai_backfill']['enabled'] = 0;
+$GLOBALS['cfais_options']['skyphusion_ai_assistant']['enabled'] = 0;
+expect('a job that is off does not add its limit', skyphusion_ai_tool_limit_sum(), 11000);
+
+$_POST['skyphusion_ai_settings'] = array(
+    'tool_caps' => array(
+        'text' => '0',
+        'embeddings' => '12',
+        'assistant' => 'nope',
+        'vision' => '',
+    ),
+);
+$cfais_tool_saved = skyphusion_ai_neuron_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array(
+        'tool_caps' => array(
+            'assistant' => 40,
+            'vision' => 9,
+        ),
+    )
+);
+expect('a posted zero stores no writing limit', $cfais_tool_saved['tool_caps']['text'], 0);
+expect('a posted embeddings limit is stored', $cfais_tool_saved['tool_caps']['embeddings'], 12);
+expect('a rejected assistant limit keeps the previous one', $cfais_tool_saved['tool_caps']['assistant'], 40);
+expect('clearing image reading stores zero', $cfais_tool_saved['tool_caps']['vision'], 0);
+unset($_POST['skyphusion_ai_settings']);
+$cfais_tool_kept = skyphusion_ai_neuron_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array(
+        'tool_caps' => array('text' => 15),
+    )
+);
+expect('a save that omits tool limits keeps the writing limit', $cfais_tool_kept['tool_caps']['text'], 15);
+unset($_POST['skyphusion_ai_settings']);
+
+$cfais_tool_assistant_src = (string) file_get_contents(dirname(__DIR__) . '/includes/assistant.php');
+$cfais_tool_translate_src = (string) file_get_contents(dirname(__DIR__) . '/includes/translate.php');
+$cfais_tool_backfill_src = (string) file_get_contents(dirname(__DIR__) . '/includes/backfill.php');
+$cfais_tool_prompts_src = (string) file_get_contents(dirname(__DIR__) . '/includes/prompts.php');
+expect(
+    'the assistant asks its own tool limit',
+    strpos($cfais_tool_assistant_src, "skyphusion_ai_tool_refusal( 'assistant' )") !== false,
+    true
+);
+expect(
+    'translation asks its own tool limit',
+    strpos($cfais_tool_translate_src, "skyphusion_ai_tool_refusal( 'translate' )") !== false,
+    true
+);
+expect(
+    'backfill records neurons on its own counter',
+    strpos($cfais_tool_backfill_src, "skyphusion_ai_neuron_record( \$feature, \$model, \$decoded, 'backfill' )") !== false,
+    true
+);
+expect(
+    'a prompt test asks the writing tool limit',
+    strpos($cfais_tool_prompts_src, "skyphusion_ai_tool_refusal( 'text' )") !== false,
+    true
+);
+
+if (null === $cfais_stored_over) {
+    unset($GLOBALS['cfais_stored']['neuron_over']);
+} else {
+    $GLOBALS['cfais_stored']['neuron_over'] = $cfais_stored_over;
+}
+unset($GLOBALS['cfais_stored']['tool_caps']);
+unset($GLOBALS['skyphusion_ai_models_runtime']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_backfill']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_assistant']);
 
 cfais_neuron_reset();
 unset($GLOBALS['cfais_body']);

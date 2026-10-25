@@ -76,7 +76,7 @@ Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` 
 
 = Does the plugin stop at a neuron budget? =
 
-Yes. The default is 10,000 neurons a day, the free allowance. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. You can instead send a plain text call to the cheapest priced model on the account. Backfill, embeddings, the site assistant, translation, vision, images, and speech still pause. The plugin mails the site admin at 80% and at 100%. The public search box and the chat button are not in the total. The AI Search rate limit is their cap.
+Yes. The default is 10,000 neurons a day, the free allowance. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. You can instead send a plain text call to the cheapest priced model on the account. Backfill, embeddings, the site assistant, translation, vision, images, and speech still pause. Each tool can have its own daily limit. Zero means that tool has no limit of its own. Embeddings start at 3,000 neurons. The site assistant starts at 1,000 neurons, and that limit counts only while the assistant is on. A tool at its limit stops. The other tools continue. The screen shows today's use for each tool. It warns when those limits, including the backfill limit while that job is on, add up to more than the daily budget. The totals do not store an IP address. The public search box and the chat button are not in the total and they are not in the tool limits. The plugin mails the site admin at 80% and at 100%. The AI Search rate limit is their cap.
 
 = Does AI Gateway see which feature ran? =
 

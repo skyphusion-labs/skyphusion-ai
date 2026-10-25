@@ -108,6 +108,12 @@ function skyphusion_ai_translate( $text, $target, $source = '' ) {
 			return $refusal;
 		}
 	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'translate' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return $tool_refusal;
+		}
+	}
 	$model       = skyphusion_ai_translate_model();
 	$credentials = array(
 		'account_id' => '',
@@ -159,7 +165,7 @@ function skyphusion_ai_translate( $text, $target, $source = '' ) {
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
-		skyphusion_ai_neuron_record( 'text', $model, $decoded );
+		skyphusion_ai_neuron_record( 'text', $model, $decoded, 'translate' );
 	}
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {

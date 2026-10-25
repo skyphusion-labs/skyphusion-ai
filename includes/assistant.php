@@ -203,6 +203,12 @@ function skyphusion_ai_assistant_text( $prompt ) {
 			return $refusal;
 		}
 	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'assistant' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return $tool_refusal;
+		}
+	}
 	$model       = skyphusion_ai_assistant_model();
 	$credentials = array(
 		'account_id' => '',
@@ -259,7 +265,7 @@ function skyphusion_ai_assistant_text( $prompt ) {
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
-		skyphusion_ai_neuron_record( 'text', $model, $decoded );
+		skyphusion_ai_neuron_record( 'text', $model, $decoded, 'assistant' );
 	}
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
@@ -328,6 +334,13 @@ function skyphusion_ai_assistant_ask( $question, $consent ) {
 		$refusal = skyphusion_ai_neuron_refusal();
 		if ( is_wp_error( $refusal ) ) {
 			$text = function_exists( 'skyphusion_ai_neuron_refusal_text' ) ? skyphusion_ai_neuron_refusal_text() : '';
+			return skyphusion_ai_assistant_result( 'blocked', $text, array() );
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'assistant' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			$text = function_exists( 'skyphusion_ai_tool_refusal_text' ) ? skyphusion_ai_tool_refusal_text() : '';
 			return skyphusion_ai_assistant_result( 'blocked', $text, array() );
 		}
 	}
