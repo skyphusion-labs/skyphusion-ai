@@ -350,6 +350,10 @@ function skyphusion_ai_backfill_prompt( $kind, $title ) {
 	} else {
 		$title = substr( $title, 0, 120 );
 	}
+	$key = ( 'alt' === $kind ) ? 'backfill_alt' : 'backfill_description';
+	if ( function_exists( 'skyphusion_ai_prompt_fill' ) ) {
+		return skyphusion_ai_prompt_fill( $key, array( 'title' => $title ) );
+	}
 	if ( 'alt' === $kind ) {
 		return 'Write one alt sentence for this image. Title: ' . $title;
 	}

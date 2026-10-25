@@ -46,6 +46,8 @@ A theme or plugin can translate one string with `skyphusion_ai_translate()`. Pas
 
 The post editor can suggest an internal link when the phrase is already in the post. The post is not changed. The same screen lists pages that nothing links to. The list uses the stored vectors.
 
+The settings screen lists each prompt this plugin sends. You can reset one prompt. A test runs one call and shows the neuron cost. Developers can replace the text with the `skyphusion_ai_prompt` filter. The empty text job and the site assistant use the saved text. The editor does not send the link prompt. The translation helper does not send its instruction.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce

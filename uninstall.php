@@ -17,4 +17,6 @@ delete_option( 'skyphusion_ai_neurons' );
 	delete_option( 'skyphusion_ai_assistant' );
 	delete_option( 'skyphusion_ai_assistant_chats' );
 	delete_option( 'skyphusion_ai_backfill' );
+	delete_option( 'skyphusion_ai_prompts' );
+	delete_option( 'skyphusion_ai_prompt_last' );
 delete_transient( 'skyphusion_ai_models' );

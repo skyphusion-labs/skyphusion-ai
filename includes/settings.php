@@ -729,6 +729,10 @@ function skyphusion_ai_render_page()
 		require_once __DIR__ . '/backfill.php';
 	}
 	skyphusion_ai_backfill_render();
+	if ( ! function_exists( 'skyphusion_ai_prompt_render' ) ) {
+		require_once __DIR__ . '/prompts.php';
+	}
+	skyphusion_ai_prompt_render();
     echo '</div>';
 }
 

@@ -114,6 +114,10 @@ Yes. Call `skyphusion_ai_translate()` with the text and a two letter language co
 
 Yes. The post editor lists a page when its title is already in the post. The post is not changed. The same screen lists pages that nothing links to. The list uses the stored vectors. A page view does not call the model.
 
+= Can I edit the prompts? =
+
+Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset restores one prompt. A test runs one call and shows the neuron cost. The empty text job and the site assistant use the saved text. The editor does not send the link prompt. The translation helper does not send its instruction.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.

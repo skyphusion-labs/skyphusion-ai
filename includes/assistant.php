@@ -157,14 +157,25 @@ function skyphusion_ai_assistant_citations( $found ) {
  */
 function skyphusion_ai_assistant_prompt( $question, $citations ) {
 	$lines = array( 'Answer from these pages only.' );
+	$pages = array();
 	foreach ( $citations as $row ) {
 		$title = isset( $row['title'] ) ? trim( (string) $row['title'] ) : '';
 		if ( '' !== $title ) {
 			$lines[] = '- ' . $title;
+			$pages[] = '- ' . $title;
 		}
 	}
-	$lines[] = 'Question: ' . trim( $question );
-	return implode( "\n", $lines );
+	$lines[] = 'Question: ' . trim( (string) $question );
+	if ( ! function_exists( 'skyphusion_ai_prompt_fill' ) ) {
+		return implode( "\n", $lines );
+	}
+	return skyphusion_ai_prompt_fill(
+		'assistant',
+		array(
+			'pages'    => implode( "\n", $pages ),
+			'question' => trim( (string) $question ),
+		)
+	);
 }
 
 /**
