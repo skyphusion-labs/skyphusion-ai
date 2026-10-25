@@ -92,6 +92,10 @@ Yes. The search results page lists the pages under the sentence. A page with an 
 
 The settings screen shows passages, neurons, days, and stored dimensions before the first run. Run the sync there, or run `wp skyphusion-ai embed --yes`. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
 
+= Can a member search the stored pages? =
+
+Yes. Place `[skyphusion_ai_member_search]` on a page. A signed-in member in a chosen role gets a list of pages. There is no generated answer. A logged-out visitor keeps the normal search and spends nothing. A repeated search is remembered for one hour. The same list can sit above the normal search for those members.
+
 = Do single posts show related pages? =
 
 The list uses the stored vectors. A page view does not call the model. The settings screen has a switch. You can also place `[skyphusion_ai_related]`.

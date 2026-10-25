@@ -35,6 +35,7 @@ require_once __DIR__ . '/includes/backfill.php';
 require_once __DIR__ . '/includes/translate.php';
 require_once __DIR__ . '/includes/links.php';
 require_once __DIR__ . '/includes/prompts.php';
+require_once __DIR__ . '/includes/member.php';
 require_once __DIR__ . '/includes/deprecated.php';
 
 function skyphusion_ai_activate()

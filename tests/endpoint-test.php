@@ -115,6 +115,7 @@ require __DIR__ . '/embed-test.php';
 require __DIR__ . '/related-test.php';
 require __DIR__ . '/insights-test.php';
 require __DIR__ . '/assistant-test.php';
+require __DIR__ . '/member-test.php';
 require __DIR__ . '/backfill-test.php';
 require __DIR__ . '/translate-test.php';
 require __DIR__ . '/links-test.php';
