@@ -210,6 +210,16 @@ expect('one batch stops at five requests', $GLOBALS['cfais_calls'], 5);
 expect('the sixth image is not written', get_post_meta(25, skyphusion_ai_backfill_alt_key(), true), '');
 
 $backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = time() - 3601;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = $backfill_many;
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+skyphusion_ai_backfill_run(false);
+expect('the next hour continues the backlog', get_post_meta(25, skyphusion_ai_backfill_alt_key(), true), 'A linen shirt.');
+expect('the next hour sends one request', $GLOBALS['cfais_calls'], 1);
+
+$backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
@@ -263,6 +273,8 @@ ob_start();
 skyphusion_ai_backfill_render();
 $backfill_screen = (string) ob_get_clean();
 expect('the screen offers the switch', strpos($backfill_screen, 'name="skyphusion_ai_backfill_enabled"') !== false, true);
+expect('the screen offers the daily limit', strpos($backfill_screen, 'name="skyphusion_ai_backfill_limit"') !== false, true);
+expect('the screen says the limit stays on this job', strpos($backfill_screen, 'This limit does not stop the other tools.') !== false, true);
 expect('the screen says text you wrote stays', strpos($backfill_screen, 'It does not replace text you wrote.') !== false, true);
 expect('the screen offers a retry', strpos($backfill_screen, 'Retry skipped items') !== false, true);
 expect('the screen names yoast', strpos($backfill_screen, 'Writes Yoast.') !== false, true);
@@ -425,6 +437,126 @@ $GLOBALS['skyphusion_ai_backfill_files'][73] = $backfill_big;
 expect('a huge file is not read', skyphusion_ai_backfill_image_file($backfill_big), '');
 unlink($backfill_gif);
 unlink($backfill_big);
+
+expect('the default backfill limit is 3000', skyphusion_ai_backfill_daily_default(), 3000);
+expect('zero is a saved backfill limit', skyphusion_ai_backfill_limit_value('0'), 0);
+expect('a word is not a backfill limit', skyphusion_ai_backfill_limit_value('many'), null);
+
+$backfill_priced = '{"choices":[{"message":{"content":"A linen shirt."}}],"usage":{"neurons":2}}';
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+$backfill_saved['limit'] = 2;
+$backfill_saved['day'] = skyphusion_ai_neuron_today();
+$backfill_saved['neurons'] = 0;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+update_post_meta(79, skyphusion_ai_backfill_alt_key(), 'Already written');
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 79, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+    array('post_id' => 80, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+    array('post_id' => 81, 'kind' => 'alt', 'title' => 'Wool shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_priced, $backfill_priced);
+skyphusion_ai_backfill_run(false);
+expect('a priced item is written', get_post_meta(80, skyphusion_ai_backfill_alt_key(), true), 'A linen shirt.');
+expect('the next item stops at the backfill limit', get_post_meta(81, skyphusion_ai_backfill_alt_key(), true), '');
+expect('the backfill limit allows one priced call', $GLOBALS['cfais_calls'], 1);
+expect('text an admin wrote stays under the limit', get_post_meta(79, skyphusion_ai_backfill_alt_key(), true), 'Already written');
+$backfill_skips = skyphusion_ai_backfill_config();
+$backfill_limit_reason = '';
+foreach ($backfill_skips['skips'] as $backfill_row) {
+    if (81 === (int) $backfill_row['post_id']) {
+        $backfill_limit_reason = $backfill_row['reason'];
+    }
+}
+expect('a backfill limit records the reason', $backfill_limit_reason, 'limit');
+expect('today records the priced neurons', skyphusion_ai_backfill_used($backfill_skips), 2);
+$backfill_site = skyphusion_ai_neuron_state();
+expect('a backfill limit leaves the site budget open', (int) $backfill_site['neurons'] < skyphusion_ai_neuron_cap(), true);
+expect('another tool is not refused', skyphusion_ai_neuron_refusal() === null, true);
+expect(
+    'a backfill limit says why',
+    skyphusion_ai_backfill_skip_label(array('post_id' => 81, 'kind' => 'alt', 'reason' => 'limit')),
+    "Alt text was skipped. Today's backfill limit stopped this item."
+);
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = time();
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 82, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_priced);
+expect('a retry still stops at the backfill limit', skyphusion_ai_backfill_run(true), 'ran');
+expect('a retry at the limit makes no request', $GLOBALS['cfais_calls'], 0);
+expect('a retry at the limit does not write', get_post_meta(82, skyphusion_ai_backfill_alt_key(), true), '');
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+$backfill_saved['limit'] = 0;
+$backfill_saved['day'] = skyphusion_ai_neuron_today();
+$backfill_saved['neurons'] = 9000;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 83, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+skyphusion_ai_backfill_run(false);
+expect('a zero limit does not stop the job', $GLOBALS['cfais_calls'], 1);
+expect('a zero limit still writes', get_post_meta(83, skyphusion_ai_backfill_alt_key(), true), 'A linen shirt.');
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+$backfill_saved['limit'] = 3000;
+$backfill_saved['day'] = '2000-01-01';
+$backfill_saved['neurons'] = 3000;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 84, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+skyphusion_ai_backfill_run(false);
+expect('a new day continues the backlog', $GLOBALS['cfais_calls'], 1);
+expect('a new day writes the field', get_post_meta(84, skyphusion_ai_backfill_alt_key(), true), 'A linen shirt.');
+$backfill_skips = skyphusion_ai_backfill_config();
+expect('a new day does not keep yesterday', skyphusion_ai_backfill_used($backfill_skips), 0);
+
+update_option('skyphusion_ai_neurons', array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 10000,
+    'estimated' => 0,
+    'features' => array(),
+    'mailed_80' => 1,
+    'mailed_100' => 1,
+), false);
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+$backfill_saved['limit'] = 3000;
+$backfill_saved['day'] = skyphusion_ai_neuron_today();
+$backfill_saved['neurons'] = 0;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 85, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+skyphusion_ai_backfill_run(false);
+expect('the site budget still stops a backfill call', $GLOBALS['cfais_calls'], 0);
+expect('the site budget still does not write', get_post_meta(85, skyphusion_ai_backfill_alt_key(), true), '');
+$backfill_skips = skyphusion_ai_backfill_config();
+$backfill_budget_reason = '';
+foreach ($backfill_skips['skips'] as $backfill_row) {
+    if (85 === (int) $backfill_row['post_id']) {
+        $backfill_budget_reason = $backfill_row['reason'];
+    }
+}
+expect('the site budget is still the recorded reason', $backfill_budget_reason, 'budget');
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);
