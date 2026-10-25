@@ -38,6 +38,7 @@ $i18n_floors = array(
     // call the resolution introduced.
     'includes/cli.php' => 7,
     'includes/provider.php' => 6,
+    'includes/budget.php' => 10,
     'includes/provider-models.php' => 8,
     'includes/provider-speech.php' => 2,
     'includes/stock.php' => 6,

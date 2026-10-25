@@ -8,6 +8,8 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
+require_once __DIR__ . '/budget.php';
+
 function cloudflare_ai_provider_boot()
 {
     if (!class_exists('WordPress\\AiClient\\AiClient')) {
@@ -66,17 +68,26 @@ function cloudflare_ai_provider_embeddings($texts)
         return new WP_Error('cloudflare_ai_embeddings', __('Add the Cloudflare account ID and API token before embedding text.', 'skyphusion-ai'));
     }
 
-    $response = wp_remote_post($url, array(
-        'timeout' => 30,
-        'headers' => array(
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer ' . $credentials['token'],
-        ),
-        'body' => wp_json_encode($body),
-    ));
-    if (is_wp_error($response)) {
-        return new WP_Error('cloudflare_ai_embeddings', __('The site could not reach Cloudflare.', 'skyphusion-ai'));
-    }
+	$skyphusion_ai_neuron_refusal = skyphusion_ai_neuron_refusal();
+	if ( is_wp_error( $skyphusion_ai_neuron_refusal ) ) {
+		return $skyphusion_ai_neuron_refusal;
+	}
+	$response = skyphusion_ai_neuron_embeddings_post( $url, $credentials['token'], $body );
+	if ( is_wp_error( $response ) ) {
+		$skyphusion_ai_error_code = '';
+		if ( method_exists( $response, 'get_error_code' ) ) {
+			$skyphusion_ai_error_code = (string) $response->get_error_code();
+		} elseif ( isset( $response->code ) ) {
+			$skyphusion_ai_error_code = (string) $response->code;
+		}
+		if ( 'skyphusion_ai_neuron_cap' === $skyphusion_ai_error_code ) {
+			return $response;
+		}
+		return new WP_Error(
+			'cloudflare_ai_embeddings',
+			__( 'The site could not reach Cloudflare.', 'skyphusion-ai' )
+		);
+	}
     $status = (int) wp_remote_retrieve_response_code($response);
     $decoded = json_decode((string) wp_remote_retrieve_body($response), true);
     if ($status < 200 || $status >= 300) {
@@ -120,7 +131,7 @@ function skyphusion_ai_query($question)
         /* translators: %d is an HTTP status code returned by Cloudflare. */
         return new WP_Error('cloudflare_ai_search', sprintf(__('Cloudflare answered HTTP %d.', 'skyphusion-ai'), (int) $status));
     }
-    return skyphusion_ai_read_answer($decoded);
+	return skyphusion_ai_neuron_count_search( $decoded );
 }
 
 /**
