@@ -71,6 +71,40 @@ function skyphusion_ai_embed_config() {
 	if ( ! empty( $stored['related'] ) ) {
 		$related = 1;
 	}
+	$statuses = array( 'publish' );
+	if ( isset( $stored['statuses'] ) && is_array( $stored['statuses'] ) ) {
+		$statuses = array();
+		foreach ( $stored['statuses'] as $status ) {
+			$status = (string) $status;
+			if ( 'publish' === $status || 'private' === $status ) {
+				$statuses[] = $status;
+			}
+		}
+		if ( array() === $statuses ) {
+			$statuses = array( 'publish' );
+		}
+	}
+	$after = '';
+	if ( isset( $stored['after'] ) && 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $stored['after'] ) ) {
+		$after = (string) $stored['after'];
+	}
+	$tax_mode = 'none';
+	if ( isset( $stored['tax_mode'] ) && in_array( (string) $stored['tax_mode'], array( 'include', 'exclude' ), true ) ) {
+		$tax_mode = (string) $stored['tax_mode'];
+	}
+	$terms = array();
+	if ( isset( $stored['terms'] ) && is_array( $stored['terms'] ) ) {
+		$terms = skyphusion_ai_embed_names( $stored['terms'] );
+	}
+	$limit = 3000;
+	if ( isset( $stored['limit'] ) && is_numeric( $stored['limit'] ) && (int) $stored['limit'] >= 0 ) {
+		$limit = (int) $stored['limit'];
+	}
+	$day = '';
+	if ( isset( $stored['day'] ) && 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', (string) $stored['day'] ) ) {
+		$day = (string) $stored['day'];
+	}
+	$neurons = isset( $stored['neurons'] ) ? max( 0, (int) $stored['neurons'] ) : 0;
 	return array(
 		'index'      => $index,
 		'post_types' => $types,
@@ -78,6 +112,14 @@ function skyphusion_ai_embed_config() {
 		'model'      => $model,
 		'created'    => $created,
 		'related'    => $related,
+		'statuses'   => $statuses,
+		'images'     => empty( $stored['images'] ) ? 0 : 1,
+		'after'      => $after,
+		'tax_mode'   => $tax_mode,
+		'terms'      => $terms,
+		'limit'      => $limit,
+		'day'        => $day,
+		'neurons'    => $neurons,
 	);
 }
 
@@ -187,33 +229,101 @@ function skyphusion_ai_embed_vector_id( $post_id ) {
 }
 
 /**
+ * True when the category and tag filter keeps this post.
+ *
+ * Mode none keeps every post. Include keeps a match. Exclude drops a match.
+ *
+ * @param array<string, mixed> $post   One post.
+ * @param array<string, mixed> $config Saved choices.
+ * @return bool
+ */
+function skyphusion_ai_embed_terms_ok( $post, $config ) {
+	$mode = isset( $config['tax_mode'] ) ? (string) $config['tax_mode'] : 'none';
+	if ( 'include' !== $mode && 'exclude' !== $mode ) {
+		return true;
+	}
+	$wanted = array();
+	if ( isset( $config['terms'] ) && is_array( $config['terms'] ) ) {
+		$wanted = $config['terms'];
+	}
+	$have = array();
+	foreach ( array( 'categories', 'tags' ) as $bucket ) {
+		if ( ! isset( $post[ $bucket ] ) || ! is_array( $post[ $bucket ] ) ) {
+			continue;
+		}
+		foreach ( $post[ $bucket ] as $slug ) {
+			$have[] = (string) $slug;
+		}
+	}
+	$hit = false;
+	foreach ( $wanted as $slug ) {
+		if ( in_array( (string) $slug, $have, true ) ) {
+			$hit = true;
+			break;
+		}
+	}
+	if ( 'include' === $mode ) {
+		return $hit;
+	}
+	return ! $hit;
+}
+
+/**
  * True when this post belongs in the index.
  *
  * A password-protected post stays out. A draft, a revision, and a
- * type the admin did not choose stay out.
+ * type the admin did not choose stay out. Private stays out until
+ * the admin includes it.
  *
  * @param array<string, mixed> $post   One post.
  * @param array<string, mixed> $config Saved choices.
  * @return bool
  */
 function skyphusion_ai_embed_included( $post, $config ) {
-	$status = isset( $post['post_status'] ) ? (string) $post['post_status'] : '';
-	if ( 'publish' !== $status ) {
-		return false;
-	}
 	$password = isset( $post['post_password'] ) ? (string) $post['post_password'] : '';
 	if ( '' !== $password ) {
 		return false;
 	}
-	$type = isset( $post['post_type'] ) ? (string) $post['post_type'] : '';
-	if ( '' === $type || 'revision' === $type ) {
+	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+	if ( function_exists( 'get_post_meta' ) && '1' === (string) get_post_meta( $post_id, 'skyphusion_ai_embed_exclude', true ) ) {
 		return false;
 	}
-	$types = array();
-	if ( isset( $config['post_types'] ) && is_array( $config['post_types'] ) ) {
-		$types = $config['post_types'];
+	$status   = isset( $post['post_status'] ) ? (string) $post['post_status'] : '';
+	$statuses = array( 'publish' );
+	if ( isset( $config['statuses'] ) && is_array( $config['statuses'] ) ) {
+		$statuses = $config['statuses'];
 	}
-	return in_array( $type, $types, true );
+	$type = isset( $post['post_type'] ) ? (string) $post['post_type'] : '';
+	if ( 'attachment' === $type ) {
+		if ( empty( $config['images'] ) ) {
+			return false;
+		}
+		if ( 'inherit' !== $status && 'publish' !== $status ) {
+			return false;
+		}
+	} else {
+		if ( ! in_array( $status, $statuses, true ) ) {
+			return false;
+		}
+		if ( '' === $type || 'revision' === $type ) {
+			return false;
+		}
+		$types = array();
+		if ( isset( $config['post_types'] ) && is_array( $config['post_types'] ) ) {
+			$types = $config['post_types'];
+		}
+		if ( ! in_array( $type, $types, true ) ) {
+			return false;
+		}
+	}
+	$after = isset( $config['after'] ) ? (string) $config['after'] : '';
+	if ( 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $after ) ) {
+		$dated = isset( $post['post_date_gmt'] ) ? (string) $post['post_date_gmt'] : '';
+		if ( '' !== $dated && substr( $dated, 0, 10 ) < $after ) {
+			return false;
+		}
+	}
+	return skyphusion_ai_embed_terms_ok( $post, $config );
 }
 
 /**
@@ -259,7 +369,7 @@ function skyphusion_ai_embed_create_body( $name, $model ) {
  *
  * @param array<int, mixed>    $posts  Posts to consider.
  * @param array<string, mixed> $config Saved choices.
- * @return array{posts: int, tokens: int, neurons: int}
+ * @return array{posts: int, tokens: int, neurons: int, passages: int, days: int, stored: int}
  */
 function skyphusion_ai_embed_estimate( $posts, $config ) {
 	$chars  = 0;
@@ -290,10 +400,18 @@ function skyphusion_ai_embed_estimate( $posts, $config ) {
 	}
 	$rate    = skyphusion_ai_neuron_rate( $model );
 	$neurons = skyphusion_ai_neuron_from_tokens( $tokens, (int) $rate[0] );
+	$limit   = isset( $config['limit'] ) ? (int) $config['limit'] : 3000;
+	$days    = 1;
+	if ( $limit >= 1 && $neurons > $limit ) {
+		$days = (int) ceil( $neurons / $limit );
+	}
 	return array(
-		'posts'   => $count,
-		'tokens'  => $tokens,
-		'neurons' => $neurons,
+		'posts'    => $count,
+		'tokens'   => $tokens,
+		'neurons'  => $neurons,
+		'passages' => $count,
+		'days'     => $days,
+		'stored'   => $count * 1024,
 	);
 }
 
@@ -590,6 +708,13 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	if ( ! function_exists( 'cloudflare_ai_provider_embeddings' ) ) {
 		return array( 'state' => 'blocked' );
 	}
+	if ( skyphusion_ai_embed_limit_blocked( skyphusion_ai_embed_config() ) ) {
+		return array( 'state' => 'limit' );
+	}
+	$before = 0;
+	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
+		$before = (int) skyphusion_ai_neuron_state()['neurons'];
+	}
 	$vectors = cloudflare_ai_provider_embeddings( array( $text ) );
 	if ( is_wp_error( $vectors ) || ! is_array( $vectors ) || ! isset( $vectors[0] ) || ! is_array( $vectors[0] ) ) {
 		return array( 'state' => 'blocked' );
@@ -607,14 +732,96 @@ function skyphusion_ai_embed_sync_post( $post ) {
 		return array( 'state' => 'blocked' );
 	}
 	skyphusion_ai_embed_hash_set( $post_id, $hash );
+	$after = $before;
+	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
+		$after = (int) skyphusion_ai_neuron_state()['neurons'];
+	}
+	skyphusion_ai_embed_add_neurons( $after - $before );
 	return array( 'state' => 'embedded' );
+}
+
+/**
+ * True when today's embeddings limit is spent.
+ *
+ * Zero means this job has no limit of its own.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @return bool
+ */
+function skyphusion_ai_embed_limit_blocked( $config ) {
+	$limit = isset( $config['limit'] ) ? (int) $config['limit'] : 3000;
+	if ( $limit < 1 ) {
+		return false;
+	}
+	$today = function_exists( 'skyphusion_ai_neuron_today' ) ? skyphusion_ai_neuron_today() : gmdate( 'Y-m-d' );
+	$used  = 0;
+	if ( isset( $config['day'] ) && $config['day'] === $today ) {
+		$used = (int) $config['neurons'];
+	}
+	return $used >= $limit;
+}
+
+/**
+ * Add measured neurons to today's embeddings total.
+ *
+ * @param int $neurons Neurons from the call.
+ * @return void
+ */
+function skyphusion_ai_embed_add_neurons( $neurons ) {
+	if ( ! function_exists( 'update_option' ) ) {
+		return;
+	}
+	$neurons = (int) $neurons;
+	if ( $neurons < 0 ) {
+		$neurons = 0;
+	}
+	$config = skyphusion_ai_embed_config();
+	$today  = function_exists( 'skyphusion_ai_neuron_today' ) ? skyphusion_ai_neuron_today() : gmdate( 'Y-m-d' );
+	$used   = 0;
+	if ( isset( $config['day'] ) && $config['day'] === $today ) {
+		$used = (int) $config['neurons'];
+	}
+	$config['day']     = $today;
+	$config['neurons'] = $used + $neurons;
+	update_option( skyphusion_ai_embed_option_name(), $config, false );
+}
+
+/**
+ * Query for the posts a run would consider.
+ *
+ * Images are included only when the admin turned that choice on.
+ * Private posts are included only when that choice is saved.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_embed_query_args( $config ) {
+	$types = array();
+	if ( isset( $config['post_types'] ) && is_array( $config['post_types'] ) ) {
+		$types = $config['post_types'];
+	}
+	if ( ! empty( $config['images'] ) && ! in_array( 'attachment', $types, true ) ) {
+		$types[] = 'attachment';
+	}
+	$statuses = array( 'publish' );
+	if ( isset( $config['statuses'] ) && is_array( $config['statuses'] ) && array() !== $config['statuses'] ) {
+		$statuses = $config['statuses'];
+	}
+	if ( ! empty( $config['images'] ) && ! in_array( 'inherit', $statuses, true ) ) {
+		$statuses[] = 'inherit';
+	}
+	return array(
+		'post_type'   => $types,
+		'post_status' => $statuses,
+		'numberposts' => -1,
+	);
 }
 
 /**
  * Posts the estimate and the run walk.
  *
- * A test may set skyphusion_ai_embed_posts. Otherwise published posts
- * of the chosen types are loaded.
+ * A test may set skyphusion_ai_embed_posts. Otherwise the chosen types
+ * and statuses are loaded.
  *
  * @return array<int, mixed>
  */
@@ -626,17 +833,11 @@ function skyphusion_ai_embed_collect() {
 		return array();
 	}
 	$config = skyphusion_ai_embed_config();
-	$types  = $config['post_types'];
-	if ( array() === $types ) {
+	$args   = skyphusion_ai_embed_query_args( $config );
+	if ( array() === $args['post_type'] ) {
 		return array();
 	}
-	$posts = get_posts(
-		array(
-			'post_type'   => $types,
-			'post_status' => 'publish',
-			'numberposts' => -1,
-		)
-	);
+	$posts = get_posts( $args );
 	if ( ! is_array( $posts ) ) {
 		return array();
 	}
@@ -806,6 +1007,30 @@ function skyphusion_ai_embed_apply( $posted ) {
 	if ( isset( $posted['related'] ) ) {
 		$config['related'] = empty( $posted['related'] ) ? 0 : 1;
 	}
+	if ( isset( $posted['private'] ) ) {
+		$statuses = array( 'publish' );
+		if ( ! empty( $posted['private'] ) ) {
+			$statuses[] = 'private';
+		}
+		$config['statuses'] = $statuses;
+	}
+	if ( isset( $posted['images'] ) ) {
+		$config['images'] = empty( $posted['images'] ) ? 0 : 1;
+	}
+	if ( isset( $posted['after'] ) ) {
+		$after           = (string) $posted['after'];
+		$config['after'] = ( 1 === preg_match( '/^\d{4}-\d{2}-\d{2}$/', $after ) ) ? $after : '';
+	}
+	if ( isset( $posted['tax_mode'] ) ) {
+		$tax                = (string) $posted['tax_mode'];
+		$config['tax_mode'] = in_array( $tax, array( 'include', 'exclude' ), true ) ? $tax : 'none';
+	}
+	if ( isset( $posted['terms'] ) && is_array( $posted['terms'] ) ) {
+		$config['terms'] = skyphusion_ai_embed_names( $posted['terms'] );
+	}
+	if ( isset( $posted['limit'] ) && is_numeric( $posted['limit'] ) && (int) $posted['limit'] >= 0 ) {
+		$config['limit'] = (int) $posted['limit'];
+	}
 	update_option( skyphusion_ai_embed_option_name(), $config, false );
 	return skyphusion_ai_embed_config();
 }
@@ -901,9 +1126,19 @@ function skyphusion_ai_embed_render() {
 	$estimate = skyphusion_ai_embed_estimate( skyphusion_ai_embed_collect(), $config );
 	echo '<hr />';
 	echo '<h2>' . esc_html__( 'Embeddings', 'skyphusion-ai' ) . '</h2>';
-	/* translators: 1: number of posts, 2: estimated neurons. */
-	$sentence = __( 'This run would embed %1$d posts. The estimate is %2$d neurons. The model has not been called.', 'skyphusion-ai' );
-	echo '<p>' . esc_html( sprintf( $sentence, (int) $estimate['posts'], (int) $estimate['neurons'] ) ) . '</p>';
+	/* translators: 1: number of posts, 2: estimated neurons, 3: passages, 4: days, 5: stored dimensions. */
+	$sentence = __( 'This run would embed %1$d posts and %3$d passages. The estimate is %2$d neurons, about %4$d days, and %5$d stored dimensions. The model has not been called.', 'skyphusion-ai' );
+	echo '<p>' . esc_html(
+		sprintf(
+			$sentence,
+			(int) $estimate['posts'],
+			(int) $estimate['neurons'],
+			(int) $estimate['passages'],
+			(int) $estimate['days'],
+			(int) $estimate['stored']
+		)
+	) . '</p>';
+	echo '<p>' . esc_html__( 'Password-protected posts stay out. The embeddings limit does not stop the other tools.', 'skyphusion-ai' ) . '</p>';
 	if ( ! empty( $config['created'] ) ) {
 		echo '<p>' . esc_html__( 'The index exists. A saved post is sent again only when its text changes.', 'skyphusion-ai' ) . '</p>';
 	}
@@ -919,6 +1154,38 @@ function skyphusion_ai_embed_render() {
 		echo ' checked="checked"';
 	}
 	echo ' /> ' . esc_html__( 'Show related posts on a single post or product.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p><label><input type="checkbox" name="skyphusion_ai_embed_private" value="1"';
+	if ( in_array( 'private', $config['statuses'], true ) ) {
+		echo ' checked="checked"';
+	}
+	echo ' /> ' . esc_html__( 'Include private posts.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p><label><input type="checkbox" name="skyphusion_ai_embed_images" value="1"';
+	if ( ! empty( $config['images'] ) ) {
+		echo ' checked="checked"';
+	}
+	echo ' /> ' . esc_html__( 'Include images.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p><label>' . esc_html__( 'Only posts on or after this date.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="text" name="skyphusion_ai_embed_after" value="' . esc_attr( (string) $config['after'] ) . '" /></label></p>';
+	echo '<p><label>' . esc_html__( 'Categories and tags.', 'skyphusion-ai' ) . ' ';
+	echo '<select name="skyphusion_ai_embed_tax">';
+	$tax_labels = array(
+		'none'    => __( 'Keep every category and tag.', 'skyphusion-ai' ),
+		'include' => __( 'Only these slugs.', 'skyphusion-ai' ),
+		'exclude' => __( 'Leave these slugs out.', 'skyphusion-ai' ),
+	);
+	foreach ( $tax_labels as $mode => $label ) {
+		echo '<option value="' . esc_attr( $mode ) . '"';
+		if ( $mode === $config['tax_mode'] ) {
+			echo ' selected="selected"';
+		}
+		echo '>' . esc_html( $label ) . '</option>';
+	}
+	echo '</select></label></p>';
+	echo '<p><label>' . esc_html__( 'Slugs, separated by commas.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="text" name="skyphusion_ai_embed_terms" value="' . esc_attr( implode( ', ', $config['terms'] ) ) . '" /></label></p>';
+	echo '<p><label>' . esc_html__( 'Daily embeddings limit, in neurons. Zero means this job has no limit of its own.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="number" name="skyphusion_ai_embed_limit" value="' . esc_attr( (string) $config['limit'] ) . '" min="0" step="1" /></label></p>';
+	echo '<p>' . esc_html__( 'An editor can leave one post out.', 'skyphusion-ai' ) . '</p>';
 	echo '<button type="submit">' . esc_html__( 'Save the embedding choice', 'skyphusion-ai' ) . '</button>';
 	echo '</form>';
 	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
@@ -948,10 +1215,41 @@ function skyphusion_ai_embed_handle_save() {
 	if ( isset( $_POST['skyphusion_ai_related'] ) ) {
 		$related = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related'] ) );
 	}
+	$private = '';
+	if ( isset( $_POST['skyphusion_ai_embed_private'] ) ) {
+		$private = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_private'] ) );
+	}
+	$images = '';
+	if ( isset( $_POST['skyphusion_ai_embed_images'] ) ) {
+		$images = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_images'] ) );
+	}
+	$after = '';
+	if ( isset( $_POST['skyphusion_ai_embed_after'] ) ) {
+		$after = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_after'] ) );
+	}
+	$tax = '';
+	if ( isset( $_POST['skyphusion_ai_embed_tax'] ) ) {
+		$tax = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_tax'] ) );
+	}
+	$terms = array();
+	if ( isset( $_POST['skyphusion_ai_embed_terms'] ) ) {
+		$raw   = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_terms'] ) );
+		$terms = array_map( 'trim', explode( ',', $raw ) );
+	}
+	$limit = null;
+	if ( isset( $_POST['skyphusion_ai_embed_limit'] ) ) {
+		$limit = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_limit'] ) );
+	}
 	skyphusion_ai_embed_apply(
 		array(
-			'index'   => $index,
-			'related' => $related,
+			'index'    => $index,
+			'related'  => $related,
+			'private'  => $private,
+			'images'   => $images,
+			'after'    => $after,
+			'tax_mode' => $tax,
+			'terms'    => $terms,
+			'limit'    => $limit,
 		)
 	);
 	skyphusion_ai_embed_redirect();
