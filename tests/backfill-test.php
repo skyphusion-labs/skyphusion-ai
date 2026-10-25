@@ -126,6 +126,34 @@ expect('yoast receives the description', get_post_meta(8, '_yoast_wpseo_metadesc
 $backfill_seo_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
 expect('the seo call uses the writing model', strpos($backfill_seo_url, skyphusion_ai_backfill_model()) !== false, true);
 
+$GLOBALS['skyphusion_ai_models_runtime'] = array(
+    array('id' => '@cf/example/light-writer', 'name' => 'Light', 'task' => 'text generation'),
+);
+if (!isset($GLOBALS['cfais_stored']) || !is_array($GLOBALS['cfais_stored'])) {
+    $GLOBALS['cfais_stored'] = array();
+}
+$backfill_light_was = array_key_exists('model_light', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['model_light'] : null;
+$GLOBALS['cfais_stored']['model_light'] = '@cf/example/light-writer';
+expect('a saved light model is the seo model', skyphusion_ai_backfill_model(), '@cf/example/light-writer');
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = time() - 3601;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 18, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_page),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+skyphusion_ai_backfill_run(false);
+$backfill_light_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+expect('the seo call uses the light model', strpos($backfill_light_url, '@cf/example/light-writer') !== false, true);
+expect('the seo call leaves the writing model', strpos($backfill_light_url, 'llama-3.3-70b') === false, true);
+if (null === $backfill_light_was) {
+    unset($GLOBALS['cfais_stored']['model_light']);
+} else {
+    $GLOBALS['cfais_stored']['model_light'] = $backfill_light_was;
+}
+unset($GLOBALS['skyphusion_ai_models_runtime']);
+
 $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);

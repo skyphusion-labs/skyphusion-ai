@@ -74,6 +74,108 @@ function skyphusion_ai_model_choice( $job ) {
 }
 
 /**
+ * Short tasks that may use the light model.
+ *
+ * @return string[]
+ */
+function skyphusion_ai_short_tasks() {
+	return array( 'title', 'excerpt', 'meta', 'moderation', 'alt' );
+}
+
+/**
+ * Saved light model, or an empty string when the field is empty.
+ *
+ * An id the account list does not allow is treated as empty. No model id
+ * is filled in by the plugin.
+ *
+ * @return string
+ */
+function skyphusion_ai_model_light_id() {
+	if ( ! function_exists( 'skyphusion_ai_settings' ) || ! function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		return '';
+	}
+	$settings = skyphusion_ai_settings();
+	if ( ! is_array( $settings ) || ! isset( $settings['model_light'] ) ) {
+		return '';
+	}
+	$id = cloudflare_ai_provider_model_id( $settings['model_light'] );
+	if ( '' === $id || ! skyphusion_ai_model_id_allowed( $id, 'writing' ) ) {
+		return '';
+	}
+	return $id;
+}
+
+/**
+ * Light model when one is saved, otherwise the writing model.
+ *
+ * @return string
+ */
+function skyphusion_ai_light_model() {
+	$light = skyphusion_ai_model_light_id();
+	if ( '' !== $light ) {
+		return $light;
+	}
+	return skyphusion_ai_model_choice( 'writing' );
+}
+
+/**
+ * Model for one task. A model the editor already picked stays that model.
+ *
+ * @param string $task   Task name.
+ * @param string $picked Model id already chosen, or empty.
+ * @return string
+ */
+function skyphusion_ai_model_for_task( $task, $picked = '' ) {
+	if ( function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		$picked = cloudflare_ai_provider_model_id( $picked );
+	} else {
+		$picked = '';
+	}
+	if ( '' !== $picked ) {
+		return $picked;
+	}
+	if ( in_array( (string) $task, skyphusion_ai_short_tasks(), true ) ) {
+		return skyphusion_ai_light_model();
+	}
+	return skyphusion_ai_model_choice( 'writing' );
+}
+
+/**
+ * Light model value to store. Empty stays empty.
+ *
+ * @param mixed $original Previous settings.
+ * @param mixed $posted   Posted settings, or null when the form omitted them.
+ * @return string
+ */
+function skyphusion_ai_model_light_stored( $original, $posted ) {
+	$previous = '';
+	if ( is_array( $original ) && isset( $original['model_light'] ) && function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		$kept = cloudflare_ai_provider_model_id( $original['model_light'] );
+		if ( '' !== $kept && skyphusion_ai_model_id_allowed( $kept, 'writing' ) ) {
+			$previous = $kept;
+		}
+	}
+	if ( ! is_array( $posted ) || ! array_key_exists( 'model_light', $posted ) ) {
+		return $previous;
+	}
+	$typed = trim( (string) $posted['model_light'] );
+	if ( '' === $typed ) {
+		return '';
+	}
+	$id = function_exists( 'cloudflare_ai_provider_model_id' ) ? cloudflare_ai_provider_model_id( $typed ) : '';
+	if ( '' === $id || ! skyphusion_ai_model_id_allowed( $id, 'writing' ) ) {
+		if ( function_exists( 'skyphusion_ai_reject' ) ) {
+			skyphusion_ai_reject(
+				'model_light',
+				__( 'That light model was not kept. The previous choice stays.', 'skyphusion-ai' )
+			);
+		}
+		return $previous;
+	}
+	return $id;
+}
+
+/**
  * How long a successful account list is kept, in seconds.
  *
  * @return int
@@ -662,6 +764,7 @@ function skyphusion_ai_model_sanitize_option( $value, $option = '', $original = 
 		}
 		$value[ $key ] = $id;
 	}
+	$value['model_light'] = skyphusion_ai_model_light_stored( $original, $posted );
 	return $value;
 }
 
@@ -694,6 +797,33 @@ function skyphusion_ai_model_field( $job ) {
  */
 function skyphusion_ai_field_model_writing() {
 	skyphusion_ai_model_field( 'writing' );
+}
+
+/**
+ * Light model picker. The first row keeps the writing model.
+ *
+ * @return void
+ */
+function skyphusion_ai_field_model_light() {
+	if ( ! function_exists( 'esc_attr' ) || ! function_exists( 'esc_html' ) ) {
+		return;
+	}
+	$current = skyphusion_ai_model_light_id();
+	echo '<select name="skyphusion_ai_settings[model_light]" id="skyphusion_ai_model_light">';
+	echo '<option value=""';
+	if ( '' === $current ) {
+		echo ' selected="selected"';
+	}
+	echo '>' . esc_html__( 'Use the writing model', 'skyphusion-ai' ) . '</option>';
+	foreach ( skyphusion_ai_model_options( 'writing' ) as $option ) {
+		echo '<option value="' . esc_attr( $option['id'] ) . '"';
+		if ( $option['id'] === $current ) {
+			echo ' selected="selected"';
+		}
+		echo '>' . esc_html( $option['name'] ) . '</option>';
+	}
+	echo '</select>';
+	echo '<p class="description">' . esc_html__( 'Short tasks use this model. Titles, excerpts, meta descriptions, moderation, and alt wording. Leave it empty and the writing model stays in use. A model the editor already picked stays that model.', 'skyphusion-ai' ) . '</p>';
 }
 
 /**
@@ -762,6 +892,7 @@ function skyphusion_ai_model_register_fields() {
 		'cloudflare-ai-search'
 	);
 	add_settings_field( 'model_writing', __( 'Writing model', 'skyphusion-ai' ), 'skyphusion_ai_field_model_writing', 'cloudflare-ai-search', 'models' );
+	add_settings_field( 'model_light', __( 'Light model', 'skyphusion-ai' ), 'skyphusion_ai_field_model_light', 'cloudflare-ai-search', 'models' );
 	add_settings_field( 'model_vision', __( 'Vision model', 'skyphusion-ai' ), 'skyphusion_ai_field_model_vision', 'cloudflare-ai-search', 'models' );
 	add_settings_field( 'model_image', __( 'Image model', 'skyphusion-ai' ), 'skyphusion_ai_field_model_image', 'cloudflare-ai-search', 'models' );
 	add_settings_field( 'model_speech', __( 'Speech model', 'skyphusion-ai' ), 'skyphusion_ai_field_model_speech', 'cloudflare-ai-search', 'models' );
