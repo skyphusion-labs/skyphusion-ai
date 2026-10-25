@@ -1353,6 +1353,9 @@ function skyphusion_ai_backfill_handle_retry() {
  * @return void
  */
 function skyphusion_ai_backfill_on_hourly() {
+	if ( function_exists( 'skyphusion_ai_worker_url' ) && '' !== skyphusion_ai_worker_url() ) {
+		return;
+	}
 	skyphusion_ai_backfill_run( false );
 }
 
