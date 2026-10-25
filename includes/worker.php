@@ -141,9 +141,12 @@ function skyphusion_ai_worker_sse_neurons( $body ) {
  * @param string $script Worker source.
  * @param string $origin Allowed browser origin.
  * @param string $model  Default model id.
+ * @param string $index  Vectorize index name.
+ * @param string $site   Site address the Worker calls.
+ * @param string $secret Shared secret for the hourly call.
  * @return string
  */
-function skyphusion_ai_worker_multipart( $script, $origin, $model ) {
+function skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $site, $secret ) {
 	$metadata = wp_json_encode(
 		array(
 			'main_module'        => 'index.js',
@@ -154,6 +157,11 @@ function skyphusion_ai_worker_multipart( $script, $origin, $model ) {
 					'name' => 'AI',
 				),
 				array(
+					'type'       => 'vectorize',
+					'name'       => 'VECTORIZE',
+					'index_name' => $index,
+				),
+				array(
 					'type' => 'plain_text',
 					'name' => 'ALLOWED_ORIGIN',
 					'text' => $origin,
@@ -162,6 +170,16 @@ function skyphusion_ai_worker_multipart( $script, $origin, $model ) {
 					'type' => 'plain_text',
 					'name' => 'MODEL',
 					'text' => $model,
+				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'SITE_URL',
+					'text' => $site,
+				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'BACKFILL_SECRET',
+					'text' => $secret,
 				),
 			),
 		)
@@ -243,6 +261,7 @@ function skyphusion_ai_worker_deploy() {
 	$script = '';
 	$path   = dirname( __DIR__ ) . '/worker/index.js';
 	if ( is_readable( $path ) ) {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- Local script file, not a remote URL.
 		$script = (string) file_get_contents( $path );
 	}
 	if ( '' === $script ) {
@@ -250,7 +269,18 @@ function skyphusion_ai_worker_deploy() {
 	}
 	$origin = function_exists( 'home_url' ) ? (string) home_url( '/' ) : '';
 	$origin = rtrim( $origin, '/' );
-	$model  = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+	$index  = 'skyphusion-ai';
+	if ( function_exists( 'skyphusion_ai_embed_config' ) ) {
+		$embed = skyphusion_ai_embed_config();
+		if ( isset( $embed['index'] ) && '' !== (string) $embed['index'] ) {
+			$index = (string) $embed['index'];
+		}
+	}
+	$secret = skyphusion_ai_worker_secret();
+	if ( '' === $secret ) {
+		$secret = bin2hex( random_bytes( 16 ) );
+	}
+	$model = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 	if ( function_exists( 'skyphusion_ai_assistant_model' ) ) {
 		$model = skyphusion_ai_assistant_model();
 	}
@@ -260,7 +290,7 @@ function skyphusion_ai_worker_deploy() {
 		'PUT',
 		$base . '/workers/scripts/' . rawurlencode( $script_name ),
 		$token,
-		skyphusion_ai_worker_multipart( $script, $origin, $model ),
+		skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $origin, $secret ),
 		'multipart/form-data; boundary=skyphusionaiworker'
 	);
 	if ( is_wp_error( $uploaded ) ) {
@@ -287,15 +317,275 @@ function skyphusion_ai_worker_deploy() {
 	if ( is_wp_error( $enabled ) ) {
 		return $enabled;
 	}
+	$schedule = skyphusion_ai_worker_api(
+		'PUT',
+		$base . '/workers/scripts/' . rawurlencode( $script_name ) . '/schedules',
+		$token,
+		wp_json_encode(
+			array(
+				array(
+					'cron' => '0 * * * *',
+				),
+			)
+		),
+		'application/json'
+	);
+	if ( is_wp_error( $schedule ) ) {
+		return $schedule;
+	}
 	$url = skyphusion_ai_worker_url_clean( 'https://' . $script_name . '.' . $subdomain . '.workers.dev' );
 	if ( '' === $url ) {
 		return new WP_Error( 'skyphusion_ai_worker', __( 'Cloudflare did not return a workers.dev name.', 'skyphusion-ai' ) );
 	}
 	if ( function_exists( 'update_option' ) ) {
-		update_option( skyphusion_ai_worker_option_name(), array( 'url' => $url ), false );
+		update_option(
+			skyphusion_ai_worker_option_name(),
+			array(
+				'url'    => $url,
+				'secret' => $secret,
+			),
+			false
+		);
 	}
 	return array( 'url' => skyphusion_ai_worker_url() );
 }
+
+/**
+ * Shared secret for the hourly call. Empty until a deploy saves one.
+ *
+ * @return string
+ */
+function skyphusion_ai_worker_secret() {
+	$stored = array();
+	if ( function_exists( 'get_option' ) ) {
+		$stored = get_option( skyphusion_ai_worker_option_name(), array() );
+	}
+	if ( ! is_array( $stored ) || ! isset( $stored['secret'] ) ) {
+		return '';
+	}
+	$secret = (string) $stored['secret'];
+	if ( ! preg_match( '/^[a-f0-9]{32}$/', $secret ) ) {
+		return '';
+	}
+	return $secret;
+}
+
+/**
+ * True when the header matches the saved secret.
+ *
+ * @param string $given Header value.
+ * @return bool
+ */
+function skyphusion_ai_worker_secret_matches( $given ) {
+	$stored = skyphusion_ai_worker_secret();
+	$given  = trim( (string) $given );
+	if ( '' === $stored || '' === $given ) {
+		return false;
+	}
+	return hash_equals( $stored, $given );
+}
+
+/**
+ * Ask the Worker for pages. One request. No generated answer.
+ *
+ * @param string $question Search text.
+ * @return array<int, array{title: string, url: string}>|array{state: string}
+ */
+function skyphusion_ai_worker_retrieve( $question ) {
+	$url = skyphusion_ai_worker_url();
+	if ( '' === $url || ! function_exists( 'wp_remote_post' ) ) {
+		return array( 'state' => 'blocked' );
+	}
+	$response = wp_remote_post(
+		$url,
+		array(
+			'timeout' => 20,
+			'headers' => array(
+				'Content-Type' => 'application/json',
+			),
+			'body'    => wp_json_encode(
+				array(
+					'action'   => 'retrieve',
+					'question' => $question,
+				)
+			),
+		)
+	);
+	if ( is_wp_error( $response ) ) {
+		return array( 'state' => 'blocked' );
+	}
+	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	if ( ! is_array( $decoded ) || ! isset( $decoded['pages'] ) || ! is_array( $decoded['pages'] ) ) {
+		return array( 'state' => 'blocked' );
+	}
+	$rows = array();
+	foreach ( $decoded['pages'] as $page ) {
+		if ( ! is_array( $page ) ) {
+			continue;
+		}
+		$rows[] = array(
+			'title' => isset( $page['title'] ) ? (string) $page['title'] : '',
+			'url'   => isset( $page['url'] ) ? (string) $page['url'] : '',
+		);
+	}
+	return $rows;
+}
+
+/**
+ * Next empty text for the Worker. This function does not call the model.
+ *
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_worker_backfill_offer() {
+	if ( ! function_exists( 'skyphusion_ai_backfill_config' ) || ! function_exists( 'skyphusion_ai_backfill_candidates' ) ) {
+		return array( 'state' => 'stop' );
+	}
+	$config = skyphusion_ai_backfill_config();
+	if ( empty( $config['enabled'] ) ) {
+		return array( 'state' => 'stop' );
+	}
+	if ( function_exists( 'skyphusion_ai_backfill_blocked' ) && skyphusion_ai_backfill_blocked( $config ) ) {
+		return array( 'state' => 'stop' );
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
+		return array( 'state' => 'stop' );
+	}
+	$seo = function_exists( 'skyphusion_ai_backfill_seo_plugin' ) ? skyphusion_ai_backfill_seo_plugin() : '';
+	foreach ( skyphusion_ai_backfill_candidates() as $candidate ) {
+		if ( ! is_array( $candidate ) ) {
+			continue;
+		}
+		$post_id = isset( $candidate['post_id'] ) ? (int) $candidate['post_id'] : 0;
+		$kind    = ( isset( $candidate['kind'] ) && 'alt' === $candidate['kind'] ) ? 'alt' : 'description';
+		if ( 1 > $post_id || ! function_exists( 'skyphusion_ai_backfill_current' ) ) {
+			continue;
+		}
+		$current = skyphusion_ai_backfill_current( $post_id, $kind, $seo );
+		if ( null === $current || '' !== $current ) {
+			continue;
+		}
+		$title = isset( $candidate['title'] ) ? (string) $candidate['title'] : '';
+		$page  = '';
+		if ( 'description' === $kind && function_exists( 'skyphusion_ai_backfill_plain' ) ) {
+			$raw  = isset( $candidate['content'] ) ? (string) $candidate['content'] : '';
+			$page = skyphusion_ai_backfill_plain( $raw );
+			if ( function_exists( 'skyphusion_ai_backfill_plain_length' ) && function_exists( 'skyphusion_ai_backfill_content_floor' ) ) {
+				if ( skyphusion_ai_backfill_plain_length( $page ) < skyphusion_ai_backfill_content_floor() ) {
+					continue;
+				}
+			}
+		}
+		$prompt = '';
+		$model  = '';
+		if ( 'alt' === $kind && function_exists( 'skyphusion_ai_backfill_alt_prompt' ) ) {
+			$prompt = skyphusion_ai_backfill_alt_prompt( $title );
+			$model  = function_exists( 'skyphusion_ai_backfill_vision_model' ) ? skyphusion_ai_backfill_vision_model() : '';
+		} elseif ( function_exists( 'skyphusion_ai_backfill_prompt' ) ) {
+			$prompt = skyphusion_ai_backfill_prompt( $kind, $title, $page );
+			$model  = function_exists( 'skyphusion_ai_backfill_model' ) ? skyphusion_ai_backfill_model() : '';
+		}
+		if ( '' === $prompt ) {
+			continue;
+		}
+		return array(
+			'state'   => 'ready',
+			'post_id' => $post_id,
+			'kind'    => $kind,
+			'prompt'  => $prompt,
+			'model'   => $model,
+		);
+	}
+	return array( 'state' => 'stop' );
+}
+
+/**
+ * Store text from the Worker. This function does not call the model.
+ *
+ * @param int    $post_id Post id.
+ * @param string $kind    alt or description.
+ * @param string $text    Text from the Worker.
+ * @return bool
+ */
+function skyphusion_ai_worker_backfill_keep( $post_id, $kind, $text ) {
+	if ( ! function_exists( 'skyphusion_ai_backfill_write' ) || ! function_exists( 'skyphusion_ai_backfill_seo_plugin' ) ) {
+		return false;
+	}
+	$kind = ( 'alt' === $kind ) ? 'alt' : 'description';
+	return skyphusion_ai_backfill_write( (int) $post_id, $kind, skyphusion_ai_backfill_seo_plugin(), (string) $text );
+}
+
+/**
+ * REST permission. The header must match the saved secret.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return bool
+ */
+function skyphusion_ai_worker_backfill_permission( $request ) {
+	$header = '';
+	if ( is_object( $request ) && method_exists( $request, 'get_header' ) ) {
+		$header = (string) $request->get_header( 'x-skyphusion-worker' );
+	}
+	return skyphusion_ai_worker_secret_matches( $header );
+}
+
+/**
+ * REST: next empty text.
+ *
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_worker_backfill_next_route() {
+	return skyphusion_ai_worker_backfill_offer();
+}
+
+/**
+ * REST: store the Worker text.
+ *
+ * @param WP_REST_Request $request Request.
+ * @return array{state: string}
+ */
+function skyphusion_ai_worker_backfill_save_route( $request ) {
+	$post_id = 0;
+	$kind    = 'description';
+	$text    = '';
+	if ( is_object( $request ) && method_exists( $request, 'get_param' ) ) {
+		$post_id = (int) $request->get_param( 'post_id' );
+		$kind    = (string) $request->get_param( 'kind' );
+		$text    = (string) $request->get_param( 'text' );
+	}
+	$kept = skyphusion_ai_worker_backfill_keep( $post_id, $kind, $text );
+	return array( 'state' => $kept ? 'saved' : 'stop' );
+}
+
+/**
+ * Register the two routes the Worker calls.
+ *
+ * @return void
+ */
+function skyphusion_ai_worker_rest_boot() {
+	if ( ! function_exists( 'register_rest_route' ) ) {
+		return;
+	}
+	register_rest_route(
+		'skyphusion-ai/v1',
+		'/backfill-next',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'skyphusion_ai_worker_backfill_next_route',
+			'permission_callback' => 'skyphusion_ai_worker_backfill_permission',
+		)
+	);
+	register_rest_route(
+		'skyphusion-ai/v1',
+		'/backfill-save',
+		array(
+			'methods'             => 'POST',
+			'callback'            => 'skyphusion_ai_worker_backfill_save_route',
+			'permission_callback' => 'skyphusion_ai_worker_backfill_permission',
+		)
+	);
+}
+
+add_action( 'rest_api_init', 'skyphusion_ai_worker_rest_boot' );
 
 /**
  * WP-CLI deploy. Same function as the settings button.

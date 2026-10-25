@@ -179,10 +179,13 @@ function skyphusion_ai_member_results( $question ) {
 			return $cached;
 		}
 	}
-	if ( ! function_exists( 'skyphusion_ai_embed_search' ) ) {
+	if ( function_exists( 'skyphusion_ai_worker_retrieve' ) && '' !== skyphusion_ai_worker_url() ) {
+		$found = skyphusion_ai_worker_retrieve( $question );
+	} elseif ( ! function_exists( 'skyphusion_ai_embed_search' ) ) {
 		return array( 'state' => 'blocked' );
+	} else {
+		$found = skyphusion_ai_embed_search( $question, 5 );
 	}
-	$found = skyphusion_ai_embed_search( $question, 5 );
 	if ( ! is_array( $found ) || isset( $found['state'] ) ) {
 		return is_array( $found ) ? $found : array( 'state' => 'blocked' );
 	}

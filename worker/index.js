@@ -3,6 +3,8 @@
  * The AI binding is named AI. This file has no API token.
  * It does not call Skyphusion.
  */
+const EMBED_MODEL = '@cf/baai/bge-large-en-v1.5';
+
 export default {
 	async fetch(request, env) {
 		const headers = skyphusionAiCors(env);
@@ -26,16 +28,102 @@ export default {
 		if (!question) {
 			return new Response('The question is empty.', { status: 400, headers: headers });
 		}
+		const pages = await skyphusionAiPages(env, question);
+		if (payload.action === 'retrieve') {
+			headers.set('content-type', 'application/json; charset=utf-8');
+			return new Response(JSON.stringify({ pages: pages }), { headers: headers });
+		}
 		const model = String(payload.model || env.MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+		const prompt = skyphusionAiPrompt(question, pages);
 		const aiStream = await env.AI.run(model, {
-			messages: [{ role: 'user', content: question }],
+			messages: [{ role: 'user', content: prompt }],
 			stream: true,
 		});
 		headers.set('content-type', 'text/event-stream; charset=utf-8');
 		headers.set('cache-control', 'no-cache');
 		return new Response(skyphusionAiEvents(aiStream), { headers: headers });
 	},
+	async scheduled(event, env) {
+		await skyphusionAiBackfill(env);
+	},
 };
+
+async function skyphusionAiPages(env, question) {
+	if (!env.AI || !env.VECTORIZE) {
+		return [];
+	}
+	const embedded = await env.AI.run(EMBED_MODEL, { text: [question] });
+	let vector = null;
+	if (embedded && Array.isArray(embedded.data)) {
+		if (Array.isArray(embedded.data[0])) {
+			vector = embedded.data[0];
+		} else if (typeof embedded.data[0] === 'number') {
+			vector = embedded.data;
+		}
+	}
+	if (!vector) {
+		return [];
+	}
+	const found = await env.VECTORIZE.query(vector, { topK: 5, returnMetadata: 'all' });
+	const rows = found && found.matches ? found.matches : [];
+	const pages = [];
+	for (const row of rows) {
+		const meta = row.metadata || {};
+		pages.push({
+			title: String(meta.title || ''),
+			url: String(meta.url || ''),
+		});
+	}
+	return pages;
+}
+
+function skyphusionAiPrompt(question, pages) {
+	const lines = [];
+	for (const page of pages) {
+		if (page.title) {
+			lines.push(page.title);
+		}
+	}
+	return 'Answer from these pages only.\n' + lines.join('\n') + '\nQuestion: ' + question;
+}
+
+async function skyphusionAiBackfill(env) {
+	if (!env.SITE_URL || !env.BACKFILL_SECRET || !env.AI) {
+		return;
+	}
+	const site = String(env.SITE_URL).replace(/\/$/, '');
+	const headers = { 'x-skyphusion-worker': env.BACKFILL_SECRET };
+	const next = await fetch(site + '/wp-json/skyphusion-ai/v1/backfill-next', {
+		method: 'POST',
+		headers: headers,
+	});
+	if (!next.ok) {
+		return;
+	}
+	const job = await next.json();
+	if (!job || job.state !== 'ready' || !job.prompt) {
+		return;
+	}
+	const result = await env.AI.run(job.model || env.MODEL, {
+		messages: [{ role: 'user', content: job.prompt }],
+	});
+	const text = result && typeof result.response === 'string' ? result.response : '';
+	if (!text) {
+		return;
+	}
+	await fetch(site + '/wp-json/skyphusion-ai/v1/backfill-save', {
+		method: 'POST',
+		headers: {
+			'content-type': 'application/json',
+			'x-skyphusion-worker': env.BACKFILL_SECRET,
+		},
+		body: JSON.stringify({
+			post_id: job.post_id,
+			kind: job.kind,
+			text: text,
+		}),
+	});
+}
 
 function skyphusionAiCors(env) {
 	const headers = new Headers();
