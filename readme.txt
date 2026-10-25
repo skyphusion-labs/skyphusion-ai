@@ -74,6 +74,10 @@ Open the Cloudflare dashboard. Go to AI Search, then your instance, then Setting
 
 Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
 
+= Does the plugin stop at a neuron budget? =
+
+Yes. The default is 10,000 neurons a day, the free allowance. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. The plugin mails the site admin at 80% and at 100%. The public search box and the chat button are not in the total. The AI Search rate limit is their cap.
+
 = Does the chat button cost extra? =
 
 This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. The prices are in the Cost section of README.md.

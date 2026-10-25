@@ -107,6 +107,7 @@ require __DIR__ . '/stock-test.php';
 // LAST on purpose: it defines WordPress stand-ins at global scope.
 require __DIR__ . '/i18n-test.php';
 require __DIR__ . '/lead-guard-test.php';
+require __DIR__ . '/neuron-budget-test.php';
 // LAST on purpose. cold-path-test.php sets CLOUDFLARE_API_KEY and restores
 // it; running it last means no earlier file can read the value it sets.
 require __DIR__ . '/cold-path-test.php';

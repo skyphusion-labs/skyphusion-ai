@@ -159,6 +159,8 @@ The derivation for a small catalog: indexing a few dozen product pages is far un
 
 Workers AI is priced at $0.011 per 1,000 Neurons, with 10,000 Neurons per day included on the Free plan and on the Paid plan. The text model this plugin uses by default is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`, at $0.293 per million input tokens and $2.253 per million output tokens. The embeddings helper uses `@cf/baai/bge-large-en-v1.5` at $0.204 per million input tokens. That embeddings call is Workers AI. It is separate from the embeddings AI Search runs while it indexes.
 
+The plugin stops Workers AI at a daily neuron budget. The default is 10,000 neurons. Settings, then Skyphusion AI, can raise it. The settings screen and the admin bar show today's total. The plugin mails the site admin once at 80% and once at 100%, each UTC day. At the budget, the next Workers AI call stays on the site until 00:00 UTC. The public search box and the chat button are not in this total. PHP does not see those calls. The AI Search instance rate limit remains their cap. A search-results answer is counted when Cloudflare reports neurons or tokens. A missing figure does not stop that answer. The call ceiling on that answer stays.
+
 | meter | included | this plugin | marginal |
 | --- | --- | --- | --- |
 | Plugin price | | no subscription | $0 |

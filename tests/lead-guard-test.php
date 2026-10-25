@@ -168,6 +168,9 @@ if (!function_exists('wp_remote_retrieve_response_code')) {
 if (!function_exists('wp_remote_retrieve_body')) {
     function wp_remote_retrieve_body($response)
     {
+        if (isset($GLOBALS['cfais_body'])) {
+            return (string) $GLOBALS['cfais_body'];
+        }
         return json_encode(array(
             'choices' => array(array('message' => array('content' => $GLOBALS['cfais_answer']))),
         ));
