@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.5.1
+Stable tag: 0.5.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -13,6 +13,8 @@ Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce.
 == Description ==
 
 This plugin connects your site to Cloudflare® AI Search. Open Settings, then Skyphusion AI. Paste your public endpoint address there. You can set the same options with `wp skyphusion-ai`.
+
+Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
 
@@ -24,7 +26,19 @@ One switch prints an AI Search answer above WordPress and WooCommerce search res
 
 A single product page also prints its stock as text. Each variation names its attributes, its SKU, its price, and its stock. A simple product names its stock. The text sits in the page itself. A crawler that does not run JavaScript can index it.
 
-The stock count reaches AI Search only after you add a custom metadata field on your instance. The field name is stock_quantity. The type is number. The steps are in the FAQ.
+The same page adds the SKU, the stock status, and the managed stock count to the meta description. Rank Math and Yoast both receive that sentence. The AI Search dropdown quotes it. A product that does not manage stock gets the SKU and the status, and no count. You do not add a custom field for this sentence.
+
+You can also add a stock_quantity number field on the instance. That field is a filter. It is not what the dropdown prints. The steps, including Wrangler, are in the FAQ.
+
+This plugin does three jobs, and it does not charge a licence for any of them.
+
+Search. The box is Cloudflare AI Search. On a product page the meta description gains the SKU, the stock status, and the managed stock count, and the dropdown quotes that description. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a licence. They are not this search.
+
+Chat. You can turn on a chat button. It answers in a sentence. It is not a staff inbox, and it has no seats. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month.
+
+Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. This plugin does not edit posts and it does not open an MCP server. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. Pro adds MCP. You still pay the model vendor there. Here the plugin fee is $0, and the usage is Cloudflare's.
+
+The tables, the renewal figures, and the page each price came from are in the Compared section of README.md. Every price was read on 2026-10-25 from that vendor's own page.
 
 Shortcode: `[cloudflare_ai_search]`
 
@@ -66,11 +80,25 @@ This plugin does not charge a subscription. Cloudflare bills the account that ow
 
 = Does search show how many are in stock? =
 
-Yes, on the search results page. Each product that manages stock prints its count, for example "4 available." A product that does not manage stock prints no count. The search box itself is Cloudflare's snippet. That snippet has no stock field, so the count is on the results list, not inside the dropdown.
+Yes. On a single product page the plugin adds the SKU, the stock status, and the managed stock count to the meta description. The AI Search dropdown quotes that description after the next crawl. A browser refresh does not start that crawl.
+
+The search results page also prints the managed count under each product, for example "4 available." A product that does not manage stock prints the status and no count. A variable product prints a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed. Zero is printed.
 
 = How do I give AI Search the stock count? =
 
-The plugin prints a meta tag on each product page that manages stock. The tag name is stock_quantity. AI Search ignores that tag until you add the field on the instance. You add the field in the Cloudflare account that owns the instance. The plugin cannot add it.
+The dropdown does not need a new field. It already quotes the meta description. Install this plugin. Turn on stock management in WooCommerce and save a quantity when you want a number. Then crawl the site again.
+
+In the Cloudflare dashboard, open the instance and choose Sync index. With Wrangler, in the account that owns the instance:
+
+`npx wrangler ai-search jobs create your-instance`
+
+Replace your-instance with the instance name. The namespace defaults to default. Then list the job:
+
+`npx wrangler ai-search jobs list your-instance`
+
+The job is not instant. A new job can be started every 30 seconds.
+
+The stock_quantity meta tag is a separate filter. AI Search ignores that tag until you add the field. You add it in the Cloudflare account that owns the instance. The plugin cannot add it. You do not add it for the dropdown.
 
 1. In WooCommerce, open the product. Turn on stock management. Enter the quantity. Save the product.
 2. In the Cloudflare dashboard, go to AI, then AI Search, then your instance.
@@ -80,15 +108,27 @@ The plugin prints a meta tag on each product page that manages stock. The tag na
 
 An instance allows five custom fields. This field uses one of them.
 
-The search box does not show the number. The field is a filter. The sentence on the product page is what an answer can quote.
+`npx wrangler ai-search update` does not set custom metadata. Do not use it to add this field. The create command does, and only for a new instance. Repeat every field you want to keep:
+
+`npx wrangler ai-search create your-instance --custom-metadata title:text --custom-metadata description:text --custom-metadata image:text --custom-metadata stock_quantity:number`
+
+Do not create a second instance to add this one field. On an instance you already have, use the dashboard or the API.
 
 If you use the API, add `{"field_name": "stock_quantity", "data_type": "number"}` to custom_metadata with the fields you already have. Do not send that object as the only field. That removes the other fields.
+
+The Wrangler commands are documented at https://developers.cloudflare.com/ai-search/wrangler-commands/ . That page was updated on 2026-07-08.
 
 = Does this replace another AI provider? =
 
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.5.2 =
+
+* A single product page adds the SKU, the stock status, and the managed stock count to the meta description. The AI Search dropdown quotes that description. A product that does not manage stock gets no count. A variable product prints a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed.
+* The readme says how to start the next crawl with Wrangler, and how to add the optional stock_quantity filter. The dropdown does not need that field. `wrangler ai-search update` does not set custom metadata.
+* The readme compares this plugin with search plugins, with Tidio for chat, and with AI Engine for agents. This plugin is the search box, the chat button, and the Cloudflare provider on the AI Client. It does not charge a licence for those.
 
 = 0.5.1 =
 

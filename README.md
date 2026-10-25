@@ -2,6 +2,10 @@
 
 WordPress plugin for Cloudflare® [Workers AI](https://developers.cloudflare.com/workers-ai/), [AI Gateway](https://developers.cloudflare.com/ai-gateway/), and [AI Search](https://developers.cloudflare.com/ai-search/).
 
+Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
+
+The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. The comparison below is those three jobs against the plugins that charge for each one.
+
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
 WordPress and WooCommerce call Workers AI through the WordPress AI Client. The provider id is `cloudflare`. That provider covers text, vision, JSON, tools, images, and speech. Plugin code can also call embeddings and the public AI Search endpoint. This plugin does not take over another provider that is already set up. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
@@ -64,7 +68,9 @@ Search results print that same count on each product. The line is `N available.`
 
 A variable product that manages stock at the parent uses the parent count. When each variation manages its own stock, the search card does not add those counts together. That total is not the quantity of any one variation. The product page already lists each variation with its own count.
 
-The search box is Cloudflare's snippet. That snippet has no field for stock, and this plugin does not draw the dropdown. The count the shopper sees is on the search results list. The product page already contains the same sentence, so a crawl can index it and an answer can cite it.
+The search box is Cloudflare's snippet. The snippet quotes the product page meta description. It does not draw its own stock line, and this plugin does not draw the dropdown. On a single product page this plugin adds the SKU, the stock status, and the managed stock count to that description. Rank Math and Yoast both receive it. A product that does not manage stock gets the SKU and the status, and no count. A variable product adds a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed. Zero is printed.
+
+The dropdown shows the new sentence after the next crawl. A browser refresh does not start that crawl. You do not add a custom field for this sentence. The description is already one of the fields the snippet quotes.
 
 A single product page prints `<meta name="stock_quantity" content="N">` in the page head. The plugin prints that tag only when the product manages stock and the count is a whole number of zero or more. A product that does not manage stock prints no tag.
 
@@ -78,7 +84,7 @@ AI Search does not read the tag until you add the field on the instance. You do 
 
 An instance allows five custom fields. This field uses one of them. The name is stored in lowercase. Do not use the names `timestamp`, `folder`, or `filename`.
 
-The search box does not show this field. The field is a filter on the search API. The sentence on the product page is what an answer can quote. That sentence is inside `main`.
+The search box does not show this field. The field is a filter on the search API. The SKU, the status, and the count that the dropdown quotes are in the meta description, not in this field. The product page also prints the same facts as text inside `main`.
 
 If you set the field with the API, add this object to `custom_metadata` together with the fields you already have:
 
@@ -87,6 +93,31 @@ If you set the field with the API, add this object to `custom_metadata` together
 ```
 
 Do not send this object as the only field. That removes the other fields. Cloudflare documents the control at https://developers.cloudflare.com/ai-search/configuration/indexing/metadata/ and the page tag at https://developers.cloudflare.com/ai-search/configuration/data-source/website/custom-metadata/.
+
+### Crawl the new sentence
+
+Install this plugin, then crawl the site again. The dropdown keeps the old sentence until that crawl finishes.
+
+In the Cloudflare dashboard, open the instance and choose Sync index. The same job from Wrangler, logged into the account that owns the instance:
+
+```bash
+npx wrangler ai-search jobs create your-instance
+npx wrangler ai-search jobs list your-instance
+```
+
+Replace `your-instance` with the instance name. The namespace defaults to `default`. The job is not instant. A new job can be started every 30 seconds. The commands are documented at https://developers.cloudflare.com/ai-search/wrangler-commands/ (that page was updated on 2026-07-08).
+
+### Wrangler and the stock filter
+
+`npx wrangler ai-search update` does not set custom metadata. Do not use it to add `stock_quantity`.
+
+The create command does, and only when you are creating the instance. Repeat every field you want to keep. Five is the maximum.
+
+```bash
+npx wrangler ai-search create your-instance --custom-metadata title:text --custom-metadata description:text --custom-metadata image:text --custom-metadata stock_quantity:number
+```
+
+Do not create a second instance to add this one field. On an instance you already have, use the dashboard or the API object above. You still do not need this field for the dropdown.
 
 The default text model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A prompt that includes an image uses `@cf/mistralai/mistral-small-3.1-24b-instruct` first. `@cf/meta/llama-3.2-11b-vision-instruct` needs a one-time `{"prompt":"agree"}` request on that model before it will answer. It does not take tools or JSON.
 
@@ -142,19 +173,45 @@ Workers AI is priced at $0.011 per 1,000 Neurons, with 10,000 Neurons per day in
 
 **At rest, with no crawl and no query, and with the index inside the included 10 GB, the AI Search marginal cost is $0.** The search box sends no API token. The token for Workers AI stays in the site owner's Cloudflare account. Nothing is sent to Skyphusion.
 
-Keyword search plugins charge their own licence. They are not semantic search. Prices below were read on 2026-10-25 from each vendor's own page. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms.
+## Compared with other plugins
 
-| plugin | listed price | stock in its own results |
+Prices below were read on 2026-10-25 from each vendor's own page. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms. Confirm them before you budget.
+
+This plugin is the harness for three jobs: search, chat, and the AI Client. It does not charge a licence for any of them. The other rows are plugins that sell one of those jobs. A blank cell means that page did not say.
+
+### Search
+
+These plugins are keyword or instant search. They are not Cloudflare AI Search.
+
+| plugin | licence | what a result shows |
 | --- | --- | --- |
-| SearchWP Standard | $99 for the first year, 1 site. The page says the renewal is the full price, shown there as $199. | keyword search, not this plugin |
-| SearchWP Pro | $199 for the first year, 3 sites. WooCommerce product data is on this tier. The page says the renewal is $399. | keyword search |
-| SearchWP All Access | $399 for the first year. The page says the renewal is $699. | keyword search |
-| FiboSearch | free. Pro is $59, $99, or $249 for the first year, for 1, 3, or 25 sites. The page says renewals are 15% off those figures. | image, price, and SKU. Not a stock count on the free comparison table |
-| Relevanssi | free. Premium Annual is 109 EUR. Premium Permanent is 379 EUR. Unlimited sites. The page says prices exclude tax. | keyword search |
-| YITH WooCommerce Ajax Search | a free plugin, plus a premium licence. The product page did not print a number. | premium can show stock in its own result list |
-| Skyphusion AI | $0 | the count is on the search results page. The snippet dropdown has no stock field |
+| SearchWP Standard | $99 for the first year, renewal $199, 1 site | the pricing page does not list SKU or stock |
+| SearchWP Pro | $199 for the first year, renewal $399, 3 sites. WooCommerce product data is on this tier | the pricing page does not list a stock count |
+| SearchWP All Access | $399 for the first year, renewal $699, up to 100 sites. Includes WPFilters | the pricing page does not list a stock count |
+| FiboSearch | free. Pro is $59, $99, or $249 for the first year, for 1 site (10,000 products), 3 sites (50,000 each), or 25 sites (150,000 each). Renewals are 15% off: $50.15, $84.15, and $211.65 | the pricing page lists image, price, and SKU. It does not list a stock count |
+| Relevanssi | free. Premium is €100 per year, or €335 once. Unlimited sites. The page says prices exclude tax | the buy page does not list SKU or a stock count |
+| YITH WooCommerce Ajax Search | a free plugin, plus a premium licence. The product page did not print a price | the Free vs Premium table lists an optional price, SKU, and stock line in YITH's own results |
+| Skyphusion AI | $0 | the dropdown quotes the product meta description. This plugin adds the SKU, the stock status, and the managed count to that description. The search results page also prints the managed count |
 
-Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>.
+### Chat
+
+The chat button in this plugin is the Cloudflare snippet. It answers in a sentence from the indexed site. That answer is generation, so it spends Workers AI Neurons. The button is off until you turn it on. It is not a staff inbox. It has no seats, no tickets, and no handoff to a person.
+
+| plugin | licence | what the visitor gets |
+| --- | --- | --- |
+| Tidio | Free is $0, with 50 billable conversations and 10 seats. Starter is $24.17 a month on annual billing, for 100 conversations. Growth starts at $49.17 a month, from 250 conversations. Plus starts at $300 a month plus usage. Premium did not print a price. Lyro, the AI agent, starts at $32.50 a month for 50 AI conversations. The first 50 Lyro conversations are one-off, not a monthly allowance | live chat, tickets, and an AI agent that can hand the thread to a person. Tidio ships a WordPress plugin. This is a help desk |
+| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox |
+
+### Agents
+
+The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. This plugin does not edit posts, install other plugins, or open an MCP server. A product that does those things is a different product. You still do not pay a plugin fee to make the Cloudflare call.
+
+| plugin | licence | what the agent can do |
+| --- | --- | --- |
+| AI Engine (Meow Apps) | the plugin is free. Pro is $69 a year for 1 site, $99 for 5 sites, or $179 for 20 sites. Lifetime is $499 for 5 sites, $799 for 20, $999 for 500, or $1,699 for 2,500. You still pay the model vendor. The Pro page says a refund is available within 14 days | a chatbot, and, on Pro, MCP so Claude or ChatGPT can act on the site. Pro also lists embeddings, AI forms, and voice |
+| Skyphusion AI | $0 for the plugin. Workers AI rates are in the table above | the Cloudflare provider those calls use. Tools are part of the provider. There is no MCP server in this plugin |
+
+Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>, <https://www.tidio.com/pricing/>, <https://meowapps.com/products/ai-engine-pro/>.
 
 ## External services
 

@@ -1,10 +1,12 @@
 <?php
 /**
- * Stock quantity on search results.
+ * Stock on search results and on the product description.
  *
- * The hosted search snippet has no result template, so it cannot print a
- * stock field. This file prints the managed count on the WordPress and
- * WooCommerce search loop, which is the list the shopper actually sees.
+ * The hosted search snippet quotes the page meta description. It has no
+ * result template, so it cannot print a stock field of its own. On a single
+ * product page this file appends the SKU, the stock status, and the managed
+ * count to that description. It also prints the managed count on the
+ * WordPress and WooCommerce search loop.
  *
  * @package skyphusion-ai
  */
@@ -237,10 +239,151 @@ function skyphusion_ai_search_stock_meta() {
 	echo '<meta name="stock_quantity" content="' . esc_attr( (string) $count ) . '" />' . "\n";
 }
 
+/**
+ * Plain SKU, status, and managed count for the product description.
+ *
+ * The AI Search dropdown quotes this description. The string is plain text.
+ * Rank Math and Yoast escape it when they print the tag. Do not escape it
+ * here. Do not reuse skyphusion_ai_stock_line(): that function escapes, and
+ * it also prints the price.
+ *
+ * A variable product contributes only its own row. Child quantities are not
+ * added. A negative count is omitted. Zero is printed. A product that does
+ * not manage stock gets no count.
+ *
+ * @param mixed $product Product object, or anything else.
+ * @return string
+ */
+function skyphusion_ai_search_stock_facts( $product ) {
+	$row = skyphusion_ai_stock_row_from_product( $product, false );
+	if ( ! is_array( $row ) ) {
+		return '';
+	}
+
+	$labels = skyphusion_ai_stock_labels();
+	$parts  = array();
+
+	$sku = isset( $row['sku'] ) ? trim( (string) $row['sku'] ) : '';
+	if ( '' !== $sku && isset( $labels['sku'] ) ) {
+		$parts[] = sprintf( (string) $labels['sku'], $sku );
+	}
+
+	$status = isset( $row['stock_status'] ) ? (string) $row['stock_status'] : '';
+	if (
+		( 'instock' === $status || 'outofstock' === $status || 'onbackorder' === $status )
+		&& isset( $labels[ $status ] )
+	) {
+		$parts[] = (string) $labels[ $status ];
+	}
+
+	$managing = ! empty( $row['managing_stock'] );
+	$quantity = array_key_exists( 'quantity', $row ) ? $row['quantity'] : null;
+	if ( $managing && is_int( $quantity ) && $quantity >= 0 ) {
+		$count = (int) $quantity;
+		if ( function_exists( '_n' ) ) {
+			/* translators: %d is the number of units in stock. */
+			$format = _n( '%d available.', '%d available.', $count, 'skyphusion-ai' );
+		} else {
+			$format = '%d available.';
+		}
+		$parts[] = sprintf( (string) $format, $count );
+	}
+
+	return implode( ' ', $parts );
+}
+
+/**
+ * Whether the description filter is on a single product request.
+ *
+ * Search, feeds, embeds, and wp-admin keep the description they already had.
+ *
+ * @return bool
+ */
+function skyphusion_ai_search_stock_describe_should() {
+	if ( function_exists( 'is_admin' ) && is_admin() ) {
+		return false;
+	}
+	if ( function_exists( 'is_feed' ) && is_feed() ) {
+		return false;
+	}
+	if ( function_exists( 'is_embed' ) && is_embed() ) {
+		return false;
+	}
+	if ( function_exists( 'is_search' ) && is_search() ) {
+		return false;
+	}
+	if ( ! function_exists( 'is_product' ) || ! is_product() ) {
+		return false;
+	}
+	return true;
+}
+
+/**
+ * True when the facts are already the end of the description.
+ *
+ * The check is the whole sentence, not the status alone, so a blurb that
+ * already ends in "In stock." still gains the SKU and the count.
+ *
+ * @param string $description Description so far.
+ * @param string $facts       Sentence this filter would append.
+ * @return bool
+ */
+function skyphusion_ai_search_stock_facts_are_suffix( $description, $facts ) {
+	$description = rtrim( $description );
+	if ( '' === $facts || '' === $description ) {
+		return false;
+	}
+	if ( $description === $facts ) {
+		return true;
+	}
+	return str_ends_with( $description, ' ' . $facts );
+}
+
+/**
+ * Append stock facts to a single product's SEO description.
+ *
+ * Rank Math reuses rank_math/frontend/description for the meta description
+ * and for Open Graph. Yoast keeps those two strings on separate filters.
+ * Priority 20 runs after a theme description at the default priority.
+ * The description's own final period is kept.
+ *
+ * @param mixed $description Description the SEO plugin already built.
+ * @return mixed
+ */
+function skyphusion_ai_search_stock_describe( $description ) {
+	if ( ! is_string( $description ) ) {
+		return $description;
+	}
+	if ( ! skyphusion_ai_search_stock_describe_should() ) {
+		return $description;
+	}
+
+	$product = null;
+	if ( function_exists( 'wc_get_product' ) && function_exists( 'get_the_ID' ) ) {
+		$product = wc_get_product( (int) get_the_ID() );
+	}
+	$facts = skyphusion_ai_search_stock_facts( $product );
+	if ( '' === $facts ) {
+		return $description;
+	}
+	if ( skyphusion_ai_search_stock_facts_are_suffix( $description, $facts ) ) {
+		return $description;
+	}
+
+	$base = rtrim( $description );
+	if ( '' === $base ) {
+		return $facts;
+	}
+	return $base . ' ' . $facts;
+}
+
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'woocommerce_after_shop_loop_item_title', 'skyphusion_ai_search_stock_item', 15 );
 	add_action( 'wp_head', 'skyphusion_ai_search_stock_meta', 2 );
 }
 if ( function_exists( 'add_filter' ) ) {
 	add_filter( 'render_block', 'skyphusion_ai_search_stock_block', 12, 2 );
+	add_filter( 'rank_math/frontend/description', 'skyphusion_ai_search_stock_describe', 20 );
+	add_filter( 'wpseo_metadesc', 'skyphusion_ai_search_stock_describe', 20 );
+	add_filter( 'wpseo_opengraph_desc', 'skyphusion_ai_search_stock_describe', 20 );
 }

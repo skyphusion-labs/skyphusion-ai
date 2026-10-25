@@ -166,6 +166,7 @@ foreach (array_merge(array_keys($i18n_floors), array(
     'includes/endpoint.php',
     'includes/frontend.php',
     'includes/routes.php',
+    'includes/search-stock.php',
     'uninstall.php',
 )) as $rel) {
     $i18n_files[$rel] = (string) file_get_contents($i18n_root . '/' . $rel);
