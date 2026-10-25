@@ -24,7 +24,7 @@
 # the security sniffs, which do not fire on this tree.
 #
 # =============================================================================
-# OWED: 5654 findings across 11 files.
+# OWED: 5637 findings across 11 files.
 skyphusion-ai.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
 skyphusion-ai.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
 skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
@@ -62,25 +62,23 @@ includes/cli.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenPa
 includes/cli.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	25
 includes/cli.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	4
 includes/cli.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	4
-includes/endpoint.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	4
+includes/endpoint.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	3
 includes/endpoint.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	6
-includes/endpoint.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	119
-includes/endpoint.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceAfterArrayOpenerSingleLine	2
-includes/endpoint.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceBeforeArrayCloserSingleLine	2
-includes/endpoint.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	57
-includes/endpoint.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	57
+includes/endpoint.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	113
+includes/endpoint.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceAfterArrayOpenerSingleLine	1
+includes/endpoint.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceBeforeArrayCloserSingleLine	1
+includes/endpoint.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	56
+includes/endpoint.php	PEAR.Functions.FunctionCallSignature.SpaceBeforeCloseBracket	56
 includes/endpoint.php	Squiz.Commenting.FileComment.MissingPackageTag	1
 includes/endpoint.php	Squiz.Commenting.FunctionComment.MissingParamComment	4
 includes/endpoint.php	Squiz.Commenting.FunctionComment.MissingParamTag	2
 includes/endpoint.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingAfterOpen	6
 includes/endpoint.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingBeforeClose	6
-includes/endpoint.php	WordPress.Arrays.ArrayDeclarationSpacing.AssociativeArrayFound	1
-includes/endpoint.php	WordPress.Arrays.ArrayKeySpacingRestrictions.NoSpacesAroundArrayKeys	8
-includes/endpoint.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	1
-includes/endpoint.php	WordPress.PHP.YodaConditions.NotYoda	8
+includes/endpoint.php	WordPress.Arrays.ArrayKeySpacingRestrictions.NoSpacesAroundArrayKeys	7
+includes/endpoint.php	WordPress.PHP.YodaConditions.NotYoda	7
 includes/endpoint.php	WordPress.WhiteSpace.CastStructureSpacing.NoSpaceBeforeOpenParenthesis	3
-includes/endpoint.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	31
-includes/endpoint.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	31
+includes/endpoint.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	30
+includes/endpoint.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	30
 includes/endpoint.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceAfter	11
 includes/endpoint.php	WordPress.WhiteSpace.OperatorSpacing.NoSpaceBefore	10
 includes/frontend.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	1

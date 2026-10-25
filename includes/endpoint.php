@@ -147,8 +147,14 @@ function skyphusion_ai_read_answer($decoded)
 {
     $answer = '';
     $sources = array();
+	if ( ! function_exists( 'skyphusion_ai_source_url' ) ) {
+		require_once __DIR__ . '/sources.php';
+	}
+	if ( ! isset( $source_urls ) ) {
+		$source_urls = array();
+	}
     if (!is_array($decoded)) {
-        return array('answer' => '', 'sources' => array());
+		return skyphusion_ai_answer_with_urls( '', array(), array() );
     }
 
     if (isset($decoded['response']) && is_string($decoded['response'])) {
@@ -179,19 +185,21 @@ function skyphusion_ai_read_answer($decoded)
         }
     }
     $seen = array();
+	if ( ! isset( $seen_urls ) ) {
+		$seen_urls = array();
+	}
     foreach ($groups as $rows) {
         foreach ($rows as $row) {
             $text = skyphusion_ai_row_text($row);
-            if ($text === '' || isset($seen[$text])) {
+			if ( skyphusion_ai_source_skip( $text, $row, $seen, $seen_urls ) ) {
                 continue;
             }
             $seen[$text] = true;
+			skyphusion_ai_source_remember( $seen_urls, $row );
             $sources[] = $text;
+			skyphusion_ai_source_push( $source_urls, $row );
         }
     }
 
-    return array(
-        'answer' => $answer,
-        'sources' => $sources,
-    );
+	return skyphusion_ai_answer_with_urls( $answer, $sources, $source_urls );
 }
