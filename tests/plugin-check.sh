@@ -20,7 +20,14 @@
 #                      One lock on this directory covers the whole run. A second
 #                      run waits and says so. See acquire_harness_lock.
 #   PLUGIN_CHECK_PREFIX  directory name inside the archive (default
-#                      skyphusion-ai, what the release zip uses)
+#                      skyphusion-ai, the slug this plugin is submitted under
+#                      and what the release zip uses from v0.4.1. Releases up
+#                      to v0.4.0 shipped cloudflare-ai-search, and run under
+#                      that prefix this check FAILS with 62
+#                      WordPress.WP.I18n.TextDomainMismatch errors, because the
+#                      declared Text Domain is skyphusion-ai and WordPress
+#                      requires the domain to equal the slug. That mismatch was
+#                      the artifact being wrong, not this default.)
 #   PLUGIN_CHECK_REF   git ref to archive (default HEAD)
 #   PLUGIN_CHECK_BASELINE  baseline file (default tests/plugin-check-baseline.txt)
 #   PLUGIN_CHECK_ROOT  repo to archive (default: the repo holding this script)
