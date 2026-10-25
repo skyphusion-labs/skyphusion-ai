@@ -46,7 +46,7 @@ A site assistant can answer from the stored pages and list those pages. It is of
 
 An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent. Each hour continues until the empty fields are done or today's backfill limit is reached. That limit does not stop the other tools. The SEO job sends the title and the page text. It skips a page with fewer than 40 characters of text. It cuts the text at 6000 characters. The alt text job reads the image. A decorative image is marked and the alt field stays empty.
 
-A theme or plugin can translate one string with `skyphusion_ai_translate()`. Pass a two letter language code. The call stops when the daily neuron budget is spent.
+A theme or plugin can translate one string with `skyphusion_ai_translate()`, and the call stops when the daily neuron budget is spent. See `docs/translate.md`.
 
 The post editor can suggest an internal link when the phrase is already in the post. It can also suggest a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. Outbound suggestions still use the stored vectors. The editor does not call the model.
 
