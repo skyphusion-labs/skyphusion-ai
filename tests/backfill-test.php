@@ -26,6 +26,13 @@ function backfill_clear()
     $GLOBALS['cfais_calls'] = 0;
     unset($GLOBALS['cfais_bodies']);
     $GLOBALS['cfais_last_post'] = array('marker' => 1);
+    if (isset($GLOBALS['cfais_store']) && is_array($GLOBALS['cfais_store'])) {
+        foreach (array_keys($GLOBALS['cfais_store']) as $backfill_cache_key) {
+            if (0 === strpos((string) $backfill_cache_key, 'skyphusion_ai_pc_')) {
+                unset($GLOBALS['cfais_store'][$backfill_cache_key]);
+            }
+        }
+    }
 }
 
 $backfill_text = '{"choices":[{"message":{"content":"A linen shirt."}}]}';
@@ -223,7 +230,7 @@ expect('a skip has no address field', isset($backfill_skips['skips'][0]['ip']), 
 $backfill_many = array();
 $backfill_i = 20;
 while ($backfill_i < 26) {
-    $backfill_many[] = array('post_id' => $backfill_i, 'kind' => 'alt', 'title' => 'Shirt', 'image' => $backfill_image);
+    $backfill_many[] = array('post_id' => $backfill_i, 'kind' => 'alt', 'title' => 'Shirt ' . $backfill_i, 'image' => $backfill_image);
     $backfill_i++;
 }
 $backfill_saved = skyphusion_ai_backfill_config();
@@ -437,6 +444,29 @@ $backfill_vision_count = (is_array($backfill_usage) && isset($backfill_usage['fe
 expect('an alt read counts as vision', $backfill_vision_count > 0, true);
 expect('a decorative image leaves alt empty', get_post_meta(51, skyphusion_ai_backfill_alt_key(), true), '');
 expect('a decorative image stores the mark', get_post_meta(51, skyphusion_ai_backfill_decorative_key(), true), '1');
+
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+$backfill_cached = skyphusion_ai_backfill_call('Cache this linen prompt.', skyphusion_ai_backfill_model(), 'text', '');
+expect('the first call returns the sentence', $backfill_cached, 'A linen shirt.');
+expect('the first call reaches the model', $GLOBALS['cfais_calls'], 1);
+$backfill_neurons_before = (int) skyphusion_ai_neuron_state()['neurons'];
+$GLOBALS['cfais_calls'] = 0;
+$backfill_again = skyphusion_ai_backfill_call('Cache this linen prompt.', skyphusion_ai_backfill_model(), 'text', '');
+expect('a repeat returns the same sentence', $backfill_again, 'A linen shirt.');
+expect('a repeat does not call the model', $GLOBALS['cfais_calls'], 0);
+expect('a repeat adds no neurons', (int) skyphusion_ai_neuron_state()['neurons'], $backfill_neurons_before);
+$backfill_key = skyphusion_ai_prompt_cache_key('text', skyphusion_ai_backfill_model(), 'Cache this linen prompt.', '');
+expect('the cache key hides the prompt', strpos($backfill_key, 'Cache this linen prompt') === false, true);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array('{"choices":[{"message":{"content":"A fresh line."}}]}');
+$backfill_fresh = skyphusion_ai_backfill_call('Cache this linen prompt.', skyphusion_ai_backfill_model(), 'text', '', true);
+expect('a regenerate bypasses the cache', $backfill_fresh, 'A fresh line.');
+expect('a regenerate calls the model', $GLOBALS['cfais_calls'], 1);
+$backfill_provider = (string) file_get_contents(dirname(__DIR__) . '/includes/provider.php');
+$backfill_query_at = strpos($backfill_provider, 'function skyphusion_ai_query');
+$backfill_query_fn = (false === $backfill_query_at) ? '' : substr($backfill_provider, $backfill_query_at, 4000);
+expect('search does not use the prompt cache', strpos($backfill_query_fn, 'skyphusion_ai_prompt_cache_') === false, true);
 $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);

@@ -193,10 +193,20 @@ function skyphusion_ai_assistant_model() {
 /**
  * Ask the text model. A spent budget does not leave the site.
  *
- * @param string $prompt Prompt text.
+ * @param string $prompt      Prompt text.
+ * @param bool   $regenerate  Whether this call asks for a new answer.
  * @return string|WP_Error
  */
-function skyphusion_ai_assistant_text( $prompt ) {
+function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
+	if ( function_exists( 'skyphusion_ai_prompt_cache_read' ) ) {
+		$cached = skyphusion_ai_prompt_cache_read( 'assistant', skyphusion_ai_assistant_model(), $prompt, '', $regenerate );
+		if ( is_string( $cached ) ) {
+			if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+				skyphusion_ai_neuron_record( 'text', skyphusion_ai_assistant_model(), array(), 'assistant' );
+			}
+			return $cached;
+		}
+	}
 	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
 		$refusal = skyphusion_ai_neuron_refusal();
 		if ( is_wp_error( $refusal ) ) {
@@ -278,6 +288,9 @@ function skyphusion_ai_assistant_text( $prompt ) {
 	$text = '';
 	if ( isset( $read['candidates'][0]['text'] ) ) {
 		$text = trim( (string) $read['candidates'][0]['text'] );
+	}
+	if ( '' !== $text && function_exists( 'skyphusion_ai_prompt_cache_write' ) ) {
+		skyphusion_ai_prompt_cache_write( 'assistant', $model, $prompt, '', $text );
 	}
 	return $text;
 }
