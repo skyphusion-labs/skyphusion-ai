@@ -357,6 +357,12 @@ function skyphusion_ai_prompt_test( $key ) {
 			return skyphusion_ai_prompt_remember( $key, 0, '', (string) $refusal->message );
 		}
 	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'text' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return skyphusion_ai_prompt_remember( $key, 0, '', skyphusion_ai_tool_refusal_text() );
+		}
+	}
 	$model       = skyphusion_ai_prompt_model();
 	$credentials = array(
 		'account_id' => '',

@@ -865,7 +865,7 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image ) {
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
-		skyphusion_ai_neuron_record( $feature, $model, $decoded );
+		skyphusion_ai_neuron_record( $feature, $model, $decoded, 'backfill' );
 	}
 	skyphusion_ai_backfill_add_neurons( $model, $decoded );
 	$status = (int) wp_remote_retrieve_response_code( $response );

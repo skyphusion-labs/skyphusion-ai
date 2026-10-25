@@ -4,6 +4,10 @@
  *
  * The public search box and the chat button are not counted. PHP does not
  * see those calls. The AI Search instance rate limit remains their cap.
+ * Each tool can also have a daily limit. A tool at its limit stops, and
+ * the other tools continue. The site budget still stops every tool.
+ * Search snippets stay outside both limits. The totals do not store an
+ * IP address.
  *
  * @package skyphusion-ai
  */
@@ -52,11 +56,16 @@ function skyphusion_ai_neuron_blank( $day ) {
 	foreach ( skyphusion_ai_neuron_features() as $feature ) {
 		$features[ $feature ] = 0;
 	}
+	$tools = array();
+	foreach ( skyphusion_ai_tool_keys() as $tool ) {
+		$tools[ $tool ] = 0;
+	}
 	return array(
 		'day'        => $day,
 		'neurons'    => 0,
 		'estimated'  => 0,
 		'features'   => $features,
+		'tools'      => $tools,
 		'mailed_80'  => 0,
 		'mailed_100' => 0,
 	);
@@ -194,6 +203,7 @@ function skyphusion_ai_neuron_sanitize_option( $value, $option = '', $original =
 	}
 	$value['neuron_cap']  = $parsed;
 	$value['neuron_over'] = skyphusion_ai_neuron_stored_over( $original );
+	$value['tool_caps']   = skyphusion_ai_tool_stored_caps( $original );
 	return $value;
 }
 
@@ -360,6 +370,396 @@ function skyphusion_ai_neuron_cheap_request( $url, $payload ) {
 }
 
 /**
+ * Tools that can stop on their own daily limit.
+ *
+ * Search is not a tool here. The public search box does not pass through
+ * PHP, and a search answer is counted on the site budget without a refusal.
+ * Backfill keeps the limit on its own option.
+ *
+ * @return string[]
+ */
+function skyphusion_ai_tool_keys() {
+	return array(
+		'text',
+		'vision',
+		'image',
+		'speech',
+		'embeddings',
+		'assistant',
+		'translate',
+	);
+}
+
+/**
+ * Daily limit used when that tool has never been saved.
+ *
+ * Zero means the tool has no limit of its own. Embeddings and the site
+ * assistant start with a limit. The others wait for the admin to set one.
+ *
+ * @param string $tool Tool name.
+ * @return int
+ */
+function skyphusion_ai_tool_default( $tool ) {
+	$defaults = array(
+		'text'       => 0,
+		'vision'     => 0,
+		'image'      => 0,
+		'speech'     => 0,
+		'embeddings' => 3000,
+		'assistant'  => 1000,
+		'translate'  => 0,
+	);
+	if ( isset( $defaults[ $tool ] ) ) {
+		return $defaults[ $tool ];
+	}
+	return 0;
+}
+
+/**
+ * A tool limit that is a whole number of 0 or more, or null.
+ *
+ * An empty string is 0, so clearing the field removes the tool's own limit.
+ *
+ * @param mixed $value Raw value.
+ * @return int|null
+ */
+function skyphusion_ai_tool_limit_value( $value ) {
+	if ( is_int( $value ) && $value >= 0 ) {
+		return $value;
+	}
+	if ( ! is_string( $value ) ) {
+		return null;
+	}
+	$value = trim( $value );
+	if ( '' === $value ) {
+		return 0;
+	}
+	if ( 1 === preg_match( '/^(0|[1-9][0-9]{0,8})$/', $value ) ) {
+		return (int) $value;
+	}
+	return null;
+}
+
+/**
+ * The tool limits submitted with the settings form, or null when absent.
+ *
+ * Options.php has already checked the settings nonce.
+ *
+ * @return array<string, mixed>|null
+ */
+function skyphusion_ai_tool_posted_caps() {
+	if ( ! isset( $_POST['skyphusion_ai_settings'] ) || ! is_array( $_POST['skyphusion_ai_settings'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checks the settings nonce before this filter.
+		return null;
+	}
+	if ( ! isset( $_POST['skyphusion_ai_settings']['tool_caps'] ) || ! is_array( $_POST['skyphusion_ai_settings']['tool_caps'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checks the settings nonce before this filter.
+		return null;
+	}
+	$typed = $_POST['skyphusion_ai_settings']['tool_caps']; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- wp_unslash runs on the next line when that function exists. Each value is parsed as a whole number, or rejected.
+	if ( function_exists( 'wp_unslash' ) ) {
+		$typed = wp_unslash( $typed );
+	}
+	if ( ! is_array( $typed ) ) {
+		return null;
+	}
+	return $typed;
+}
+
+/**
+ * Tool limits to store. An omitted or rejected field keeps the previous limit.
+ *
+ * @param mixed $original Previous stored settings.
+ * @return array<string, int>
+ */
+function skyphusion_ai_tool_stored_caps( $original ) {
+	$previous = array();
+	if ( is_array( $original ) && isset( $original['tool_caps'] ) && is_array( $original['tool_caps'] ) ) {
+		$previous = $original['tool_caps'];
+	}
+	$posted = skyphusion_ai_tool_posted_caps();
+	$out    = array();
+	foreach ( skyphusion_ai_tool_keys() as $tool ) {
+		$kept = skyphusion_ai_tool_default( $tool );
+		if ( array_key_exists( $tool, $previous ) ) {
+			$parsed_prev = skyphusion_ai_tool_limit_value( $previous[ $tool ] );
+			if ( null !== $parsed_prev ) {
+				$kept = $parsed_prev;
+			}
+		}
+		if ( null === $posted || ! array_key_exists( $tool, $posted ) ) {
+			$out[ $tool ] = $kept;
+			continue;
+		}
+		$parsed = skyphusion_ai_tool_limit_value( $posted[ $tool ] );
+		if ( null === $parsed ) {
+			if ( function_exists( 'skyphusion_ai_reject' ) ) {
+				skyphusion_ai_reject(
+					'tool_caps',
+					__( 'A tool limit has to be a whole number of 0 or more. The previous limit was kept.', 'skyphusion-ai' )
+				);
+			}
+			$out[ $tool ] = $kept;
+			continue;
+		}
+		$out[ $tool ] = $parsed;
+	}
+	return $out;
+}
+
+/**
+ * The daily limit for one tool. Zero means no limit of its own.
+ *
+ * @param string $tool Tool name.
+ * @return int
+ */
+function skyphusion_ai_tool_cap( $tool ) {
+	if ( ! in_array( $tool, skyphusion_ai_tool_keys(), true ) ) {
+		return 0;
+	}
+	if ( function_exists( 'skyphusion_ai_settings' ) ) {
+		$settings = skyphusion_ai_settings();
+		if ( is_array( $settings ) && isset( $settings['tool_caps'] ) && is_array( $settings['tool_caps'] ) && array_key_exists( $tool, $settings['tool_caps'] ) ) {
+			$parsed = skyphusion_ai_tool_limit_value( $settings['tool_caps'][ $tool ] );
+			if ( null !== $parsed ) {
+				return $parsed;
+			}
+		}
+	}
+	return skyphusion_ai_tool_default( $tool );
+}
+
+/**
+ * Neurons this tool has used today. A row from another UTC day counts as zero.
+ *
+ * @param string $tool Tool name.
+ * @return int
+ */
+function skyphusion_ai_tool_used( $tool ) {
+	$state = skyphusion_ai_neuron_state();
+	if ( ! isset( $state['tools'][ $tool ] ) ) {
+		return 0;
+	}
+	$used = (int) $state['tools'][ $tool ];
+	if ( $used < 0 ) {
+		return 0;
+	}
+	return $used;
+}
+
+/**
+ * True when this tool has spent its own limit.
+ *
+ * A limit of zero does not stop the tool. The site budget is a separate check.
+ *
+ * @param string $tool Tool name.
+ * @return bool
+ */
+function skyphusion_ai_tool_blocked( $tool ) {
+	$cap = skyphusion_ai_tool_cap( $tool );
+	if ( $cap < 1 ) {
+		return false;
+	}
+	return skyphusion_ai_tool_used( $tool ) >= $cap;
+}
+
+/**
+ * The refusal shown when one tool has spent its limit.
+ *
+ * It does not name an IP address, and it does not include the token.
+ *
+ * @return string
+ */
+function skyphusion_ai_tool_refusal_text() {
+	return __( 'This tool\'s daily limit is spent. It resumes at 00:00 UTC. The other tools continue. The site budget still stops every tool.', 'skyphusion-ai' );
+}
+
+/**
+ * WP_Error when this tool must stay on the site, or null.
+ *
+ * @param string $tool Tool name.
+ * @return WP_Error|null
+ */
+function skyphusion_ai_tool_refusal( $tool ) {
+	if ( ! skyphusion_ai_tool_blocked( $tool ) ) {
+		return null;
+	}
+	if ( ! class_exists( 'WP_Error' ) ) {
+		return null;
+	}
+	return new WP_Error( 'skyphusion_ai_tool_cap', skyphusion_ai_tool_refusal_text() );
+}
+
+/**
+ * Add neurons to one tool's total for today.
+ *
+ * Unknown tools, including search and backfill, are left unchanged. Backfill
+ * keeps its own counter. Search stays outside both limits.
+ *
+ * @param string $tool    Tool name.
+ * @param int    $neurons Neurons to add.
+ * @return array{day: string, neurons: int, estimated: int, features: array<string, int>, tools: array<string, int>, mailed_80: int, mailed_100: int}
+ */
+function skyphusion_ai_tool_add( $tool, $neurons ) {
+	$state = skyphusion_ai_neuron_state();
+	if ( ! in_array( $tool, skyphusion_ai_tool_keys(), true ) ) {
+		return $state;
+	}
+	$neurons = (int) $neurons;
+	if ( $neurons < 0 ) {
+		$neurons = 0;
+	}
+	$state['tools'][ $tool ] = (int) $state['tools'][ $tool ] + $neurons;
+	if ( function_exists( 'update_option' ) ) {
+		update_option( skyphusion_ai_neuron_option(), $state, false );
+	}
+	return $state;
+}
+
+/**
+ * Name shown beside a tool limit.
+ *
+ * @param string $tool Tool name.
+ * @return string
+ */
+function skyphusion_ai_tool_label( $tool ) {
+	if ( 'text' === $tool ) {
+		return __( 'Writing', 'skyphusion-ai' );
+	}
+	if ( 'vision' === $tool ) {
+		return __( 'Image reading', 'skyphusion-ai' );
+	}
+	if ( 'image' === $tool ) {
+		return __( 'Image generation', 'skyphusion-ai' );
+	}
+	if ( 'speech' === $tool ) {
+		return __( 'Speech', 'skyphusion-ai' );
+	}
+	if ( 'embeddings' === $tool ) {
+		return __( 'Embeddings', 'skyphusion-ai' );
+	}
+	if ( 'assistant' === $tool ) {
+		return __( 'Site assistant', 'skyphusion-ai' );
+	}
+	if ( 'translate' === $tool ) {
+		return __( 'Translation', 'skyphusion-ai' );
+	}
+	return $tool;
+}
+
+/**
+ * Whether this tool's limit counts toward the shared-budget warning.
+ *
+ * A limit of zero does not count. The site assistant counts only while it
+ * is on. Embeddings, writing, image reading, image generation, speech, and
+ * translation count whenever a limit is saved, because those calls can run
+ * without a second switch.
+ *
+ * @param string $tool Tool name.
+ * @return bool
+ */
+function skyphusion_ai_tool_counts( $tool ) {
+	if ( skyphusion_ai_tool_cap( $tool ) < 1 ) {
+		return false;
+	}
+	if ( 'assistant' === $tool ) {
+		if ( ! function_exists( 'skyphusion_ai_assistant_config' ) ) {
+			return false;
+		}
+		$config = skyphusion_ai_assistant_config();
+		return ! empty( $config['enabled'] );
+	}
+	return true;
+}
+
+/**
+ * Sum of the tool limits that can be reached today, including backfill.
+ *
+ * Backfill is included only while that job is on and its own limit is at
+ * least 1. A job that is off does not add its limit to the warning.
+ *
+ * @return int
+ */
+function skyphusion_ai_tool_limit_sum() {
+	$sum = 0;
+	foreach ( skyphusion_ai_tool_keys() as $tool ) {
+		if ( skyphusion_ai_tool_counts( $tool ) ) {
+			$sum += skyphusion_ai_tool_cap( $tool );
+		}
+	}
+	if ( ! function_exists( 'skyphusion_ai_backfill_config' ) ) {
+		return $sum;
+	}
+	$config = skyphusion_ai_backfill_config();
+	if ( empty( $config['enabled'] ) ) {
+		return $sum;
+	}
+	$limit = isset( $config['limit'] ) ? (int) $config['limit'] : 0;
+	if ( $limit > 0 ) {
+		$sum += $limit;
+	}
+	return $sum;
+}
+
+/**
+ * Warning when the tool limits add up to more than the site budget, or empty.
+ *
+ * @return string
+ */
+function skyphusion_ai_tool_warning() {
+	$sum = skyphusion_ai_tool_limit_sum();
+	$cap = skyphusion_ai_neuron_cap();
+	if ( $sum <= $cap ) {
+		return '';
+	}
+	$over = $sum - $cap;
+	if ( 'cheapest' === skyphusion_ai_neuron_over_mode() ) {
+		return sprintf(
+			/* translators: 1: sum of the tool limits, 2: daily budget, 3: neurons over that budget. */
+			__( 'These tool limits add up to %1$d neurons, %3$d more than the daily budget of %2$d. The daily budget is reached first. A plain text call can switch to the cheapest priced model. The other tools pause. Lower the tool limits by %3$d in total, or raise the daily budget.', 'skyphusion-ai' ),
+			$sum,
+			$cap,
+			$over
+		);
+	}
+	return sprintf(
+		/* translators: 1: sum of the tool limits, 2: daily budget, 3: neurons over that budget. */
+		__( 'These tool limits add up to %1$d neurons, %3$d more than the daily budget of %2$d. The daily budget is reached first and stops every tool. Lower the tool limits by %3$d in total, or raise the daily budget.', 'skyphusion-ai' ),
+		$sum,
+		$cap,
+		$over
+	);
+}
+
+/**
+ * Print one number field per tool, with today's use.
+ *
+ * @return void
+ */
+function skyphusion_ai_tool_fields() {
+	echo '<p class="description">' . esc_html__( 'Zero means that tool has no limit of its own. A tool at its limit stops. The other tools continue. The public search box is not in these limits.', 'skyphusion-ai' ) . '</p>';
+	foreach ( skyphusion_ai_tool_keys() as $tool ) {
+		echo '<p><label for="skyphusion_ai_tool_' . esc_attr( $tool ) . '">' . esc_html( skyphusion_ai_tool_label( $tool ) ) . '</label> ';
+		printf(
+			'<input type="number" class="small-text" id="skyphusion_ai_tool_%1$s" name="skyphusion_ai_settings[tool_caps][%1$s]" value="%2$s" min="0" step="1" />',
+			esc_attr( $tool ),
+			esc_attr( (string) skyphusion_ai_tool_cap( $tool ) )
+		);
+		echo ' ';
+		echo esc_html(
+			sprintf(
+				/* translators: %d: neurons this tool has used today. */
+				__( 'Today: %d neurons.', 'skyphusion-ai' ),
+				skyphusion_ai_tool_used( $tool )
+			)
+		);
+		echo '</p>';
+	}
+	$warning = skyphusion_ai_tool_warning();
+	if ( '' !== $warning ) {
+		echo '<p class="description">' . esc_html( $warning ) . '</p>';
+	}
+}
+
+/**
  * Today's row. A stored row from another UTC day reads as zero.
  *
  * Reading does not write.
@@ -388,6 +788,15 @@ function skyphusion_ai_neuron_state() {
 				$value = 0;
 			}
 			$blank['features'][ $feature ] = $value;
+		}
+	}
+	if ( isset( $stored['tools'] ) && is_array( $stored['tools'] ) ) {
+		foreach ( skyphusion_ai_tool_keys() as $tool ) {
+			$tool_value = isset( $stored['tools'][ $tool ] ) ? (int) $stored['tools'][ $tool ] : 0;
+			if ( $tool_value < 0 ) {
+				$tool_value = 0;
+			}
+			$blank['tools'][ $tool ] = $tool_value;
 		}
 	}
 	$blank['mailed_80']  = empty( $stored['mailed_80'] ) ? 0 : 1;
@@ -670,15 +1079,26 @@ function skyphusion_ai_neuron_add( $feature, $neurons, $estimated ) {
  * A response with no neuron figure and no token figure still counts as a
  * call and adds no neurons.
  *
- * @param string $feature Feature name.
- * @param string $model   Model id.
- * @param mixed  $decoded Response JSON.
- * @return array{day: string, neurons: int, estimated: int, features: array<string, int>, mailed_80: int, mailed_100: int}
+ * The fourth argument names the tool bucket. It defaults to the feature.
+ * Backfill passes backfill so those neurons stay on the backfill counter.
+ * The site assistant and translation pass their own tool so they do not
+ * spend the writing limit.
+ *
+ * @param string      $feature Feature name.
+ * @param string      $model   Model id.
+ * @param mixed       $decoded Response JSON.
+ * @param string|null $tool    Tool bucket. Null uses the feature name.
+ * @return array{day: string, neurons: int, estimated: int, features: array<string, int>, tools: array<string, int>, mailed_80: int, mailed_100: int}
  */
-function skyphusion_ai_neuron_record( $feature, $model, $decoded ) {
+function skyphusion_ai_neuron_record( $feature, $model, $decoded, $tool = null ) {
 	$measured = skyphusion_ai_neuron_measure( $model, $decoded );
 	$neurons  = $measured['known'] ? (int) $measured['neurons'] : 0;
-	return skyphusion_ai_neuron_add( $feature, $neurons, $measured['known'] && $measured['estimated'] );
+	$state    = skyphusion_ai_neuron_add( $feature, $neurons, $measured['known'] && $measured['estimated'] );
+	$bucket   = is_string( $tool ) && '' !== $tool ? $tool : $feature;
+	if ( in_array( $bucket, skyphusion_ai_tool_keys(), true ) ) {
+		$state = skyphusion_ai_tool_add( $bucket, $neurons );
+	}
+	return $state;
 }
 
 /**
@@ -776,19 +1196,21 @@ function skyphusion_ai_neuron_feature( $model, $payload ) {
  */
 function skyphusion_ai_neuron_closed_message( $url, $payload ) {
 	unset( $GLOBALS['skyphusion_ai_neuron_call'] );
+	$model   = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
+	$feature = skyphusion_ai_neuron_feature( $model, $payload );
 	$refusal = skyphusion_ai_neuron_refusal();
 	if ( is_wp_error( $refusal ) ) {
-		$model   = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
-		$feature = skyphusion_ai_neuron_feature( $model, $payload );
-		$cheap   = skyphusion_ai_neuron_cheapest_text();
-		$plain   = 'text' === $feature && ! skyphusion_ai_neuron_payload_has_image( $payload );
+		$cheap = skyphusion_ai_neuron_cheapest_text();
+		$plain = 'text' === $feature && ! skyphusion_ai_neuron_payload_has_image( $payload );
 		if ( ! ( 'cheapest' === skyphusion_ai_neuron_over_mode() && $plain && '' !== $cheap && $model === $cheap ) ) {
 			return skyphusion_ai_neuron_refusal_text();
 		}
 	}
-	$model                                = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
+	if ( skyphusion_ai_tool_blocked( $feature ) ) {
+		return skyphusion_ai_tool_refusal_text();
+	}
 	$GLOBALS['skyphusion_ai_neuron_call'] = array(
-		'feature' => skyphusion_ai_neuron_feature( $model, $payload ),
+		'feature' => $feature,
 		'model'   => $model,
 	);
 	return '';
@@ -825,6 +1247,10 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 	$refusal = skyphusion_ai_neuron_refusal();
 	if ( is_wp_error( $refusal ) ) {
 		return $refusal;
+	}
+	$tool_refusal = skyphusion_ai_tool_refusal( 'embeddings' );
+	if ( is_wp_error( $tool_refusal ) ) {
+		return $tool_refusal;
 	}
 	$model = '@cf/baai/bge-large-en-v1.5';
 	if ( function_exists( 'cloudflare_ai_provider_embeddings_model' ) ) {
@@ -977,6 +1403,7 @@ function skyphusion_ai_neuron_field() {
 	echo '>' . esc_html__( 'Use the cheapest text model', 'skyphusion-ai' ) . '</option>';
 	echo '</select>';
 	echo '<p class="description">' . esc_html__( 'Only a plain text call can switch. Backfill, embeddings, the site assistant, translation, vision, images, and speech pause either way. The public search box is not in this budget.', 'skyphusion-ai' ) . '</p>';
+	skyphusion_ai_tool_fields();
 }
 
 /**
