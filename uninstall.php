@@ -9,3 +9,4 @@ if (!defined('WP_UNINSTALL_PLUGIN')) {
 
 delete_option('skyphusion_ai_settings');
 delete_option( 'cloudflare_ai_search_settings' );
+delete_option( 'skyphusion_ai_db_version' );
