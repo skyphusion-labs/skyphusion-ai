@@ -85,7 +85,7 @@ function skyphusion_ai_backfill_public_skip( $row ) {
 		$kind = 'alt';
 	}
 	$reason = isset( $row['reason'] ) ? (string) $row['reason'] : '';
-	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing', 'short' ), true ) ) {
+	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing', 'short', 'noimage' ), true ) ) {
 		$reason = 'missing';
 	}
 	return array(
@@ -264,7 +264,15 @@ function skyphusion_ai_backfill_current( $post_id, $kind, $seo ) {
 		if ( ! function_exists( 'get_post_meta' ) ) {
 			return null;
 		}
-		return trim( (string) get_post_meta( (int) $post_id, skyphusion_ai_backfill_alt_key(), true ) );
+		$alt = trim( (string) get_post_meta( (int) $post_id, skyphusion_ai_backfill_alt_key(), true ) );
+		if ( '' !== $alt ) {
+			return $alt;
+		}
+		$mark = trim( (string) get_post_meta( (int) $post_id, skyphusion_ai_backfill_decorative_key(), true ) );
+		if ( '1' === $mark ) {
+			return $mark;
+		}
+		return '';
 	}
 	if ( 'aioseo' === $seo ) {
 		return skyphusion_ai_backfill_aioseo_current( $post_id );
@@ -456,7 +464,163 @@ function skyphusion_ai_backfill_prompt( $kind, $title, $content = '' ) {
 }
 
 /**
- * Text model id for this job.
+ * Meta key for an image that carries no information.
+ *
+ * @return string
+ */
+function skyphusion_ai_backfill_decorative_key() {
+	return '_skyphusion_ai_decorative_alt';
+}
+
+/**
+ * Word the vision model uses when an image carries no information.
+ *
+ * @return string
+ */
+function skyphusion_ai_backfill_decorative_word() {
+	return 'decorative';
+}
+
+/**
+ * True when the whole reply is the decorative word.
+ *
+ * @param string $text Model reply.
+ * @return bool
+ */
+function skyphusion_ai_backfill_is_decorative( $text ) {
+	$text = strtolower( trim( (string) $text ) );
+	$text = rtrim( $text, '.' );
+	$text = trim( $text );
+	return skyphusion_ai_backfill_decorative_word() === $text;
+}
+
+/**
+ * Remember a decorative image and leave the alt field empty.
+ *
+ * @param int $post_id Attachment id.
+ * @return bool
+ */
+function skyphusion_ai_backfill_mark_decorative( $post_id ) {
+	if ( ! function_exists( 'update_post_meta' ) ) {
+		return false;
+	}
+	update_post_meta( (int) $post_id, skyphusion_ai_backfill_decorative_key(), '1' );
+	return true;
+}
+
+/**
+ * Largest local image this job will read, in bytes.
+ *
+ * @return int
+ */
+function skyphusion_ai_backfill_image_cap() {
+	return 2000000;
+}
+
+/**
+ * True for an http, https, or data image URL.
+ *
+ * @param string $url Image URL.
+ * @return bool
+ */
+function skyphusion_ai_backfill_image_allowed( $url ) {
+	$url = trim( (string) $url );
+	if ( 0 === strpos( $url, 'data:image/' ) ) {
+		return false === strpos( $url, ' ' );
+	}
+	if ( function_exists( 'wp_parse_url' ) ) {
+		$parts = wp_parse_url( $url );
+		if ( ! is_array( $parts ) || empty( $parts['scheme'] ) || empty( $parts['host'] ) ) {
+			return false;
+		}
+		$scheme = strtolower( (string) $parts['scheme'] );
+		return 'https' === $scheme || 'http' === $scheme;
+	}
+	$scheme = strtolower( (string) strtok( $url, ':' ) );
+	if ( 'https' !== $scheme && 'http' !== $scheme ) {
+		return false;
+	}
+	$rest = substr( $url, strlen( $scheme ) + 3 );
+	return '' !== $rest && 0 !== strpos( $rest, '/' ) && false === strpos( $rest, ' ' );
+}
+
+/**
+ * Public image URL, or a data URL read from a local file.
+ *
+ * A public URL is preferred so the file is not loaded in PHP.
+ *
+ * @param int $post_id Attachment id.
+ * @return string
+ */
+function skyphusion_ai_backfill_image_ref( $post_id ) {
+	$post_id = (int) $post_id;
+	$url     = '';
+	if ( function_exists( 'wp_get_attachment_url' ) ) {
+		$url = (string) wp_get_attachment_url( $post_id );
+	}
+	if ( skyphusion_ai_backfill_image_allowed( $url ) && 0 !== strpos( $url, 'data:' ) ) {
+		return $url;
+	}
+	if ( 0 === strpos( $url, 'data:image/' ) ) {
+		return $url;
+	}
+	$path = '';
+	if ( function_exists( 'get_attached_file' ) ) {
+		$path = (string) get_attached_file( $post_id );
+	}
+	return skyphusion_ai_backfill_image_file( $path );
+}
+
+/**
+ * Data URL for one local image file. An unreadable or huge file is empty.
+ *
+ * @param string $path File path.
+ * @return string
+ */
+function skyphusion_ai_backfill_image_file( $path ) {
+	$path = (string) $path;
+	if ( '' === $path || ! is_readable( $path ) ) {
+		return '';
+	}
+	$size = filesize( $path );
+	if ( ! is_int( $size ) && ! is_float( $size ) ) {
+		return '';
+	}
+	$size = (int) $size;
+	if ( 1 > $size || $size > skyphusion_ai_backfill_image_cap() ) {
+		return '';
+	}
+	// phpcs:ignore WordPress.WP.AlternativeFunctions.file_get_contents_file_get_contents -- local attachment, not a remote request.
+	$raw = file_get_contents( $path );
+	if ( ! is_string( $raw ) || '' === $raw ) {
+		return '';
+	}
+	$mime  = 'image/jpeg';
+	$lower = strtolower( $path );
+	if ( str_ends_with( $lower, '.png' ) ) {
+		$mime = 'image/png';
+	} elseif ( str_ends_with( $lower, '.gif' ) ) {
+		$mime = 'image/gif';
+	} elseif ( str_ends_with( $lower, '.webp' ) ) {
+		$mime = 'image/webp';
+	}
+	// phpcs:ignore WordPress.PHP.DiscouragedPHPFunctions.obfuscation_base64_encode -- image bytes for the vision request, not hidden text.
+	return 'data:' . $mime . ';base64,' . base64_encode( $raw );
+}
+
+/**
+ * Saved alt prompt plus the decorative instruction.
+ *
+ * @param string $title Image title.
+ * @return string
+ */
+function skyphusion_ai_backfill_alt_prompt( $title ) {
+	$prompt = skyphusion_ai_backfill_prompt( 'alt', $title );
+	return $prompt . "\nIf the image has no information, reply with the single word decorative.";
+}
+
+/**
+ * Text model id for an SEO description.
  *
  * @return string
  */
@@ -468,19 +632,57 @@ function skyphusion_ai_backfill_model() {
 }
 
 /**
+ * Vision model id for empty alt text.
+ *
+ * @return string
+ */
+function skyphusion_ai_backfill_vision_model() {
+	if ( function_exists( 'skyphusion_ai_model_choice' ) ) {
+		$chosen = skyphusion_ai_model_choice( 'vision' );
+		if ( '' !== $chosen ) {
+			return $chosen;
+		}
+	}
+	return '@cf/mistralai/mistral-small-3.1-24b-instruct';
+}
+
+/**
  * Ask the writing model. A spent budget does not leave the site.
  *
  * @param string $prompt Prompt text.
  * @return string|WP_Error
  */
 function skyphusion_ai_backfill_text( $prompt ) {
+	return skyphusion_ai_backfill_call( $prompt, skyphusion_ai_backfill_model(), 'text', '' );
+}
+
+/**
+ * Ask the vision model with one image.
+ *
+ * @param string $prompt Prompt text.
+ * @param string $image  Allowed image URL.
+ * @return string|WP_Error
+ */
+function skyphusion_ai_backfill_see( $prompt, $image ) {
+	return skyphusion_ai_backfill_call( $prompt, skyphusion_ai_backfill_vision_model(), 'vision', $image );
+}
+
+/**
+ * Ask one model. A spent budget does not leave the site.
+ *
+ * @param string $prompt  Prompt text.
+ * @param string $model   Model id.
+ * @param string $feature text or vision.
+ * @param string $image   Image URL. Empty for text.
+ * @return string|WP_Error
+ */
+function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image ) {
 	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
 		$refusal = skyphusion_ai_neuron_refusal();
 		if ( is_wp_error( $refusal ) ) {
 			return $refusal;
 		}
 	}
-	$model       = skyphusion_ai_backfill_model();
 	$credentials = array(
 		'account_id' => '',
 		'token'      => '',
@@ -504,17 +706,19 @@ function skyphusion_ai_backfill_text( $prompt ) {
 	if ( '' === $url || '' === $token || ! function_exists( 'wp_remote_post' ) ) {
 		return new WP_Error( 'skyphusion_ai_backfill', __( 'The text could not be written.', 'skyphusion-ai' ) );
 	}
+	$message = array(
+		'role' => 'user',
+		'text' => $prompt,
+	);
+	if ( '' !== $image ) {
+		$message['images'] = array( $image );
+	}
 	$body = array();
 	if ( function_exists( 'cloudflare_ai_provider_chat_body' ) ) {
 		$body = cloudflare_ai_provider_chat_body(
 			array(
 				'model'    => $model,
-				'messages' => array(
-					array(
-						'role' => 'user',
-						'text' => $prompt,
-					),
-				),
+				'messages' => array( $message ),
 			)
 		);
 	}
@@ -523,7 +727,7 @@ function skyphusion_ai_backfill_text( $prompt ) {
 		'Authorization' => 'Bearer ' . $token,
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, $feature, $model ) );
 	}
 	$response = wp_remote_post(
 		$url,
@@ -538,7 +742,7 @@ function skyphusion_ai_backfill_text( $prompt ) {
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
 	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
-		skyphusion_ai_neuron_record( 'text', $model, $decoded );
+		skyphusion_ai_neuron_record( $feature, $model, $decoded );
 	}
 	$status = (int) wp_remote_retrieve_response_code( $response );
 	if ( $status < 200 || $status >= 300 ) {
@@ -759,12 +963,24 @@ function skyphusion_ai_backfill_run( $force ) {
 				continue;
 			}
 		}
+		$image = '';
+		if ( 'alt' === $kind ) {
+			$image = isset( $candidate['image'] ) ? (string) $candidate['image'] : skyphusion_ai_backfill_image_ref( $post_id );
+			if ( ! skyphusion_ai_backfill_image_allowed( $image ) ) {
+				$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'noimage' );
+				continue;
+			}
+		}
 		++$attempts;
 		if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
 			$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'budget' );
 			break;
 		}
-		$written = skyphusion_ai_backfill_text( skyphusion_ai_backfill_prompt( $kind, $title, $page ) );
+		if ( 'alt' === $kind ) {
+			$written = skyphusion_ai_backfill_see( skyphusion_ai_backfill_alt_prompt( $title ), $image );
+		} else {
+			$written = skyphusion_ai_backfill_text( skyphusion_ai_backfill_prompt( $kind, $title, $page ) );
+		}
 		if ( is_wp_error( $written ) ) {
 			$reason = 'blocked';
 			if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
@@ -774,6 +990,14 @@ function skyphusion_ai_backfill_run( $force ) {
 			if ( 'budget' === $reason ) {
 				break;
 			}
+			continue;
+		}
+		if ( 'alt' === $kind && skyphusion_ai_backfill_is_decorative( $written ) ) {
+			if ( skyphusion_ai_backfill_mark_decorative( $post_id ) ) {
+				$skips = skyphusion_ai_backfill_forget_skip( $skips, $post_id, $kind );
+				continue;
+			}
+			$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'missing' );
 			continue;
 		}
 		$written = skyphusion_ai_backfill_trim( $kind, $written );
@@ -812,6 +1036,9 @@ function skyphusion_ai_backfill_skip_label( $row ) {
 	}
 	if ( 'alt' === $kind && 'blocked' === $reason ) {
 		return __( 'Alt text was skipped. The model could not write this item.', 'skyphusion-ai' );
+	}
+	if ( 'alt' === $kind && 'noimage' === $reason ) {
+		return __( 'Alt text was skipped. The image could not be read.', 'skyphusion-ai' );
 	}
 	if ( 'alt' === $kind ) {
 		return __( 'Alt text was skipped. This item has no empty field.', 'skyphusion-ai' );

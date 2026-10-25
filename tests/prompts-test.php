@@ -65,6 +65,8 @@ $prompt_stored = get_option('skyphusion_ai_prompts', array());
 expect('a default prompt is not stored', isset($prompt_stored['backfill_alt']), false);
 skyphusion_ai_prompt_assign('backfill_alt', 'Custom alt. Title: {title}');
 expect('an edit is what the empty text job sends', skyphusion_ai_backfill_prompt('alt', 'Linen shirt'), 'Custom alt. Title: Linen shirt');
+$prompt_see = skyphusion_ai_backfill_alt_prompt('Linen shirt');
+expect('an edit is what the image job sends', strpos($prompt_see, 'Custom alt. Title: Linen shirt') === 0, true);
 $prompt_page = 'This linen shirt is cut for warm weather and a long walk.';
 skyphusion_ai_prompt_assign('backfill_description', 'Custom SEO. Title: {title}');
 $prompt_custom_seo = skyphusion_ai_backfill_prompt('description', 'Linen shirt', $prompt_page);

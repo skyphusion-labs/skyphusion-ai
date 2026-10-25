@@ -30,6 +30,25 @@ function backfill_clear()
 
 $backfill_text = '{"choices":[{"message":{"content":"A linen shirt."}}]}';
 $backfill_blank = '{"choices":[{"message":{"content":""}}]}';
+$backfill_image = 'https://cdn.example/linen.jpg';
+$backfill_decorative = '{"choices":[{"message":{"content":"decorative"}}]}';
+
+if (!function_exists('wp_get_attachment_url')) {
+    function wp_get_attachment_url($post_id)
+    {
+        $map = isset($GLOBALS['skyphusion_ai_backfill_urls']) ? $GLOBALS['skyphusion_ai_backfill_urls'] : array();
+        $post_id = (int) $post_id;
+        return isset($map[$post_id]) ? (string) $map[$post_id] : '';
+    }
+}
+if (!function_exists('get_attached_file')) {
+    function get_attached_file($post_id)
+    {
+        $map = isset($GLOBALS['skyphusion_ai_backfill_files']) ? $GLOBALS['skyphusion_ai_backfill_files'] : array();
+        $post_id = (int) $post_id;
+        return isset($map[$post_id]) ? (string) $map[$post_id] : '';
+    }
+}
 
 backfill_clear();
 expect('the empty text job is off by default', skyphusion_ai_backfill_run(false), 'off');
@@ -54,7 +73,7 @@ $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 6, 'kind' => 'alt', 'title' => 'Linen shirt'),
+    array('post_id' => 6, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
@@ -62,11 +81,24 @@ expect('an empty alt field is filled', skyphusion_ai_backfill_run(false), 'ran')
 expect('an empty alt field makes one request', $GLOBALS['cfais_calls'], 1);
 expect('the alt text is the model sentence', get_post_meta(6, skyphusion_ai_backfill_alt_key(), true), 'A linen shirt.');
 $backfill_post_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
-expect('the text call uses the writing model', strpos($backfill_post_url, skyphusion_ai_backfill_model()) !== false, true);
+expect('the alt call uses the vision model', strpos($backfill_post_url, skyphusion_ai_backfill_vision_model()) !== false, true);
+expect('the alt call does not use the writing model', strpos($backfill_post_url, skyphusion_ai_backfill_model()) === false, true);
+$backfill_alt_body = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+$backfill_decoded = json_decode($backfill_alt_body, true);
+$backfill_sent_image = '';
+if (is_array($backfill_decoded) && isset($backfill_decoded['messages'][0]['content']) && is_array($backfill_decoded['messages'][0]['content'])) {
+    foreach ($backfill_decoded['messages'][0]['content'] as $backfill_part) {
+        if (is_array($backfill_part) && isset($backfill_part['image_url']['url'])) {
+            $backfill_sent_image = (string) $backfill_part['image_url']['url'];
+        }
+    }
+}
+expect('the alt call sends the image', $backfill_sent_image, $backfill_image);
+expect('the alt call does not carry the token', strpos($backfill_alt_body, $backfill_token) === false, true);
 expect('the text url does not carry the token', strpos($backfill_post_url, $backfill_token) === false, true);
 
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 16, 'kind' => 'alt', 'title' => 'Wool shirt'),
+    array('post_id' => 16, 'kind' => 'alt', 'title' => 'Wool shirt', 'image' => $backfill_image),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
@@ -91,6 +123,8 @@ backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
 skyphusion_ai_backfill_run(false);
 expect('yoast receives the description', get_post_meta(8, '_yoast_wpseo_metadesc', true), 'A linen shirt.');
+$backfill_seo_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+expect('the seo call uses the writing model', strpos($backfill_seo_url, skyphusion_ai_backfill_model()) !== false, true);
 
 $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
@@ -161,7 +195,7 @@ expect('a skip has no address field', isset($backfill_skips['skips'][0]['ip']), 
 $backfill_many = array();
 $backfill_i = 20;
 while ($backfill_i < 26) {
-    $backfill_many[] = array('post_id' => $backfill_i, 'kind' => 'alt', 'title' => 'Shirt');
+    $backfill_many[] = array('post_id' => $backfill_i, 'kind' => 'alt', 'title' => 'Shirt', 'image' => $backfill_image);
     $backfill_i++;
 }
 $backfill_saved = skyphusion_ai_backfill_config();
@@ -179,7 +213,7 @@ $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 30, 'kind' => 'alt', 'title' => 'Linen shirt'),
+    array('post_id' => 30, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_blank);
@@ -207,7 +241,7 @@ $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 31, 'kind' => 'alt', 'title' => 'Linen shirt'),
+    array('post_id' => 31, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
 );
 backfill_clear();
 skyphusion_ai_backfill_run(false);
@@ -316,12 +350,90 @@ expect('the request does not send the tag', strpos($backfill_body, '<p>') === fa
 expect('the request does not send the shortcode', strpos($backfill_body, 'gallery') === false, true);
 expect('the request does not carry the token', strpos($backfill_body, $backfill_token) === false, true);
 
+expect('a public image url is allowed', skyphusion_ai_backfill_image_allowed($backfill_image), true);
+expect('a script url is refused', skyphusion_ai_backfill_image_allowed('javascript:alert(1)'), false);
+expect('a file path is refused', skyphusion_ai_backfill_image_allowed('/tmp/linen.jpg'), false);
+expect('the saved alt sentence stays first', strpos(skyphusion_ai_backfill_alt_prompt('Linen shirt'), 'Write one alt sentence for this image. Title: Linen shirt') === 0, true);
+expect('decorative is the whole reply only', skyphusion_ai_backfill_is_decorative('Decorative.'), true);
+expect('a real sentence is not decorative', skyphusion_ai_backfill_is_decorative('A decorative linen shirt.'), false);
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 50, 'kind' => 'alt', 'title' => 'Linen shirt'),
+);
+backfill_clear();
+expect('an image with no source is skipped', skyphusion_ai_backfill_run(false), 'ran');
+expect('an image with no source makes no request', $GLOBALS['cfais_calls'], 0);
+$backfill_skips = skyphusion_ai_backfill_config();
+$backfill_image_reason = '';
+foreach ($backfill_skips['skips'] as $backfill_row) {
+    if (50 === (int) $backfill_row['post_id']) {
+        $backfill_image_reason = $backfill_row['reason'];
+    }
+}
+expect('an image with no source records the reason', $backfill_image_reason, 'noimage');
+expect(
+    'an image with no source says why',
+    skyphusion_ai_backfill_skip_label(array('post_id' => 50, 'kind' => 'alt', 'reason' => 'noimage')),
+    'Alt text was skipped. The image could not be read.'
+);
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 51, 'kind' => 'alt', 'title' => 'Linen shirt', 'image' => $backfill_image),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_decorative);
+expect('a decorative image is marked', skyphusion_ai_backfill_run(false), 'ran');
+expect('a decorative image makes one request', $GLOBALS['cfais_calls'], 1);
+$backfill_usage = get_option('skyphusion_ai_neurons', array());
+$backfill_vision_count = (is_array($backfill_usage) && isset($backfill_usage['features']['vision'])) ? (int) $backfill_usage['features']['vision'] : 0;
+expect('an alt read counts as vision', $backfill_vision_count > 0, true);
+expect('a decorative image leaves alt empty', get_post_meta(51, skyphusion_ai_backfill_alt_key(), true), '');
+expect('a decorative image stores the mark', get_post_meta(51, skyphusion_ai_backfill_decorative_key(), true), '1');
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+backfill_clear();
+expect('a marked image is not asked again', skyphusion_ai_backfill_run(false), 'ran');
+expect('a marked image makes no request', $GLOBALS['cfais_calls'], 0);
+
+$backfill_gif = sys_get_temp_dir() . '/sai-alt-linen.gif';
+file_put_contents($backfill_gif, base64_decode('R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7'));
+$GLOBALS['skyphusion_ai_backfill_urls'] = array(71 => $backfill_image, 72 => 'javascript:alert(1)');
+$GLOBALS['skyphusion_ai_backfill_files'] = array(70 => $backfill_gif, 71 => $backfill_gif, 72 => $backfill_gif);
+$backfill_data = skyphusion_ai_backfill_image_ref(70);
+expect('a local image becomes a data url', strpos($backfill_data, 'data:image/gif;base64,') === 0, true);
+expect('a public url is preferred', skyphusion_ai_backfill_image_ref(71), $backfill_image);
+$backfill_fallback = skyphusion_ai_backfill_image_ref(72);
+expect('a script url is not sent', strpos($backfill_fallback, 'javascript:') === false, true);
+expect('a script url falls back to the file', strpos($backfill_fallback, 'data:image/gif;base64,') === 0, true);
+$backfill_big = sys_get_temp_dir() . '/sai-alt-big.bin';
+$backfill_handle = fopen($backfill_big, 'wb');
+if (is_resource($backfill_handle)) {
+    ftruncate($backfill_handle, skyphusion_ai_backfill_image_cap() + 1);
+    fclose($backfill_handle);
+}
+$GLOBALS['skyphusion_ai_backfill_urls'][73] = '';
+$GLOBALS['skyphusion_ai_backfill_files'][73] = $backfill_big;
+expect('a huge file is not read', skyphusion_ai_backfill_image_file($backfill_big), '');
+unlink($backfill_gif);
+unlink($backfill_big);
+
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);
 unset($GLOBALS['skyphusion_ai_backfill_candidates']);
 unset($GLOBALS['skyphusion_ai_backfill_seo']);
 unset($GLOBALS['skyphusion_ai_backfill_aioseo']);
 unset($GLOBALS['cfais_options']['skyphusion_ai_backfill']);
+unset($GLOBALS['skyphusion_ai_backfill_urls']);
+unset($GLOBALS['skyphusion_ai_backfill_files']);
 unset($GLOBALS['cfais_options']['skyphusion_ai_neurons']);
 unset($GLOBALS['cfais_can']['manage_options']);
 if (false === $backfill_prev_key || '' === $backfill_prev_key) {
