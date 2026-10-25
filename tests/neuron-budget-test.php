@@ -776,5 +776,71 @@ expect(
 );
 expect('the receipt namespace is skyphusion-ai/v1', strpos($cfais_budget_src, 'skyphusion-ai/v1') !== false, true);
 
+expect('September comes before 1 October', skyphusion_ai_neuron_previous_month('2026-10-01'), '2026-09');
+expect('December comes before January', skyphusion_ai_neuron_previous_month('2026-01-15'), '2025-12');
+$cfais_month_sum = skyphusion_ai_neuron_month_sum(
+    array(
+        '2026-09-02' => array('neurons' => 4, 'calls' => 1),
+        '2026-09-30' => array('neurons' => 6, 'calls' => 2),
+        '2026-10-01' => array('neurons' => 9, 'calls' => 3),
+    ),
+    '2026-09'
+);
+expect('a month sums its own neurons', $cfais_month_sum['neurons'], 10);
+expect('a month sums its own calls', $cfais_month_sum['calls'], 3);
+$cfais_month_text = skyphusion_ai_neuron_month_mail_text('2026-09', 10, 3);
+expect('the month subject names the month', $cfais_month_text['subject'], 'Workers AI use for 2026-09');
+expect(
+    'the month body names the totals',
+    strpos($cfais_month_text['body'], '10 neurons') !== false && strpos($cfais_month_text['body'], '3 calls') !== false,
+    true
+);
+expect('the month body has no prompt', strpos($cfais_month_text['body'], 'prompt') === false, true);
+
+$cfais_month_yesterday = gmdate('Y-m-d', time() - 86400);
+cfais_neuron_reset();
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => $cfais_month_yesterday,
+    'neurons' => 5,
+    'estimated' => 0,
+    'features' => array('text' => 2),
+    'mailed_80' => 0,
+    'mailed_100' => 0,
+    'ip' => '203.0.113.9',
+);
+expect('a read does not archive a finished day', skyphusion_ai_neuron_state()['neurons'], 0);
+expect('a read leaves the stored day', $GLOBALS['cfais_options']['skyphusion_ai_neurons']['day'], $cfais_month_yesterday);
+skyphusion_ai_neuron_roll();
+expect('a finished day keeps its neurons', $GLOBALS['cfais_options']['skyphusion_ai_neurons']['days'][$cfais_month_yesterday]['neurons'], 5);
+expect('a finished day keeps its calls', $GLOBALS['cfais_options']['skyphusion_ai_neurons']['days'][$cfais_month_yesterday]['calls'], 2);
+expect('a finished day drops the address', isset($GLOBALS['cfais_options']['skyphusion_ai_neurons']['days'][$cfais_month_yesterday]['ip']), false);
+expect('today starts after the roll', $GLOBALS['cfais_options']['skyphusion_ai_neurons']['day'], skyphusion_ai_neuron_today());
+
+$cfais_month_previous = skyphusion_ai_neuron_previous_month(skyphusion_ai_neuron_today());
+cfais_neuron_reset();
+$GLOBALS['cfais_mail'] = array();
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 0,
+    'days' => array(
+        $cfais_month_previous . '-15' => array('neurons' => 11, 'calls' => 4, 'ip' => 'nope'),
+    ),
+);
+skyphusion_ai_neuron_month_mail();
+expect('one month sends one mail', count($GLOBALS['cfais_mail']), 1);
+expect('the month mail names the neurons', strpos($GLOBALS['cfais_mail'][0][2], '11 neurons') !== false, true);
+expect('the month mail leaves out the address', strpos($GLOBALS['cfais_mail'][0][2], 'nope') === false, true);
+skyphusion_ai_neuron_month_mail();
+expect('the same month does not mail again', count($GLOBALS['cfais_mail']), 1);
+cfais_neuron_reset();
+$GLOBALS['cfais_mail'] = array();
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => skyphusion_ai_neuron_today(),
+    'neurons' => 0,
+    'days' => array(),
+);
+skyphusion_ai_neuron_month_mail();
+expect('a quiet month sends nothing', count($GLOBALS['cfais_mail']), 0);
+
 cfais_neuron_reset();
 unset($GLOBALS['cfais_body']);
