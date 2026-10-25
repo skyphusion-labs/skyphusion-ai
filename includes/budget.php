@@ -794,7 +794,7 @@ function skyphusion_ai_neuron_state() {
 	}
 	$stored = get_option( skyphusion_ai_neuron_option(), array() );
 	if ( ! is_array( $stored ) || ! isset( $stored['day'] ) || $stored['day'] !== $today ) {
-		return $blank;
+		return skyphusion_ai_neuron_keep_history( $blank, $stored );
 	}
 	$blank['neurons']   = max( 0, (int) ( isset( $stored['neurons'] ) ? $stored['neurons'] : 0 ) );
 	$blank['estimated'] = max( 0, (int) ( isset( $stored['estimated'] ) ? $stored['estimated'] : 0 ) );
@@ -821,7 +821,7 @@ function skyphusion_ai_neuron_state() {
 	}
 	$blank['mailed_80']  = empty( $stored['mailed_80'] ) ? 0 : 1;
 	$blank['mailed_100'] = empty( $stored['mailed_100'] ) ? 0 : 1;
-	return $blank;
+	return skyphusion_ai_neuron_keep_history( $blank, $stored );
 }
 
 /**
@@ -1063,6 +1063,290 @@ function skyphusion_ai_neuron_mail( $state ) {
 }
 
 /**
+ * Keep the month history on a row.
+ *
+ * The history is dates, neuron totals, and call counts. It has no prompt,
+ * no page text, and no IP address.
+ *
+ * @param array<string, mixed> $blank  Today's row.
+ * @param mixed                $stored Stored row.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_neuron_keep_history( $blank, $stored ) {
+	$blank['days']       = array();
+	$blank['month_sent'] = '';
+	if ( ! is_array( $stored ) ) {
+		return $blank;
+	}
+	if ( isset( $stored['days'] ) && is_array( $stored['days'] ) ) {
+		$blank['days'] = skyphusion_ai_neuron_days_clean( $stored['days'] );
+	}
+	if ( isset( $stored['month_sent'] ) && is_string( $stored['month_sent'] ) && 1 === preg_match( '/^\d{4}-\d{2}$/', $stored['month_sent'] ) ) {
+		$blank['month_sent'] = $stored['month_sent'];
+	}
+	return $blank;
+}
+
+/**
+ * A date key the history will keep, or an empty string.
+ *
+ * @param mixed $day Raw day.
+ * @return string
+ */
+function skyphusion_ai_neuron_day_key( $day ) {
+	$day = (string) $day;
+	if ( 1 !== preg_match( '/^\d{4}-\d{2}-\d{2}$/', $day ) ) {
+		return '';
+	}
+	return $day;
+}
+
+/**
+ * History rows reduced to neurons and calls.
+ *
+ * @param mixed $days Raw history.
+ * @return array<string, array{neurons: int, calls: int}>
+ */
+function skyphusion_ai_neuron_days_clean( $days ) {
+	$clean = array();
+	if ( ! is_array( $days ) ) {
+		return $clean;
+	}
+	foreach ( $days as $day => $row ) {
+		$key = skyphusion_ai_neuron_day_key( $day );
+		if ( '' === $key || ! is_array( $row ) ) {
+			continue;
+		}
+		$neurons = isset( $row['neurons'] ) ? (int) $row['neurons'] : 0;
+		$calls   = isset( $row['calls'] ) ? (int) $row['calls'] : 0;
+		if ( $neurons < 0 ) {
+			$neurons = 0;
+		}
+		if ( $calls < 0 ) {
+			$calls = 0;
+		}
+		if ( 0 === $neurons && 0 === $calls ) {
+			continue;
+		}
+		$clean[ $key ] = array(
+			'neurons' => $neurons,
+			'calls'   => $calls,
+		);
+	}
+	return $clean;
+}
+
+/**
+ * Drop history older than 400 days.
+ *
+ * @param array<string, array{neurons: int, calls: int}> $days  Clean history.
+ * @param string                                         $today UTC day.
+ * @return array<string, array{neurons: int, calls: int}>
+ */
+function skyphusion_ai_neuron_days_prune( $days, $today ) {
+	$today = skyphusion_ai_neuron_day_key( $today );
+	if ( '' === $today ) {
+		return $days;
+	}
+	$stamp = gmmktime( 0, 0, 0, (int) substr( $today, 5, 2 ), (int) substr( $today, 8, 2 ), (int) substr( $today, 0, 4 ) );
+	$cut   = gmdate( 'Y-m-d', $stamp - ( 400 * 86400 ) );
+	$kept  = array();
+	foreach ( $days as $day => $row ) {
+		if ( $day >= $cut && $day <= $today ) {
+			$kept[ $day ] = $row;
+		}
+	}
+	return $kept;
+}
+
+/**
+ * The calendar month before a UTC day.
+ *
+ * @param string $today UTC day.
+ * @return string
+ */
+function skyphusion_ai_neuron_previous_month( $today ) {
+	$today = skyphusion_ai_neuron_day_key( $today );
+	if ( '' === $today ) {
+		return '';
+	}
+	$year  = (int) substr( $today, 0, 4 );
+	$month = (int) substr( $today, 5, 2 );
+	--$month;
+	if ( $month < 1 ) {
+		$month = 12;
+		--$year;
+	}
+	return sprintf( '%04d-%02d', $year, $month );
+}
+
+/**
+ * Neurons and calls stored for one month.
+ *
+ * @param array<string, array{neurons: int, calls: int}> $days  Clean history.
+ * @param string                                         $month Month as Y-m.
+ * @return array{neurons: int, calls: int}
+ */
+function skyphusion_ai_neuron_month_sum( $days, $month ) {
+	$neurons = 0;
+	$calls   = 0;
+	if ( 1 !== preg_match( '/^\d{4}-\d{2}$/', $month ) ) {
+		return array(
+			'neurons' => 0,
+			'calls'   => 0,
+		);
+	}
+	foreach ( $days as $day => $row ) {
+		if ( substr( (string) $day, 0, 7 ) !== $month ) {
+			continue;
+		}
+		$neurons += (int) $row['neurons'];
+		$calls   += (int) $row['calls'];
+	}
+	return array(
+		'neurons' => $neurons,
+		'calls'   => $calls,
+	);
+}
+
+/**
+ * Move a finished UTC day into the history and start today at zero.
+ *
+ * Reading today's row does not do this. A later call, or the admin
+ * screen, does. The copy spends nothing and stores no prompt.
+ *
+ * @return void
+ */
+function skyphusion_ai_neuron_roll() {
+	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+		return;
+	}
+	$stored = get_option( skyphusion_ai_neuron_option(), array() );
+	if ( ! is_array( $stored ) ) {
+		return;
+	}
+	$today = skyphusion_ai_neuron_today();
+	$day   = isset( $stored['day'] ) ? skyphusion_ai_neuron_day_key( $stored['day'] ) : '';
+	if ( '' === $day || $day >= $today ) {
+		return;
+	}
+	$calls = 0;
+	if ( isset( $stored['features'] ) && is_array( $stored['features'] ) ) {
+		foreach ( $stored['features'] as $count ) {
+			$count = (int) $count;
+			if ( $count > 0 ) {
+				$calls += $count;
+			}
+		}
+	}
+	$neurons = isset( $stored['neurons'] ) ? (int) $stored['neurons'] : 0;
+	if ( $neurons < 0 ) {
+		$neurons = 0;
+	}
+	$days = array();
+	if ( isset( $stored['days'] ) ) {
+		$days = skyphusion_ai_neuron_days_clean( $stored['days'] );
+	}
+	if ( $neurons > 0 || $calls > 0 ) {
+		$days[ $day ] = array(
+			'neurons' => $neurons,
+			'calls'   => $calls,
+		);
+	}
+	$fresh         = skyphusion_ai_neuron_blank( $today );
+	$fresh         = skyphusion_ai_neuron_keep_history( $fresh, $stored );
+	$fresh['days'] = skyphusion_ai_neuron_days_prune( $days, $today );
+	update_option( skyphusion_ai_neuron_option(), $fresh, false );
+}
+
+/**
+ * Mail text for one finished month.
+ *
+ * @param string $month   Month as Y-m.
+ * @param int    $neurons Neurons in that month.
+ * @param int    $calls   Calls in that month.
+ * @return array{subject: string, body: string}
+ */
+function skyphusion_ai_neuron_month_mail_text( $month, $neurons, $calls ) {
+	$subject = sprintf(
+		/* translators: %s: month as Y-m. */
+		__( 'Workers AI use for %s', 'skyphusion-ai' ),
+		$month
+	);
+	$body = sprintf(
+		/* translators: 1: neurons in the month, 2: month as Y-m, 3: number of calls. */
+		__( 'Workers AI used %1$d neurons in %2$s across %3$d calls. The public search box and the chat button are not in this total.', 'skyphusion-ai' ),
+		$neurons,
+		$month,
+		$calls
+	);
+	return array(
+		'subject' => $subject,
+		'body'    => $body,
+	);
+}
+
+/**
+ * Send the previous month once.
+ *
+ * A month with no stored use does not send a mail. A failed send is not
+ * retried. The message is the stored totals only.
+ *
+ * @return void
+ */
+function skyphusion_ai_neuron_month_mail() {
+	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
+		return;
+	}
+	$previous = skyphusion_ai_neuron_previous_month( skyphusion_ai_neuron_today() );
+	if ( '' === $previous ) {
+		return;
+	}
+	$stored = get_option( skyphusion_ai_neuron_option(), array() );
+	if ( ! is_array( $stored ) ) {
+		$stored = array();
+	}
+	$sent = '';
+	if ( isset( $stored['month_sent'] ) && is_string( $stored['month_sent'] ) ) {
+		$sent = $stored['month_sent'];
+	}
+	if ( $sent === $previous ) {
+		return;
+	}
+	$days  = isset( $stored['days'] ) ? skyphusion_ai_neuron_days_clean( $stored['days'] ) : array();
+	$sum   = skyphusion_ai_neuron_month_sum( $days, $previous );
+	$ready = function_exists( 'wp_mail' );
+	$email = function_exists( 'get_option' ) ? get_option( 'admin_email', '' ) : '';
+	if ( ! is_string( $email ) ) {
+		$email = '';
+	}
+	if ( function_exists( 'is_email' ) && '' !== $email && ! is_email( $email ) ) {
+		$email = '';
+	}
+	if ( ( $sum['neurons'] > 0 || $sum['calls'] > 0 ) && $ready && '' !== $email ) {
+		$text = skyphusion_ai_neuron_month_mail_text( $previous, $sum['neurons'], $sum['calls'] );
+		wp_mail( $email, $text['subject'], $text['body'] );
+	}
+	if ( ( 0 === $sum['neurons'] && 0 === $sum['calls'] ) || ( $ready && '' !== $email ) ) {
+		$stored['month_sent'] = $previous;
+		if ( ! isset( $stored['day'] ) ) {
+			$stored['day'] = skyphusion_ai_neuron_today();
+		}
+		update_option( skyphusion_ai_neuron_option(), $stored, false );
+	}
+}
+
+/**
+ * Archive a finished day, then send last month when it is due.
+ *
+ * @return void
+ */
+function skyphusion_ai_neuron_month_check() {
+	skyphusion_ai_neuron_roll();
+	skyphusion_ai_neuron_month_mail();
+}
+
+/**
  * Add one call to today's row.
  *
  * The write happens before this function returns, so the next call sees it.
@@ -1073,6 +1357,7 @@ function skyphusion_ai_neuron_mail( $state ) {
  * @return array{day: string, neurons: int, estimated: int, features: array<string, int>, mailed_80: int, mailed_100: int}
  */
 function skyphusion_ai_neuron_add( $feature, $neurons, $estimated ) {
+	skyphusion_ai_neuron_roll();
 	$state = skyphusion_ai_neuron_state();
 	if ( ! in_array( $feature, skyphusion_ai_neuron_features(), true ) ) {
 		$feature = 'text';
@@ -1090,6 +1375,7 @@ function skyphusion_ai_neuron_add( $feature, $neurons, $estimated ) {
 	if ( function_exists( 'update_option' ) ) {
 		update_option( skyphusion_ai_neuron_option(), $state, false );
 	}
+	skyphusion_ai_neuron_month_mail();
 	return $state;
 }
 
@@ -1713,6 +1999,7 @@ function skyphusion_ai_neuron_admin_bar( $bar ) {
 
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'admin_init', 'skyphusion_ai_neuron_register_field', 20 );
+	add_action( 'admin_init', 'skyphusion_ai_neuron_month_check', 30 );
 	add_action( 'admin_notices', 'skyphusion_ai_neuron_admin_notice' );
 	add_action( 'admin_notices', 'skyphusion_ai_neuron_receipt_notice' );
 	add_action( 'admin_bar_menu', 'skyphusion_ai_neuron_admin_bar', 80 );
