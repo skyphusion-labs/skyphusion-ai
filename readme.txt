@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.5.0
+Stable tag: 0.5.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -23,6 +23,8 @@ Set the account id on the Skyphusion AI screen. Add a gateway id only when calls
 One switch prints an AI Search answer above WordPress and WooCommerce search results. The switch is off until you turn it on. Errors stay off the page.
 
 A single product page also prints its stock as text. Each variation names its attributes, its SKU, its price, and its stock. A simple product names its stock. The text sits in the page itself. A crawler that does not run JavaScript can index it.
+
+The stock count reaches AI Search only after you add a custom metadata field on your instance. The field name is stock_quantity. The type is number. The steps are in the FAQ.
 
 Shortcode: `[cloudflare_ai_search]`
 
@@ -66,11 +68,31 @@ This plugin does not charge a subscription. Cloudflare bills the account that ow
 
 Yes, on the search results page. Each product that manages stock prints its count, for example "4 available." A product that does not manage stock prints no count. The search box itself is Cloudflare's snippet. That snippet has no stock field, so the count is on the results list, not inside the dropdown.
 
+= How do I give AI Search the stock count? =
+
+The plugin prints a meta tag on each product page that manages stock. The tag name is stock_quantity. AI Search ignores that tag until you add the field on the instance. You add the field in the Cloudflare account that owns the instance. The plugin cannot add it.
+
+1. In WooCommerce, open the product. Turn on stock management. Enter the quantity. Save the product.
+2. In the Cloudflare dashboard, go to AI, then AI Search, then your instance.
+3. Open Parser options, then Custom metadata. These controls are in the instance settings.
+4. Add a field. Set the name to stock_quantity. Set the type to number. Keep every field you already have.
+5. Save. Cloudflare indexes the site again. This is not instant.
+
+An instance allows five custom fields. This field uses one of them.
+
+The search box does not show the number. The field is a filter. The sentence on the product page is what an answer can quote.
+
+If you use the API, add `{"field_name": "stock_quantity", "data_type": "number"}` to custom_metadata with the fields you already have. Do not send that object as the only field. That removes the other fields.
+
 = Does this replace another AI provider? =
 
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.5.1 =
+
+* The readme tells you how to add the stock_quantity field on your AI Search instance. You add that field in the Cloudflare account that owns the instance. The plugin already prints the meta tag. Nothing else changed.
 
 = 0.5.0 =
 
