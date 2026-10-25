@@ -14,4 +14,6 @@ delete_option( 'skyphusion_ai_search_outcomes' );
 delete_option( 'skyphusion_ai_neurons' );
 	delete_option( 'skyphusion_ai_vectorize' );
 	delete_option( 'skyphusion_ai_insights' );
+	delete_option( 'skyphusion_ai_assistant' );
+	delete_option( 'skyphusion_ai_assistant_chats' );
 delete_transient( 'skyphusion_ai_models' );

@@ -114,6 +114,7 @@ require __DIR__ . '/sources-test.php';
 require __DIR__ . '/embed-test.php';
 require __DIR__ . '/related-test.php';
 require __DIR__ . '/insights-test.php';
+require __DIR__ . '/assistant-test.php';
 // LAST on purpose. cold-path-test.php sets CLOUDFLARE_API_KEY and restores
 // it; running it last means no earlier file can read the value it sets.
 require __DIR__ . '/cold-path-test.php';
