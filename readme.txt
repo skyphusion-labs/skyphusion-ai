@@ -82,6 +82,10 @@ Yes. The default is 10,000 neurons a day, the free allowance. You can raise it u
 
 Yes, when a gateway id is saved. Each Workers AI call sends the site, the feature, the model, and the user id. A visitor sends an empty user id. The prompt is not in that tag. A direct Workers AI call does not send the tag.
 
+= Does the search answer show its sources? =
+
+Yes. The search results page lists the pages under the sentence. A page with an address is a link. A page with no address stays as text. A failed search shows no sentence and no list.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.

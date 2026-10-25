@@ -236,6 +236,10 @@ function skyphusion_ai_render_lead($query = null, $from_block = false)
 
     echo '<section class="cloudflare-ai-search-lead">';
     echo '<p>' . esc_html($answer) . '</p>';
+	if ( ! function_exists( 'skyphusion_ai_lead_sources_html' ) ) {
+		require_once __DIR__ . '/sources.php';
+	}
+	skyphusion_ai_lead_sources_html( $result );
     echo '</section>';
 }
 add_action('woocommerce_before_shop_loop', 'skyphusion_ai_render_lead', 5);
