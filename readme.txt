@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.3.3
+Stable tag: 0.4.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,16 @@ The search box only lists pages. The chat button answers in a sentence. It uses 
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.4.0 =
+
+* Every shipped function is named `skyphusion_ai_*`. The old `cloudflare_ai_*` names keep working through shims, so existing snippets and child themes do not break.
+* Settings carry forward once on update, so a stored configuration survives the rename instead of reverting to defaults.
+* A rejected setting now says which submitted value was rejected and what was kept, instead of failing silently.
+* User-facing strings are translatable, and the translation surface is gated so an untranslated string is a test failure rather than a surprise.
+* `wp skyphusion-ai` accepts `--accent-color`; `--color` keeps working.
+* A variable product no longer reports its parent stock pool as a variation quantity.
+* Cloudflare trademark attribution and first-use designation, per Cloudflare's published guidelines.
 
 = 0.3.3 =
 
