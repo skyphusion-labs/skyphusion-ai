@@ -16,6 +16,8 @@ This plugin connects your site to Cloudflare® AI Search. Open Settings, then Sk
 
 Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
 
+This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
+
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
 
 WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `cloudflare`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.

@@ -4,6 +4,8 @@ WordPress plugin for Cloudflare® [Workers AI](https://developers.cloudflare.com
 
 Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
 
+This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
+
 The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The comparison below is those three jobs against the plugins that charge for each one.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
