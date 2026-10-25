@@ -85,7 +85,7 @@ function skyphusion_ai_backfill_public_skip( $row ) {
 		$kind = 'alt';
 	}
 	$reason = isset( $row['reason'] ) ? (string) $row['reason'] : '';
-	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing' ), true ) ) {
+	if ( ! in_array( $reason, array( 'budget', 'empty', 'blocked', 'missing', 'short' ), true ) ) {
 		$reason = 'missing';
 	}
 	return array(
@@ -336,13 +336,95 @@ function skyphusion_ai_backfill_trim( $kind, $text ) {
 }
 
 /**
- * Prompt for one empty field. The post body is not sent.
+ * Minimum page text an SEO description will send.
  *
- * @param string $kind  alt or description.
- * @param string $title Page or image title.
+ * @return int
+ */
+function skyphusion_ai_backfill_content_floor() {
+	return 40;
+}
+
+/**
+ * Maximum page text an SEO description will send.
+ *
+ * @return int
+ */
+function skyphusion_ai_backfill_content_cap() {
+	return 6000;
+}
+
+/**
+ * Page text with tags, shortcodes, and extra space removed.
+ *
+ * @param string $content Raw page text.
  * @return string
  */
-function skyphusion_ai_backfill_prompt( $kind, $title ) {
+function skyphusion_ai_backfill_plain( $content ) {
+	$text = (string) $content;
+	if ( function_exists( 'strip_shortcodes' ) ) {
+		$text = strip_shortcodes( $text );
+	} else {
+		$stripped = preg_replace( '/\[[^\]]*\]/', '', $text );
+		$text     = is_string( $stripped ) ? $stripped : $text;
+	}
+	if ( function_exists( 'wp_strip_all_tags' ) ) {
+		$text = wp_strip_all_tags( $text );
+	} else {
+		$stripped = preg_replace( '/<[^>]*>/', '', $text );
+		$text     = is_string( $stripped ) ? $stripped : $text;
+	}
+	$collapsed = preg_replace( '/\s+/', ' ', $text );
+	return trim( is_string( $collapsed ) ? $collapsed : $text );
+}
+
+/**
+ * Length of plain page text.
+ *
+ * @param string $text Plain page text.
+ * @return int
+ */
+function skyphusion_ai_backfill_plain_length( $text ) {
+	if ( function_exists( 'mb_strlen' ) ) {
+		return (int) mb_strlen( (string) $text );
+	}
+	return strlen( (string) $text );
+}
+
+/**
+ * Raw page text for one post. A post id that does not match is ignored.
+ *
+ * @param int $post_id Post id.
+ * @return string
+ */
+function skyphusion_ai_backfill_page_text( $post_id ) {
+	if ( ! function_exists( 'get_post' ) ) {
+		return '';
+	}
+	$post = get_post( (int) $post_id );
+	if ( is_object( $post ) && isset( $post->post_content ) ) {
+		return (string) $post->post_content;
+	}
+	if ( is_array( $post ) && isset( $post['post_content'] ) ) {
+		$id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		if ( 0 === $id || $id === (int) $post_id ) {
+			return (string) $post['post_content'];
+		}
+	}
+	return '';
+}
+
+/**
+ * Prompt for one empty field.
+ *
+ * Alt text sends the title. An SEO description also sends the page text
+ * when that text is at least 40 characters.
+ *
+ * @param string $kind    alt or description.
+ * @param string $title   Page or image title.
+ * @param string $content Raw page text. Alt text ignores it.
+ * @return string
+ */
+function skyphusion_ai_backfill_prompt( $kind, $title, $content = '' ) {
 	$collapsed = preg_replace( '/\s+/', ' ', (string) $title );
 	$title     = trim( is_string( $collapsed ) ? $collapsed : (string) $title );
 	if ( function_exists( 'mb_substr' ) ) {
@@ -352,12 +434,25 @@ function skyphusion_ai_backfill_prompt( $kind, $title ) {
 	}
 	$key = ( 'alt' === $kind ) ? 'backfill_alt' : 'backfill_description';
 	if ( function_exists( 'skyphusion_ai_prompt_fill' ) ) {
-		return skyphusion_ai_prompt_fill( $key, array( 'title' => $title ) );
+		$prompt = skyphusion_ai_prompt_fill( $key, array( 'title' => $title ) );
+	} elseif ( 'alt' === $kind ) {
+		$prompt = 'Write one alt sentence for this image. Title: ' . $title;
+	} else {
+		$prompt = 'Write one SEO description for this page. Title: ' . $title;
 	}
 	if ( 'alt' === $kind ) {
-		return 'Write one alt sentence for this image. Title: ' . $title;
+		return $prompt;
 	}
-	return 'Write one SEO description for this page. Title: ' . $title;
+	$plain = skyphusion_ai_backfill_plain( $content );
+	if ( skyphusion_ai_backfill_plain_length( $plain ) < skyphusion_ai_backfill_content_floor() ) {
+		return $prompt;
+	}
+	if ( function_exists( 'mb_substr' ) ) {
+		$plain = mb_substr( $plain, 0, skyphusion_ai_backfill_content_cap() );
+	} else {
+		$plain = substr( $plain, 0, skyphusion_ai_backfill_content_cap() );
+	}
+	return $prompt . "\n\nContent:\n" . $plain;
 }
 
 /**
@@ -542,7 +637,7 @@ function skyphusion_ai_backfill_live_candidates() {
 }
 
 /**
- * Title for a prompt. The post body is not read.
+ * Title for a prompt. The page text is read separately.
  *
  * @param int $post_id Post id.
  * @return string
@@ -654,13 +749,22 @@ function skyphusion_ai_backfill_run( $force ) {
 			$skips = skyphusion_ai_backfill_forget_skip( $skips, $post_id, $kind );
 			continue;
 		}
+		$title = isset( $candidate['title'] ) ? (string) $candidate['title'] : skyphusion_ai_backfill_title( $post_id );
+		$page  = '';
+		if ( 'description' === $kind ) {
+			$raw  = isset( $candidate['content'] ) ? (string) $candidate['content'] : skyphusion_ai_backfill_page_text( $post_id );
+			$page = skyphusion_ai_backfill_plain( $raw );
+			if ( skyphusion_ai_backfill_plain_length( $page ) < skyphusion_ai_backfill_content_floor() ) {
+				$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'short' );
+				continue;
+			}
+		}
 		++$attempts;
 		if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
 			$skips = skyphusion_ai_backfill_remember_skip( $skips, $post_id, $kind, 'budget' );
 			break;
 		}
-		$title   = isset( $candidate['title'] ) ? (string) $candidate['title'] : skyphusion_ai_backfill_title( $post_id );
-		$written = skyphusion_ai_backfill_text( skyphusion_ai_backfill_prompt( $kind, $title ) );
+		$written = skyphusion_ai_backfill_text( skyphusion_ai_backfill_prompt( $kind, $title, $page ) );
 		if ( is_wp_error( $written ) ) {
 			$reason = 'blocked';
 			if ( function_exists( 'skyphusion_ai_neuron_refusal' ) && is_wp_error( skyphusion_ai_neuron_refusal() ) ) {
@@ -720,6 +824,9 @@ function skyphusion_ai_backfill_skip_label( $row ) {
 	}
 	if ( 'blocked' === $reason ) {
 		return __( 'The SEO description was skipped. The model could not write this item.', 'skyphusion-ai' );
+	}
+	if ( 'short' === $reason ) {
+		return __( 'The SEO description was skipped. The page text is under 40 characters.', 'skyphusion-ai' );
 	}
 	return __( 'The SEO description was skipped. This item has no empty field.', 'skyphusion-ai' );
 }
