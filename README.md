@@ -4,7 +4,7 @@ WordPress plugin for Cloudflare® [Workers AI](https://developers.cloudflare.com
 
 Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
 
-The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. The comparison below is those three jobs against the plugins that charge for each one.
+The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The comparison below is those three jobs against the plugins that charge for each one.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
@@ -68,7 +68,7 @@ Search results print that same count on each product. The line is `N available.`
 
 A variable product that manages stock at the parent uses the parent count. When each variation manages its own stock, the search card does not add those counts together. That total is not the quantity of any one variation. The product page already lists each variation with its own count.
 
-The search box is Cloudflare's snippet. The snippet quotes the product page meta description. It does not draw its own stock line, and this plugin does not draw the dropdown. On a single product page this plugin adds the SKU, the stock status, and the managed stock count to that description. Rank Math and Yoast both receive it. A product that does not manage stock gets the SKU and the status, and no count. A variable product adds a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed. Zero is printed.
+The search box is Cloudflare's snippet. The card shows the product image, the title, and the product page meta description. The image is the page image. The snippet already quotes it. You do not add a field for the image. This plugin does not draw the dropdown, and the snippet does not draw its own stock line. On a single product page this plugin adds the SKU, the stock status, and the managed stock count to that description. Rank Math and Yoast both receive it. A product that does not manage stock gets the SKU and the status, and no count. A variable product adds a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed. Zero is printed.
 
 The dropdown shows the new sentence after the next crawl. A browser refresh does not start that crawl. You do not add a custom field for this sentence. The description is already one of the fields the snippet quotes.
 
@@ -191,25 +191,25 @@ These plugins are keyword or instant search. They are not Cloudflare AI Search.
 | FiboSearch | free. Pro is $59, $99, or $249 for the first year, for 1 site (10,000 products), 3 sites (50,000 each), or 25 sites (150,000 each). Renewals are 15% off: $50.15, $84.15, and $211.65 | the pricing page lists image, price, and SKU. It does not list a stock count |
 | Relevanssi | free. Premium is €100 per year, or €335 once. Unlimited sites. The page says prices exclude tax | the buy page does not list SKU or a stock count |
 | YITH WooCommerce Ajax Search | a free plugin, plus a premium licence. The product page did not print a price | the Free vs Premium table lists an optional price, SKU, and stock line in YITH's own results |
-| Skyphusion AI | $0 | the dropdown quotes the product meta description. This plugin adds the SKU, the stock status, and the managed count to that description. The search results page also prints the managed count |
+| Skyphusion AI | $0 | the card shows the product image, the title, and the description. The image is the page image. The description carries the SKU, the stock status, and the managed count. The search results page also prints the managed count |
 
 ### Chat
 
-The chat button in this plugin is the Cloudflare snippet. It answers in a sentence from the indexed site. That answer is generation, so it spends Workers AI Neurons. The button is off until you turn it on. It is not a staff inbox. It has no seats, no tickets, and no handoff to a person.
+The chat button in this plugin is the Cloudflare snippet. It answers in a sentence from the indexed site. That answer is generation, so it spends Workers AI Neurons. The button is off until you turn it on. It is not a staff inbox. It has no seats, no tickets, and no handoff to a person. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Other code calls the Cloudflare provider for text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send those calls through `gateway.ai.cloudflare.com`.
 
 | plugin | licence | what the visitor gets |
 | --- | --- | --- |
 | Tidio | Free is $0, with 50 billable conversations and 10 seats. Starter is $24.17 a month on annual billing, for 100 conversations. Growth starts at $49.17 a month, from 250 conversations. Plus starts at $300 a month plus usage. Premium did not print a price. Lyro, the AI agent, starts at $32.50 a month for 50 AI conversations. The first 50 Lyro conversations are one-off, not a monthly allowance | live chat, tickets, and an AI agent that can hand the thread to a person. Tidio ships a WordPress plugin. This is a help desk |
-| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox |
+| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox. You can expand that with Workers AI or with AI Gateway |
 
 ### Agents
 
-The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. This plugin does not edit posts, install other plugins, or open an MCP server. A product that does those things is a different product. You still do not pay a plugin fee to make the Cloudflare call.
+The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. You still do not pay a plugin fee to make the Cloudflare call.
 
 | plugin | licence | what the agent can do |
 | --- | --- | --- |
 | AI Engine (Meow Apps) | the plugin is free. Pro is $69 a year for 1 site, $99 for 5 sites, or $179 for 20 sites. Lifetime is $499 for 5 sites, $799 for 20, $999 for 500, or $1,699 for 2,500. You still pay the model vendor. The Pro page says a refund is available within 14 days | a chatbot, and, on Pro, MCP so Claude or ChatGPT can act on the site. Pro also lists embeddings, AI forms, and voice |
-| Skyphusion AI | $0 for the plugin. Workers AI rates are in the table above | the Cloudflare provider those calls use. Tools are part of the provider. There is no MCP server in this plugin |
+| Skyphusion AI | $0 for the plugin. Workers AI rates are in the table above | the Cloudflare provider those calls use. You can expand them with Workers AI or with AI Gateway. Tools are part of the provider. This release has no MCP server. An MCP server is planned |
 
 Sources: <https://developers.cloudflare.com/ai-search/platform/limits-pricing/> (page updated 2026-10-01), <https://developers.cloudflare.com/workers-ai/platform/pricing/> (page updated 2026-10-20), <https://searchwp.com/pricing/>, <https://fibosearch.com/pricing/>, <https://www.relevanssi.com/buy-premium/>, <https://yithemes.com/themes/plugins/yith-woocommerce-ajax-search/>, <https://www.tidio.com/pricing/>, <https://meowapps.com/products/ai-engine-pro/>.
 
