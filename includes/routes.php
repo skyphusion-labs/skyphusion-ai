@@ -134,9 +134,12 @@ function cloudflare_ai_provider_run_url($account_id, $gateway_id, $model)
     return 'https://gateway.ai.cloudflare.com/v1/' . $account_id . '/' . $gateway_id . '/workers-ai/' . $model;
 }
 
-function cloudflare_ai_provider_embeddings_model()
-{
-    return '@cf/baai/bge-large-en-v1.5';
+function cloudflare_ai_provider_embeddings_model() {
+	$fallback = '@cf/baai/bge-large-en-v1.5';
+	if ( function_exists( 'skyphusion_ai_model_choice' ) ) {
+		return skyphusion_ai_model_choice( 'embeddings' );
+	}
+	return $fallback;
 }
 
 /**

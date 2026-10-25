@@ -119,7 +119,7 @@ npx wrangler ai-search create your-instance --custom-metadata title:text --custo
 
 Do not create a second instance to add this one field. On an instance you already have, use the dashboard or the API object above. You still do not need this field for the dropdown.
 
-The default text model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A prompt that includes an image uses `@cf/mistralai/mistral-small-3.1-24b-instruct` first. `@cf/meta/llama-3.2-11b-vision-instruct` needs a one-time `{"prompt":"agree"}` request on that model before it will answer. It does not take tools or JSON.
+The default text model is `@cf/meta/llama-3.3-70b-instruct-fp8-fast`. A prompt that includes an image uses `@cf/mistralai/mistral-small-3.1-24b-instruct` first. Settings, then Skyphusion AI, has one picker for writing, vision, image, speech, and embeddings. The plugin reads the account's model list and keeps that list for 12 hours. A failed read keeps these built-in ids. An empty picker uses the built-in id for that job. A model id that is not in the built-in list and not on the account list is refused with the same catalog error as before. `@cf/meta/llama-3.2-11b-vision-instruct` needs a one-time `{"prompt":"agree"}` request on that model before it will answer. It does not take tools or JSON.
 
 The default image model is `@cf/black-forest-labs/flux-1-schnell`, and it takes a JSON prompt. FLUX.2 dev and FLUX.2 klein 4B are also listed. Their docs say multipart. This plugin still sends a JSON prompt. So only those two fail if Cloudflare rejects it.
 

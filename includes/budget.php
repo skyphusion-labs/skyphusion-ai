@@ -580,8 +580,14 @@ function skyphusion_ai_neuron_feature( $model, $payload ) {
 	if ( function_exists( 'cloudflare_ai_provider_catalog_entry' ) ) {
 		$entry = cloudflare_ai_provider_catalog_entry( $model );
 	}
+	if ( ! is_array( $entry ) && function_exists( 'skyphusion_ai_account_model_entry' ) ) {
+		$entry = skyphusion_ai_account_model_entry( $model );
+	}
 	if ( ! is_array( $entry ) ) {
 		return 'text';
+	}
+	if ( 'embeddings' === $entry['kind'] ) {
+		return 'embeddings';
 	}
 	if ( 'image' === $entry['kind'] ) {
 		return 'image';

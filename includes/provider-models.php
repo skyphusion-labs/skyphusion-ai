@@ -95,7 +95,7 @@ class Cloudflare_AI_Provider extends AbstractApiProvider
 
     protected static function createModel(ModelMetadata $modelMetadata, ProviderMetadata $providerMetadata): \WordPress\AiClient\Providers\Models\Contracts\ModelInterface
     {
-        $entry = cloudflare_ai_provider_catalog_entry($modelMetadata->getId());
+        $entry = skyphusion_ai_model_resolved_entry($modelMetadata->getId());
         if ($entry === null) {
             throw new InvalidArgumentException(esc_html__('That Cloudflare model is not in the catalog.', 'skyphusion-ai'));
         }
@@ -137,7 +137,7 @@ class Cloudflare_AI_Model_Directory implements ModelMetadataDirectoryInterface
     public function listModelMetadata(): array
     {
         $models = array();
-        foreach (cloudflare_ai_provider_catalog() as $entry) {
+        foreach (skyphusion_ai_model_directory_rows() as $entry) {
             if ($entry['kind'] === 'speech' && !class_exists('Cloudflare_AI_Speech_Model', false)) {
                 continue;
             }
@@ -162,7 +162,7 @@ class Cloudflare_AI_Model_Directory implements ModelMetadataDirectoryInterface
 
     private function find(string $modelId): ?array
     {
-        $entry = cloudflare_ai_provider_catalog_entry($modelId);
+        $entry = skyphusion_ai_model_resolved_entry($modelId);
         if ($entry === null) {
             return null;
         }
