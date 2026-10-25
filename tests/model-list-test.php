@@ -176,6 +176,57 @@ $cfais_kept = skyphusion_ai_model_sanitize_option(
 expect('an id that is not on the list keeps the previous model', $cfais_kept['model_writing'], '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
 expect('and tells the admin', $GLOBALS['cfais_notices'], array('model_writing'));
 
+$_POST['skyphusion_ai_settings'] = array('model_light' => '');
+$GLOBALS['cfais_notices'] = array();
+$cfais_light_empty = skyphusion_ai_model_sanitize_option(array('endpoint' => ''), 'skyphusion_ai_settings', array('model_light' => '@cf/example/new-writer'));
+expect('an empty light field stays empty', $cfais_light_empty['model_light'], '');
+expect('an empty light field stays quiet', $GLOBALS['cfais_notices'], array());
+
+$_POST['skyphusion_ai_settings'] = array('model_light' => '@cf/example/new-writer');
+$GLOBALS['cfais_notices'] = array();
+$cfais_light_saved = skyphusion_ai_model_sanitize_option(array('endpoint' => ''), 'skyphusion_ai_settings', array());
+expect('a listed light model is stored', $cfais_light_saved['model_light'], '@cf/example/new-writer');
+
+$_POST['skyphusion_ai_settings'] = array('model_light' => '@cf/example/no-such');
+$GLOBALS['cfais_notices'] = array();
+$cfais_light_kept = skyphusion_ai_model_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array('model_light' => '@cf/example/new-writer')
+);
+expect('an unlisted light model stays the previous choice', $cfais_light_kept['model_light'], '@cf/example/new-writer');
+expect('an unlisted light model tells the admin', $GLOBALS['cfais_notices'], array('model_light'));
+
+unset($_POST['skyphusion_ai_settings']);
+$cfais_light_omit = skyphusion_ai_model_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array('model_light' => '@cf/example/new-writer')
+);
+expect('an omitted light field keeps the stored id', $cfais_light_omit['model_light'], '@cf/example/new-writer');
+
+if (!isset($GLOBALS['cfais_stored']) || !is_array($GLOBALS['cfais_stored'])) {
+    $GLOBALS['cfais_stored'] = array();
+}
+$cfais_light_was = array_key_exists('model_light', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['model_light'] : null;
+unset($GLOBALS['cfais_stored']['model_light']);
+expect('an empty light field uses the writing model', skyphusion_ai_light_model(), skyphusion_ai_model_choice('writing'));
+expect('a short task with no light model uses the writing model', skyphusion_ai_model_for_task('meta'), skyphusion_ai_model_choice('writing'));
+$GLOBALS['cfais_stored']['model_light'] = '@cf/example/new-writer';
+expect('a saved light model is used for a meta description', skyphusion_ai_model_for_task('meta'), '@cf/example/new-writer');
+expect('a saved light model is used for alt wording', skyphusion_ai_model_for_task('alt'), '@cf/example/new-writer');
+expect(
+    'a model the editor picked stays that model',
+    skyphusion_ai_model_for_task('meta', '@cf/meta/llama-3.3-70b-instruct-fp8-fast'),
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+);
+expect('a long task keeps the writing model', skyphusion_ai_model_for_task('chat'), skyphusion_ai_model_choice('writing'));
+if (null === $cfais_light_was) {
+    unset($GLOBALS['cfais_stored']['model_light']);
+} else {
+    $GLOBALS['cfais_stored']['model_light'] = $cfais_light_was;
+}
+
 unset($_POST['skyphusion_ai_settings']);
 $cfais_absent = skyphusion_ai_model_sanitize_option(
     array('endpoint' => ''),

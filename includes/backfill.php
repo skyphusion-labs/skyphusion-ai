@@ -748,6 +748,9 @@ function skyphusion_ai_backfill_alt_prompt( $title ) {
  * @return string
  */
 function skyphusion_ai_backfill_model() {
+	if ( function_exists( 'skyphusion_ai_model_for_task' ) ) {
+		return skyphusion_ai_model_for_task( 'meta' );
+	}
 	if ( function_exists( 'skyphusion_ai_model_choice' ) ) {
 		return skyphusion_ai_model_choice( 'writing' );
 	}

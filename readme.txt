@@ -122,7 +122,7 @@ Yes. Settings, then Skyphusion AI, lists each prompt this plugin sends. Reset re
 
 = Can I choose the model? =
 
-Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
+Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job. A light model is optional. Titles, excerpts, meta descriptions, moderation, and alt wording use it when it is set. Leave it empty and the writing model stays in use. A model the editor already picked stays that model. The field does not fill in a model on its own.
 
 = Does the chat button cost extra? =
 
