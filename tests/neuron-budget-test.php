@@ -309,7 +309,19 @@ expect(
         && strpos(skyphusion_ai_neuron_settings_text(), 'chat button') !== false,
     true
 );
-expect('the admin bar shows the total and the cap', skyphusion_ai_neuron_bar_title(), '8000 / 10000 neurons');
+expect('the admin bar shows the total and the cap', skyphusion_ai_neuron_bar_title(), '8000 / 10000 free');
+expect('an absent cap is not saved', skyphusion_ai_neuron_cap_saved(), false);
+$cfais_bar_cap_set = array_key_exists('neuron_cap', $GLOBALS['cfais_stored']);
+$cfais_bar_cap = $cfais_bar_cap_set ? $GLOBALS['cfais_stored']['neuron_cap'] : null;
+$GLOBALS['cfais_stored']['neuron_cap'] = 10000;
+expect('a saved cap is saved', skyphusion_ai_neuron_cap_saved(), true);
+expect('the admin bar shows neurons when the cap is saved', skyphusion_ai_neuron_bar_title(), '8000 / 10000 neurons');
+expect('a saved cap does not say free', strpos(skyphusion_ai_neuron_bar_title(), 'free'), false);
+if ($cfais_bar_cap_set) {
+    $GLOBALS['cfais_stored']['neuron_cap'] = $cfais_bar_cap;
+} else {
+    unset($GLOBALS['cfais_stored']['neuron_cap']);
+}
 
 expect('an empty cap field returns to 10000', skyphusion_ai_neuron_parse_cap('', 15000), 10000);
 expect('a whole number is kept', skyphusion_ai_neuron_parse_cap('15000', 10000), 15000);
@@ -645,6 +657,124 @@ unset($GLOBALS['cfais_stored']['tool_caps']);
 unset($GLOBALS['skyphusion_ai_models_runtime']);
 unset($GLOBALS['cfais_options']['skyphusion_ai_backfill']);
 unset($GLOBALS['cfais_options']['skyphusion_ai_assistant']);
+
+$cfais_receipt_user_set = array_key_exists('cfais_user_id', $GLOBALS);
+$cfais_receipt_user = $cfais_receipt_user_set ? $GLOBALS['cfais_user_id'] : null;
+$cfais_receipt_edit = !empty($GLOBALS['cfais_can']['edit_posts']);
+$GLOBALS['cfais_stored']['neuron_cap'] = 'nope';
+expect('a rejected cap is not saved', skyphusion_ai_neuron_cap_saved(), false);
+expect('a rejected cap still uses 10000', skyphusion_ai_neuron_cap(), 10000);
+unset($GLOBALS['cfais_stored']['neuron_cap']);
+expect('usage says free when no budget is saved', skyphusion_ai_neuron_usage_payload(), array(
+    'neurons' => (int) skyphusion_ai_neuron_state()['neurons'],
+    'cap' => 10000,
+    'free' => true,
+));
+expect('usage does not carry an ip', array_key_exists('ip', skyphusion_ai_neuron_usage_payload()), false);
+$GLOBALS['cfais_stored']['neuron_cap'] = 10000;
+expect('usage says the cap is not free once it is saved', skyphusion_ai_neuron_usage_payload()['free'], false);
+expect('usage keeps the saved cap', skyphusion_ai_neuron_usage_payload()['cap'], 10000);
+unset($GLOBALS['cfais_stored']['neuron_cap']);
+
+expect('user id 0 has no receipt key', skyphusion_ai_neuron_receipt_key(0), '');
+skyphusion_ai_neuron_receipt_store(0, 'text', '@cf/meta/llama-3.2-1b-instruct', 1);
+expect('a user id of 0 does not write a transient', array_key_exists('skyphusion_ai_receipt_0', $GLOBALS['cfais_store']), false);
+$cfais_receipt_before = time();
+skyphusion_ai_neuron_receipt_store(4, 'vision', '@cf/meta/llama-3.2-11b-vision-instruct', 9);
+$cfais_receipt_after = time();
+$cfais_receipt_got = skyphusion_ai_neuron_receipt_get(4);
+expect('a stored receipt keeps the feature', $cfais_receipt_got['feature'], 'vision');
+expect('a stored receipt keeps the model', $cfais_receipt_got['model'], '@cf/meta/llama-3.2-11b-vision-instruct');
+expect('a stored receipt keeps the neurons', $cfais_receipt_got['neurons'], 9);
+expect('a stored receipt time is an int', is_int($cfais_receipt_got['time']), true);
+expect('a stored receipt time is not before the call', $cfais_receipt_got['time'] >= $cfais_receipt_before, true);
+expect('a stored receipt time is not after the call', $cfais_receipt_got['time'] <= $cfais_receipt_after, true);
+$cfais_receipt_keys = array_keys($cfais_receipt_got);
+sort($cfais_receipt_keys);
+expect('a receipt has four fields', $cfais_receipt_keys, array('feature', 'model', 'neurons', 'time'));
+expect('a receipt does not store an ip', array_key_exists('ip', $cfais_receipt_got), false);
+expect('a receipt does not store a user id', array_key_exists('user_id', $cfais_receipt_got), false);
+expect('a receipt lasts 600 seconds', $GLOBALS['cfais_store']['skyphusion_ai_receipt_4']['ttl'], 600);
+expect(
+    'the receipt sentence names the call',
+    skyphusion_ai_neuron_receipt_sentence(array(
+        'feature' => 'vision',
+        'model' => '@cf/meta/llama-3.2-11b-vision-instruct',
+        'neurons' => 9,
+        'time' => gmmktime(14, 30, 0, 10, 25, 2026),
+    )),
+    'Last call: vision, @cf/meta/llama-3.2-11b-vision-instruct, 9 neurons, 2026-10-25 14:30 UTC.'
+);
+
+$GLOBALS['cfais_user_id'] = 0;
+skyphusion_ai_neuron_record(
+    'text',
+    '@cf/meta/llama-3.2-1b-instruct',
+    array('usage' => array('neurons' => 1))
+);
+expect('neuron_record for user id 0 writes no receipt', array_key_exists('skyphusion_ai_receipt_0', $GLOBALS['cfais_store']), false);
+$GLOBALS['cfais_user_id'] = 7;
+skyphusion_ai_neuron_record(
+    'text',
+    '@cf/meta/llama-3.2-1b-instruct',
+    array(
+        'usage' => array('neurons' => 11),
+        'result' => array('answer' => 'not-kept'),
+    )
+);
+$cfais_receipt_live = skyphusion_ai_neuron_receipt_get(7);
+expect('neuron_record stores the feature', $cfais_receipt_live['feature'], 'text');
+expect('neuron_record stores the model', $cfais_receipt_live['model'], '@cf/meta/llama-3.2-1b-instruct');
+expect('neuron_record stores the neurons', $cfais_receipt_live['neurons'], 11);
+expect('neuron_record does not store the answer', array_key_exists('result', $cfais_receipt_live), false);
+expect('the receipt route reads that user', skyphusion_ai_neuron_receipt_payload(), $cfais_receipt_live);
+unset($GLOBALS['cfais_user_id']);
+expect('no current user reads an empty receipt', skyphusion_ai_neuron_receipt_payload(), array());
+expect('an editor is required for the receipt', skyphusion_ai_neuron_receipt_permission(), false);
+$GLOBALS['cfais_can']['manage_options'] = true;
+expect('managing options does not grant the receipt', skyphusion_ai_neuron_receipt_permission(), false);
+unset($GLOBALS['cfais_can']['manage_options']);
+$GLOBALS['cfais_can']['edit_posts'] = true;
+expect('an editor may read the receipt', skyphusion_ai_neuron_receipt_permission(), true);
+
+$GLOBALS['cfais_user_id'] = 7;
+$cfais_receipt_sentence = skyphusion_ai_neuron_receipt_sentence($cfais_receipt_live);
+ob_start();
+skyphusion_ai_neuron_receipt_notice();
+$cfais_receipt_notice = ob_get_clean();
+expect(
+    'an editor sees the receipt sentence',
+    $cfais_receipt_notice,
+    '<div class="notice notice-info"><p>' . $cfais_receipt_sentence . '</p></div>'
+);
+unset($GLOBALS['cfais_can']['edit_posts']);
+ob_start();
+skyphusion_ai_neuron_receipt_notice();
+expect('a user who cannot edit posts sees nothing', ob_get_clean(), '');
+$GLOBALS['cfais_can']['edit_posts'] = true;
+$GLOBALS['cfais_user_id'] = 8;
+ob_start();
+skyphusion_ai_neuron_receipt_notice();
+expect('another user with no receipt sees nothing', ob_get_clean(), '');
+unset($GLOBALS['cfais_store']['skyphusion_ai_receipt_4'], $GLOBALS['cfais_store']['skyphusion_ai_receipt_7']);
+if ($cfais_receipt_user_set) {
+    $GLOBALS['cfais_user_id'] = $cfais_receipt_user;
+} else {
+    unset($GLOBALS['cfais_user_id']);
+}
+if ($cfais_receipt_edit) {
+    $GLOBALS['cfais_can']['edit_posts'] = true;
+} else {
+    unset($GLOBALS['cfais_can']['edit_posts']);
+}
+
+$cfais_budget_src = (string) file_get_contents(dirname(__DIR__) . '/includes/budget.php');
+expect(
+    'the receipt route is on rest_api_init',
+    strpos($cfais_budget_src, "add_action( 'rest_api_init', 'skyphusion_ai_neuron_register_rest' )") !== false,
+    true
+);
+expect('the receipt namespace is skyphusion-ai/v1', strpos($cfais_budget_src, 'skyphusion-ai/v1') !== false, true);
 
 cfais_neuron_reset();
 unset($GLOBALS['cfais_body']);

@@ -7,7 +7,9 @@
  * Each tool can also have a daily limit. A tool at its limit stops, and
  * the other tools continue. The site budget still stops every tool.
  * Search snippets stay outside both limits. The totals do not store an
- * IP address.
+ * IP address. The last receipt is a transient for the current user. It
+ * stores the feature, the model, the neurons, and the time. It does not
+ * store an IP address.
  *
  * @package skyphusion-ai
  */
@@ -114,6 +116,24 @@ function skyphusion_ai_neuron_cap() {
 		return 10000;
 	}
 	return $cap;
+}
+
+/**
+ * True only when a saved cap is a whole number of 1 or more.
+ *
+ * An absent cap is not saved. The default 10000 is still the number in use.
+ *
+ * @return bool
+ */
+function skyphusion_ai_neuron_cap_saved() {
+	if ( ! function_exists( 'skyphusion_ai_settings' ) ) {
+		return false;
+	}
+	$settings = skyphusion_ai_settings();
+	if ( ! is_array( $settings ) || ! array_key_exists( 'neuron_cap', $settings ) ) {
+		return false;
+	}
+	return null !== skyphusion_ai_neuron_valid_cap( $settings['neuron_cap'] );
 }
 
 /**
@@ -1082,7 +1102,8 @@ function skyphusion_ai_neuron_add( $feature, $neurons, $estimated ) {
  * The fourth argument names the tool bucket. It defaults to the feature.
  * Backfill passes backfill so those neurons stay on the backfill counter.
  * The site assistant and translation pass their own tool so they do not
- * spend the writing limit.
+ * spend the writing limit. The call also stores a receipt for the current
+ * user. That receipt does not store an IP address.
  *
  * @param string      $feature Feature name.
  * @param string      $model   Model id.
@@ -1098,7 +1119,112 @@ function skyphusion_ai_neuron_record( $feature, $model, $decoded, $tool = null )
 	if ( in_array( $bucket, skyphusion_ai_tool_keys(), true ) ) {
 		$state = skyphusion_ai_tool_add( $bucket, $neurons );
 	}
+	skyphusion_ai_neuron_receipt_store(
+		skyphusion_ai_neuron_receipt_user(),
+		is_string( $feature ) ? $feature : '',
+		is_string( $model ) ? $model : '',
+		$neurons
+	);
 	return $state;
+}
+
+/**
+ * Transient key for one user's last receipt.
+ *
+ * @param int $user_id User id.
+ * @return string Empty when the id is not 1 or more.
+ */
+function skyphusion_ai_neuron_receipt_key( $user_id ) {
+	$user_id = (int) $user_id;
+	if ( 1 > $user_id ) {
+		return '';
+	}
+	return 'skyphusion_ai_receipt_' . $user_id;
+}
+
+/**
+ * User id for the receipt, or 0 when nobody is logged in.
+ *
+ * A harness may set cfais_user_id. Otherwise the current WordPress user is used.
+ *
+ * @return int
+ */
+function skyphusion_ai_neuron_receipt_user() {
+	if ( isset( $GLOBALS['cfais_user_id'] ) ) {
+		return (int) $GLOBALS['cfais_user_id'];
+	}
+	if ( function_exists( 'get_current_user_id' ) ) {
+		return (int) get_current_user_id();
+	}
+	return 0;
+}
+
+/**
+ * Keep the four receipt fields, or an empty array.
+ *
+ * @param mixed $stored Stored value.
+ * @return array<string, int|string>
+ */
+function skyphusion_ai_neuron_receipt_fields( $stored ) {
+	if ( ! is_array( $stored ) ) {
+		return array();
+	}
+	if ( ! isset( $stored['feature'], $stored['model'], $stored['neurons'], $stored['time'] ) ) {
+		return array();
+	}
+	if ( ! is_string( $stored['feature'] ) || ! is_string( $stored['model'] ) ) {
+		return array();
+	}
+	return array(
+		'feature' => $stored['feature'],
+		'model'   => $stored['model'],
+		'neurons' => (int) $stored['neurons'],
+		'time'    => (int) $stored['time'],
+	);
+}
+
+/**
+ * Save the last receipt for one user.
+ *
+ * User id 0 stores nothing. The value holds the feature, the model, the
+ * neurons, and the time. It does not store a prompt, a token, an IP
+ * address, or the user id.
+ *
+ * @param int    $user_id User id. Zero stores nothing.
+ * @param string $feature Feature name.
+ * @param string $model   Model id.
+ * @param int    $neurons Neurons for that call.
+ * @return void
+ */
+function skyphusion_ai_neuron_receipt_store( $user_id, $feature, $model, $neurons ) {
+	$user_id = (int) $user_id;
+	if ( 1 > $user_id || ! function_exists( 'set_transient' ) ) {
+		return;
+	}
+	set_transient(
+		skyphusion_ai_neuron_receipt_key( $user_id ),
+		array(
+			'feature' => is_string( $feature ) ? $feature : '',
+			'model'   => is_string( $model ) ? $model : '',
+			'neurons' => (int) $neurons,
+			'time'    => time(),
+		),
+		600
+	);
+}
+
+/**
+ * Last receipt for one user, or an empty array when there is none.
+ *
+ * @param int $user_id User id.
+ * @return array<string, int|string>
+ */
+function skyphusion_ai_neuron_receipt_get( $user_id ) {
+	$user_id = (int) $user_id;
+	if ( 1 > $user_id || ! function_exists( 'get_transient' ) ) {
+		return array();
+	}
+	return skyphusion_ai_neuron_receipt_fields( get_transient( skyphusion_ai_neuron_receipt_key( $user_id ) ) );
 }
 
 /**
@@ -1367,12 +1493,134 @@ function skyphusion_ai_neuron_settings_text() {
  */
 function skyphusion_ai_neuron_bar_title() {
 	$state = skyphusion_ai_neuron_state();
+	$used  = (int) $state['neurons'];
+	$cap   = skyphusion_ai_neuron_cap();
+	if ( skyphusion_ai_neuron_cap_saved() ) {
+		return sprintf(
+			/* translators: 1: neurons used today, 2: daily cap. */
+			__( '%1$d / %2$d neurons', 'skyphusion-ai' ),
+			$used,
+			$cap
+		);
+	}
 	return sprintf(
 		/* translators: 1: neurons used today, 2: daily cap. */
-		__( '%1$d / %2$d neurons', 'skyphusion-ai' ),
-		(int) $state['neurons'],
-		skyphusion_ai_neuron_cap()
+		__( '%1$d / %2$d free', 'skyphusion-ai' ),
+		$used,
+		$cap
 	);
+}
+
+/**
+ * One sentence for a receipt: the feature, the model, the neurons, and the UTC time.
+ *
+ * @param mixed $receipt Receipt fields.
+ * @return string
+ */
+function skyphusion_ai_neuron_receipt_sentence( $receipt ) {
+	if ( ! is_array( $receipt ) ) {
+		return '';
+	}
+	$feature = isset( $receipt['feature'] ) && is_string( $receipt['feature'] ) ? $receipt['feature'] : '';
+	$model   = isset( $receipt['model'] ) && is_string( $receipt['model'] ) ? $receipt['model'] : '';
+	$neurons = isset( $receipt['neurons'] ) ? (int) $receipt['neurons'] : 0;
+	$stamp   = isset( $receipt['time'] ) ? (int) $receipt['time'] : 0;
+	return sprintf(
+		/* translators: 1: feature name, 2: model id, 3: neuron count, 4: UTC time as Y-m-d H:i. */
+		__( 'Last call: %1$s, %2$s, %3$d neurons, %4$s UTC.', 'skyphusion-ai' ),
+		$feature,
+		$model,
+		$neurons,
+		gmdate( 'Y-m-d H:i', $stamp )
+	);
+}
+
+/**
+ * True when the current user can edit posts.
+ *
+ * @return bool
+ */
+function skyphusion_ai_neuron_receipt_permission() {
+	if ( ! function_exists( 'current_user_can' ) ) {
+		return false;
+	}
+	return (bool) current_user_can( 'edit_posts' );
+}
+
+/**
+ * Last receipt for the current user, or an empty array when there is none.
+ *
+ * @return array<string, int|string>
+ */
+function skyphusion_ai_neuron_receipt_payload() {
+	return skyphusion_ai_neuron_receipt_get( skyphusion_ai_neuron_receipt_user() );
+}
+
+/**
+ * Today's neuron total for the REST route.
+ *
+ * The free flag is true when no budget is saved. The row has no IP address.
+ *
+ * @return array{neurons: int, cap: int, free: bool}
+ */
+function skyphusion_ai_neuron_usage_payload() {
+	$state = skyphusion_ai_neuron_state();
+	return array(
+		'neurons' => (int) $state['neurons'],
+		'cap'     => skyphusion_ai_neuron_cap(),
+		'free'    => ! skyphusion_ai_neuron_cap_saved(),
+	);
+}
+
+/**
+ * Register the receipt route and the usage route.
+ *
+ * Editors can read both. The values do not include an IP address.
+ *
+ * @return void
+ */
+function skyphusion_ai_neuron_register_rest() {
+	if ( ! function_exists( 'register_rest_route' ) ) {
+		return;
+	}
+	register_rest_route(
+		'skyphusion-ai/v1',
+		'/receipt',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'skyphusion_ai_neuron_receipt_payload',
+			'permission_callback' => 'skyphusion_ai_neuron_receipt_permission',
+		)
+	);
+	register_rest_route(
+		'skyphusion-ai/v1',
+		'/usage',
+		array(
+			'methods'             => 'GET',
+			'callback'            => 'skyphusion_ai_neuron_usage_payload',
+			'permission_callback' => 'skyphusion_ai_neuron_receipt_permission',
+		)
+	);
+}
+
+/**
+ * Show the last receipt to a user who can edit posts.
+ *
+ * @return void
+ */
+function skyphusion_ai_neuron_receipt_notice() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'edit_posts' ) ) {
+		return;
+	}
+	$receipt = skyphusion_ai_neuron_receipt_get( skyphusion_ai_neuron_receipt_user() );
+	if ( array() === $receipt ) {
+		return;
+	}
+	$sentence = skyphusion_ai_neuron_receipt_sentence( $receipt );
+	if ( '' === $sentence ) {
+		return;
+	}
+	echo '<div class="notice notice-info"><p>' . esc_html( $sentence ) . '</p></div>';
 }
 
 /**
@@ -1466,7 +1714,9 @@ function skyphusion_ai_neuron_admin_bar( $bar ) {
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'admin_init', 'skyphusion_ai_neuron_register_field', 20 );
 	add_action( 'admin_notices', 'skyphusion_ai_neuron_admin_notice' );
+	add_action( 'admin_notices', 'skyphusion_ai_neuron_receipt_notice' );
 	add_action( 'admin_bar_menu', 'skyphusion_ai_neuron_admin_bar', 80 );
+	add_action( 'rest_api_init', 'skyphusion_ai_neuron_register_rest' );
 }
 if ( function_exists( 'add_filter' ) ) {
 	add_filter( 'sanitize_option_skyphusion_ai_settings', 'skyphusion_ai_neuron_sanitize_option', 20, 3 );
