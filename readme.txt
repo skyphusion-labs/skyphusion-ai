@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.4.1
+Stable tag: 0.5.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -60,13 +60,23 @@ Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` 
 
 = Does the chat button cost extra? =
 
-The search box only lists pages. The chat button answers in a sentence. It uses your Workers AI allowance. You can leave the chat button off.
+This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. The prices are in the Cost section of README.md.
+
+= Does search show how many are in stock? =
+
+Yes, on the search results page. Each product that manages stock prints its count, for example "4 available." A product that does not manage stock prints no count. The search box itself is Cloudflare's snippet. That snippet has no stock field, so the count is on the results list, not inside the dropdown.
 
 = Does this replace another AI provider? =
 
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.5.0 =
+
+* Search results print the managed stock count on each product. The sentence is the same "N available." line the product page already uses.
+* A product that does not manage stock prints no count. A negative count is not printed. A variable product sums its own variations when the parent does not manage stock and the full list fits under the row cap.
+* A single product page adds a stock_quantity meta tag. AI Search reads it only after the instance schema defines that number field. The search snippet still does not display the tag.
 
 = 0.4.1 =
 

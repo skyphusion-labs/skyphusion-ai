@@ -10,6 +10,10 @@
   width: 100%;
 }
 
+.cloudflare-ai-search-stock-count {
+  margin: 0.25rem 0 0;
+}
+
 .cloudflare-ai-search-lead {
   box-sizing: border-box;
   max-width: 40rem;
