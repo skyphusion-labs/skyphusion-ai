@@ -78,6 +78,10 @@ Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` 
 
 Yes. The default is 10,000 neurons a day, the free allowance. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. The plugin mails the site admin at 80% and at 100%. The public search box and the chat button are not in the total. The AI Search rate limit is their cap.
 
+= Can I choose the model? =
+
+Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
+
 = Does the chat button cost extra? =
 
 This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. The prices are in the Cost section of README.md.

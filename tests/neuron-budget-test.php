@@ -153,6 +153,28 @@ expect('a vision request is allowed under the cap', $cfais_vision, '');
 skyphusion_ai_neuron_note(array('usage' => array('neurons' => 3)));
 expect('an image in the request counts as vision', skyphusion_ai_neuron_state()['features']['vision'], 1);
 
+$GLOBALS['skyphusion_ai_models_runtime'] = array(
+    array('id' => '@cf/example/new-picture', 'name' => 'New picture', 'task' => 'text-to-image'),
+    array('id' => '@cf/example/new-voice', 'name' => 'New voice', 'task' => 'text-to-speech'),
+    array('id' => '@cf/example/new-embed', 'name' => 'New embed', 'task' => 'embeddings'),
+);
+expect(
+    'an account image model counts as image',
+    skyphusion_ai_neuron_feature('@cf/example/new-picture', array()),
+    'image'
+);
+expect(
+    'an account speech model counts as speech',
+    skyphusion_ai_neuron_feature('@cf/example/new-voice', array()),
+    'speech'
+);
+expect(
+    'an account embeddings model counts as embeddings',
+    skyphusion_ai_neuron_feature('@cf/example/new-embed', array()),
+    'embeddings'
+);
+unset($GLOBALS['skyphusion_ai_models_runtime']);
+
 cfais_neuron_reset();
 $GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
     'day' => gmdate('Y-m-d'),
