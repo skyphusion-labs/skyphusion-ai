@@ -5,7 +5,8 @@
  * The seven built-in ids stay the defaults when the account list is empty
  * or the read fails. The list is cached for 12 hours. A failed read is
  * remembered for 10 minutes so a dead token is not fetched on every call.
- * The cache stores ids, names, and task names. It does not store the token.
+ * The cache stores ids, names, and task names. A price is stored only when
+ * the account list sends one. It does not store the token.
  *
  * @package skyphusion-ai
  */
@@ -125,11 +126,45 @@ function skyphusion_ai_account_models_from_body( $decoded ) {
 				$task = (string) $row['task']['id'];
 			}
 		}
-		$out[] = array(
+		$clean = array(
 			'id'   => $id,
 			'name' => $name,
 			'task' => strtolower( trim( $task ) ),
 		);
+		foreach ( skyphusion_ai_account_model_prices( $row ) as $price_key => $price_value ) {
+			$clean[ $price_key ] = $price_value;
+		}
+		$out[] = $clean;
+	}
+	return $out;
+}
+
+/**
+ * Prices the account list sent for one model. A missing number is not filled in.
+ *
+ * @param array<string, mixed> $row Account row.
+ * @return array<string, float>
+ */
+function skyphusion_ai_account_model_prices( $row ) {
+	$out = array();
+	if ( ! is_array( $row ) ) {
+		return $out;
+	}
+	foreach ( array( 'price_in', 'price_out', 'price' ) as $key ) {
+		if ( isset( $row[ $key ] ) && is_numeric( $row[ $key ] ) ) {
+			$out[ $key ] = (float) $row[ $key ];
+		}
+	}
+	if ( isset( $row['properties'] ) && is_array( $row['properties'] ) ) {
+		foreach ( $row['properties'] as $property ) {
+			if ( ! is_array( $property ) || ! isset( $property['value'] ) || ! is_numeric( $property['value'] ) ) {
+				continue;
+			}
+			$name = isset( $property['property_id'] ) ? strtolower( (string) $property['property_id'] ) : '';
+			if ( in_array( $name, array( 'price_in', 'price_out', 'price' ), true ) ) {
+				$out[ $name ] = (float) $property['value'];
+			}
+		}
 	}
 	return $out;
 }
@@ -271,11 +306,15 @@ function skyphusion_ai_account_models_store( $account, $models, $ok ) {
 		if ( ! is_array( $model ) || empty( $model['id'] ) ) {
 			continue;
 		}
-		$clean[] = array(
+		$clean_row = array(
 			'id'   => (string) $model['id'],
 			'name' => isset( $model['name'] ) ? (string) $model['name'] : (string) $model['id'],
 			'task' => isset( $model['task'] ) ? (string) $model['task'] : '',
 		);
+		foreach ( skyphusion_ai_account_model_prices( $model ) as $price_key => $price_value ) {
+			$clean_row[ $price_key ] = $price_value;
+		}
+		$clean[] = $clean_row;
 	}
 	if ( function_exists( 'set_transient' ) ) {
 		set_transient(

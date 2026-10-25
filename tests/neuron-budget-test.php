@@ -357,5 +357,81 @@ expect('search still performs its own HTTP request', strpos($cfais_query, 'wp_re
 expect('search counts a usage figure', strpos($cfais_query, 'skyphusion_ai_neuron_count_search') !== false, true);
 expect('search does not refuse on the neuron cap', strpos($cfais_query, 'skyphusion_ai_neuron_refusal'), false);
 
+if (!isset($GLOBALS['cfais_stored']) || !is_array($GLOBALS['cfais_stored'])) {
+    $GLOBALS['cfais_stored'] = array();
+}
+$cfais_stored_over = array_key_exists('neuron_over', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['neuron_over'] : null;
+$GLOBALS['cfais_stored']['neuron_over'] = 'cheapest';
+$GLOBALS['skyphusion_ai_models_runtime'] = array(
+    array(
+        'id' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+        'name' => 'Large',
+        'task' => 'text generation',
+        'price_in' => 0.293,
+        'price_out' => 2.253,
+    ),
+    array(
+        'id' => '@cf/meta/llama-3.2-1b-instruct',
+        'name' => 'Small',
+        'task' => 'text generation',
+        'price_in' => 0.027,
+        'price_out' => 0.201,
+    ),
+    array(
+        'id' => '@cf/example/cheap-vision',
+        'name' => 'Cheap vision',
+        'task' => 'image-to-text',
+        'price_in' => 0.001,
+        'price_out' => 0.001,
+    ),
+);
+expect('the cheapest text model skips a vision model', skyphusion_ai_neuron_cheapest_text(), '@cf/meta/llama-3.2-1b-instruct');
+$GLOBALS['cfais_options']['skyphusion_ai_neurons'] = array(
+    'day' => gmdate('Y-m-d'),
+    'neurons' => 10000,
+    'estimated' => 0,
+    'features' => array(),
+    'mailed_80' => 1,
+    'mailed_100' => 1,
+);
+$cfais_large_url = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+$cfais_swapped = skyphusion_ai_neuron_cheap_request($cfais_large_url, array('prompt' => 'hello'));
+expect('a plain text call moves to the cheapest model', strpos($cfais_swapped[0], '@cf/meta/llama-3.2-1b-instruct') !== false, true);
+expect('the large model is no longer on that call', strpos($cfais_swapped[0], '70b') === false, true);
+$cfais_cheap_closed = skyphusion_ai_neuron_closed_message($cfais_swapped[0], $cfais_swapped[1]);
+expect('the cheapest text call is allowed at the cap', $cfais_cheap_closed, '');
+$cfais_vision_url = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/mistralai/mistral-small-3.1-24b-instruct';
+$cfais_vision_body = array('messages' => array(array('content' => array(array('type' => 'image_url')))));
+$cfais_vision_same = skyphusion_ai_neuron_cheap_request($cfais_vision_url, $cfais_vision_body);
+expect('a vision call is not moved', $cfais_vision_same[0], $cfais_vision_url);
+expect('a vision call still pauses at the cap', skyphusion_ai_neuron_closed_message($cfais_vision_url, $cfais_vision_body) !== '', true);
+$cfais_embed_still = skyphusion_ai_neuron_embeddings_post(
+    'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/@cf/baai/bge-large-en-v1.5',
+    'sentinel-token-must-not-appear-in-any-message',
+    array('text' => array('unique-embedding-text'))
+);
+expect('embeddings still pause at the cap', is_wp_error($cfais_embed_still), true);
+$GLOBALS['skyphusion_ai_models_runtime'] = array(
+    array('id' => '@cf/meta/llama-3.2-1b-instruct', 'name' => 'Small', 'task' => 'text generation'),
+);
+expect('a model with no price is not invented', skyphusion_ai_neuron_cheapest_text(), '');
+$cfais_unpriced = skyphusion_ai_neuron_cheap_request($cfais_large_url, array('prompt' => 'hello'));
+expect('no price leaves the call in place', $cfais_unpriced[0], $cfais_large_url);
+expect('no price still pauses the call', skyphusion_ai_neuron_closed_message($cfais_large_url, array('prompt' => 'hello')) !== '', true);
+$GLOBALS['cfais_stored']['neuron_over'] = 'pause';
+expect('pause stays the refusal', skyphusion_ai_neuron_closed_message($cfais_swapped[0], array('prompt' => 'hello')) !== '', true);
+$_POST['skyphusion_ai_settings'] = array('neuron_cap' => '10000', 'neuron_over' => 'cheapest');
+$cfais_over_saved = skyphusion_ai_neuron_sanitize_option(array('endpoint' => ''), 'skyphusion_ai_settings', array('neuron_cap' => 10000));
+expect('the screen stores the cheapest choice', $cfais_over_saved['neuron_over'], 'cheapest');
+unset($_POST['skyphusion_ai_settings']);
+$cfais_over_kept = skyphusion_ai_neuron_sanitize_option(array('endpoint' => ''), 'skyphusion_ai_settings', array('neuron_cap' => 10000, 'neuron_over' => 'cheapest'));
+expect('a save that omits the choice keeps it', $cfais_over_kept['neuron_over'], 'cheapest');
+if (null === $cfais_stored_over) {
+    unset($GLOBALS['cfais_stored']['neuron_over']);
+} else {
+    $GLOBALS['cfais_stored']['neuron_over'] = $cfais_stored_over;
+}
+unset($GLOBALS['skyphusion_ai_models_runtime']);
+
 cfais_neuron_reset();
 unset($GLOBALS['cfais_body']);

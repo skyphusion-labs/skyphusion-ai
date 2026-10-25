@@ -221,6 +221,9 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
     if ($url === '') {
         throw new RuntimeException(esc_html__('Add the Cloudflare account ID before using Workers AI.', 'skyphusion-ai'));
     }
+	$skyphusion_ai_cheap         = skyphusion_ai_neuron_cheap_request( $url, $payload );
+	$url                         = $skyphusion_ai_cheap[0];
+	$payload                     = $skyphusion_ai_cheap[1];
 	$skyphusion_ai_neuron_closed = skyphusion_ai_neuron_closed_message( $url, $payload );
 	if ( '' !== $skyphusion_ai_neuron_closed ) {
 		throw new RuntimeException( esc_html( $skyphusion_ai_neuron_closed ) );

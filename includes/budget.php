@@ -192,8 +192,171 @@ function skyphusion_ai_neuron_sanitize_option( $value, $option = '', $original =
 		}
 		$parsed = skyphusion_ai_neuron_parse_cap( null, $previous );
 	}
-	$value['neuron_cap'] = $parsed;
+	$value['neuron_cap']  = $parsed;
+	$value['neuron_over'] = skyphusion_ai_neuron_stored_over( $original );
 	return $value;
+}
+
+/**
+ * Pause, or the cheapest text model. Anything else stays pause.
+ *
+ * @return string
+ */
+function skyphusion_ai_neuron_over_mode() {
+	if ( function_exists( 'skyphusion_ai_settings' ) ) {
+		$settings = skyphusion_ai_settings();
+		if ( is_array( $settings ) && isset( $settings['neuron_over'] ) && 'cheapest' === $settings['neuron_over'] ) {
+			return 'cheapest';
+		}
+	}
+	return 'pause';
+}
+
+/**
+ * The over-budget choice to store. An omitted field keeps the previous choice.
+ *
+ * @param mixed $original Previous stored settings.
+ * @return string
+ */
+function skyphusion_ai_neuron_stored_over( $original ) {
+	$posted = skyphusion_ai_neuron_posted_over();
+	if ( null !== $posted ) {
+		return $posted;
+	}
+	if ( is_array( $original ) && isset( $original['neuron_over'] ) && 'cheapest' === $original['neuron_over'] ) {
+		return 'cheapest';
+	}
+	return 'pause';
+}
+
+/**
+ * The over-budget choice on the settings form, or null when that field is absent.
+ *
+ * Options.php has already checked the settings nonce.
+ *
+ * @return string|null
+ */
+function skyphusion_ai_neuron_posted_over() {
+	if ( ! isset( $_POST['skyphusion_ai_settings'] ) || ! is_array( $_POST['skyphusion_ai_settings'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checks the settings nonce before this filter.
+		return null;
+	}
+	if ( ! array_key_exists( 'neuron_over', $_POST['skyphusion_ai_settings'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checks the settings nonce before this filter.
+		return null;
+	}
+	$typed = $_POST['skyphusion_ai_settings']['neuron_over']; // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized, WordPress.Security.ValidatedSanitizedInput.MissingUnslash -- wp_unslash runs on the next line when that function exists. The value is kept only when it is the cheapest choice.
+	if ( function_exists( 'wp_unslash' ) ) {
+		$typed = wp_unslash( $typed );
+	}
+	if ( is_string( $typed ) && 'cheapest' === $typed ) {
+		return 'cheapest';
+	}
+	return 'pause';
+}
+
+/**
+ * Sum of the prices stored on one account row, or null when none were sent.
+ *
+ * @param array<string, mixed> $model Account row.
+ * @return float|null
+ */
+function skyphusion_ai_neuron_row_price( $model ) {
+	if ( ! is_array( $model ) || ! function_exists( 'skyphusion_ai_account_model_prices' ) ) {
+		return null;
+	}
+	$prices = skyphusion_ai_account_model_prices( $model );
+	if ( array() === $prices ) {
+		return null;
+	}
+	$sum = 0.0;
+	foreach ( $prices as $price ) {
+		$sum += (float) $price;
+	}
+	if ( $sum < 0 ) {
+		return null;
+	}
+	return $sum;
+}
+
+/**
+ * Cheapest plain text model on the account list.
+ *
+ * A vision model is skipped. A model with no price is skipped. An empty
+ * string means the call stays paused. No id is invented.
+ *
+ * @return string
+ */
+function skyphusion_ai_neuron_cheapest_text() {
+	if ( ! function_exists( 'skyphusion_ai_account_models_current' ) || ! function_exists( 'skyphusion_ai_account_model_kind' ) ) {
+		return '';
+	}
+	$best    = '';
+	$best_px = null;
+	foreach ( skyphusion_ai_account_models_current() as $model ) {
+		if ( ! is_array( $model ) || empty( $model['id'] ) ) {
+			continue;
+		}
+		$kind = skyphusion_ai_account_model_kind( isset( $model['task'] ) ? (string) $model['task'] : '' );
+		if ( 'text' !== $kind[0] || ! empty( $kind[1] ) ) {
+			continue;
+		}
+		$price = skyphusion_ai_neuron_row_price( $model );
+		if ( null === $price ) {
+			continue;
+		}
+		if ( null === $best_px || $price < $best_px ) {
+			$best_px = $price;
+			$best    = (string) $model['id'];
+		}
+	}
+	return $best;
+}
+
+/**
+ * Replace the model on one Workers AI URL. The payload model is replaced when it is set.
+ *
+ * @param string $url     Request URL.
+ * @param mixed  $payload Request JSON.
+ * @param string $model   Model id from the account list.
+ * @return array{0: string, 1: mixed}
+ */
+function skyphusion_ai_neuron_swap_model( $url, $payload, $model ) {
+	$url   = (string) $url;
+	$model = (string) $model;
+	if ( '' !== $model && 1 === preg_match( '#/(?:ai/run|workers-ai)/@cf/.+$#', $url ) ) {
+		$swapped = preg_replace( '#(/(?:ai/run|workers-ai)/)@cf/.+$#', '$1' . $model, $url, 1 );
+		if ( is_string( $swapped ) && '' !== $swapped ) {
+			$url = $swapped;
+		}
+	}
+	if ( is_array( $payload ) && isset( $payload['model'] ) ) {
+		$payload['model'] = $model;
+	}
+	return array( $url, $payload );
+}
+
+/**
+ * At the cap, a plain text call may move to the cheapest priced model.
+ *
+ * Other calls are returned unchanged. The public search call does not come here.
+ *
+ * @param string $url     Request URL.
+ * @param mixed  $payload Request JSON.
+ * @return array{0: string, 1: mixed}
+ */
+function skyphusion_ai_neuron_cheap_request( $url, $payload ) {
+	if ( 'cheapest' !== skyphusion_ai_neuron_over_mode() || ! skyphusion_ai_neuron_at_cap() ) {
+		return array( $url, $payload );
+	}
+	$model   = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
+	$feature = skyphusion_ai_neuron_feature( $model, $payload );
+	if ( 'text' !== $feature || skyphusion_ai_neuron_payload_has_image( $payload ) ) {
+		return array( $url, $payload );
+	}
+	$cheap = skyphusion_ai_neuron_cheapest_text();
+	if ( '' === $cheap ) {
+		return array( $url, $payload );
+	}
+	return skyphusion_ai_neuron_swap_model( $url, $payload, $cheap );
 }
 
 /**
@@ -615,7 +778,13 @@ function skyphusion_ai_neuron_closed_message( $url, $payload ) {
 	unset( $GLOBALS['skyphusion_ai_neuron_call'] );
 	$refusal = skyphusion_ai_neuron_refusal();
 	if ( is_wp_error( $refusal ) ) {
-		return skyphusion_ai_neuron_refusal_text();
+		$model   = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
+		$feature = skyphusion_ai_neuron_feature( $model, $payload );
+		$cheap   = skyphusion_ai_neuron_cheapest_text();
+		$plain   = 'text' === $feature && ! skyphusion_ai_neuron_payload_has_image( $payload );
+		if ( ! ( 'cheapest' === skyphusion_ai_neuron_over_mode() && $plain && '' !== $cheap && $model === $cheap ) ) {
+			return skyphusion_ai_neuron_refusal_text();
+		}
 	}
 	$model                                = skyphusion_ai_neuron_model_from_call( (string) $url, $payload );
 	$GLOBALS['skyphusion_ai_neuron_call'] = array(
@@ -794,6 +963,20 @@ function skyphusion_ai_neuron_field() {
 		esc_attr( (string) skyphusion_ai_neuron_cap() )
 	);
 	echo '<p class="description">' . esc_html( skyphusion_ai_neuron_settings_text() ) . '</p>';
+	echo '<p><label for="skyphusion_ai_neuron_over">' . esc_html__( 'When the budget is spent', 'skyphusion-ai' ) . '</label></p>';
+	echo '<select id="skyphusion_ai_neuron_over" name="skyphusion_ai_settings[neuron_over]">';
+	echo '<option value="pause"';
+	if ( 'cheapest' !== skyphusion_ai_neuron_over_mode() ) {
+		echo ' selected="selected"';
+	}
+	echo '>' . esc_html__( 'Pause until 00:00 UTC', 'skyphusion-ai' ) . '</option>';
+	echo '<option value="cheapest"';
+	if ( 'cheapest' === skyphusion_ai_neuron_over_mode() ) {
+		echo ' selected="selected"';
+	}
+	echo '>' . esc_html__( 'Use the cheapest text model', 'skyphusion-ai' ) . '</option>';
+	echo '</select>';
+	echo '<p class="description">' . esc_html__( 'Only a plain text call can switch. Backfill, embeddings, the site assistant, translation, vision, images, and speech pause either way. The public search box is not in this budget.', 'skyphusion-ai' ) . '</p>';
 }
 
 /**
