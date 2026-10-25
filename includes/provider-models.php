@@ -246,10 +246,7 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
     $request = new Request(
         HttpMethodEnum::post(),
         $url,
-        array(
-            'Content-Type' => 'application/json',
-            'Authorization' => 'Bearer ' . $credentials['token'],
-        ),
+        skyphusion_ai_gateway_transport_headers( $url, $credentials['token'] ),
         $payload
     );
     $response = $model->getHttpTransporter()->send($request, $model->getRequestOptions());

@@ -78,6 +78,10 @@ Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` 
 
 Yes. The default is 10,000 neurons a day, the free allowance. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. The plugin mails the site admin at 80% and at 100%. The public search box and the chat button are not in the total. The AI Search rate limit is their cap.
 
+= Does AI Gateway see which feature ran? =
+
+Yes, when a gateway id is saved. Each Workers AI call sends the site, the feature, the model, and the user id. A visitor sends an empty user id. The prompt is not in that tag. A direct Workers AI call does not send the tag.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.
