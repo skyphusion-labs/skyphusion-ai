@@ -99,7 +99,7 @@ function skyphusion_ai_neuron_valid_cap( $value ) {
 }
 
 /**
- * The daily cap. The default is 10,000, the free allowance.
+ * The daily cap. The default is 10,000. Cloudflare free plans include it.
  *
  * @return int
  */
@@ -1480,7 +1480,7 @@ function skyphusion_ai_neuron_settings_text() {
 	$state = skyphusion_ai_neuron_state();
 	return sprintf(
 		/* translators: 1: neurons used today, 2: estimated neurons. */
-		__( 'The default is 10,000 neurons, the free daily allowance. Today (UTC): %1$d neurons, %2$d of them estimates. The public search box and the chat button are not counted. PHP does not see those calls. The AI Search instance rate limit is the cap for them.', 'skyphusion-ai' ),
+		__( 'The default is 10,000 neurons. Cloudflare free plans include that allowance. Past it, you pay Cloudflare. Today (UTC): %1$d neurons, %2$d of them estimates. The public search box and the chat button are not counted. PHP does not see those calls. The AI Search instance rate limit is the cap for them.', 'skyphusion-ai' ),
 		(int) $state['neurons'],
 		(int) $state['estimated']
 	);
