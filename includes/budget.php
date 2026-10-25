@@ -657,14 +657,22 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 	if ( is_wp_error( $refusal ) ) {
 		return $refusal;
 	}
+	$model = '@cf/baai/bge-large-en-v1.5';
+	if ( function_exists( 'cloudflare_ai_provider_embeddings_model' ) ) {
+		$model = cloudflare_ai_provider_embeddings_model();
+	}
+	$headers = array(
+		'Content-Type'  => 'application/json',
+		'Authorization' => 'Bearer ' . $token,
+	);
+	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'embeddings', $model ) );
+	}
 	$response = wp_remote_post(
 		$url,
 		array(
 			'timeout' => 30,
-			'headers' => array(
-				'Content-Type'  => 'application/json',
-				'Authorization' => 'Bearer ' . $token,
-			),
+			'headers' => $headers,
 			'body'    => wp_json_encode( $body ),
 		)
 	);
@@ -672,10 +680,6 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 		return $response;
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
-	$model   = '@cf/baai/bge-large-en-v1.5';
-	if ( function_exists( 'cloudflare_ai_provider_embeddings_model' ) ) {
-		$model = cloudflare_ai_provider_embeddings_model();
-	}
 	skyphusion_ai_neuron_record( 'embeddings', $model, $decoded );
 	return $response;
 }
@@ -857,3 +861,5 @@ if ( function_exists( 'add_action' ) ) {
 if ( function_exists( 'add_filter' ) ) {
 	add_filter( 'sanitize_option_skyphusion_ai_settings', 'skyphusion_ai_neuron_sanitize_option', 20, 3 );
 }
+
+require_once __DIR__ . '/gateway.php';

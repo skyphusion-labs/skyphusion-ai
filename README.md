@@ -206,7 +206,7 @@ The chat button in this plugin is the Cloudflare snippet. It answers in a senten
 
 ### Agents
 
-The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. You still do not pay a plugin fee to make the Cloudflare call.
+The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. A saved gateway id adds four fields to each Workers AI log. The fields are the site, the feature, the model, and the user id. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. You still do not pay a plugin fee to make the Cloudflare call.
 
 | plugin | licence | what the agent can do |
 | --- | --- | --- |

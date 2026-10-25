@@ -24,7 +24,7 @@
 # the security sniffs, which do not fire on this tree.
 #
 # =============================================================================
-# OWED: 5658 findings across 11 files.
+# OWED: 5654 findings across 11 files.
 skyphusion-ai.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
 skyphusion-ai.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
 skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
@@ -108,7 +108,7 @@ includes/provider-models.php	Generic.Commenting.DocComment.MissingShort	2
 includes/provider-models.php	Generic.Files.OneObjectStructurePerFile.MultipleFound	4
 includes/provider-models.php	Generic.Formatting.MultipleStatementAlignment.NotSameWarning	26
 includes/provider-models.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	19
-includes/provider-models.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	354
+includes/provider-models.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	351
 includes/provider-models.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceAfterArrayOpenerMultiLine	1
 includes/provider-models.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceAfterArrayOpenerSingleLine	17
 includes/provider-models.php	NormalizedArrays.Arrays.ArrayBraceSpacing.SpaceBeforeArrayCloserMultiLine	1
@@ -128,7 +128,7 @@ includes/provider-models.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.
 includes/provider-models.php	Universal.Files.SeparateFunctionsFromOO.Mixed	1
 includes/provider-models.php	WordPress.Arrays.ArrayDeclarationSpacing.ArrayItemNoNewLine	1
 includes/provider-models.php	WordPress.Arrays.ArrayIndentation.CloseBraceNotAligned	1
-includes/provider-models.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	23
+includes/provider-models.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	22
 includes/provider-models.php	WordPress.Files.FileName.InvalidClassFileName	1
 includes/provider-models.php	WordPress.NamingConventions.ValidVariableName.UsedPropertyNotSnakeCase	2
 includes/provider-models.php	WordPress.NamingConventions.ValidVariableName.VariableNotSnakeCase	15
