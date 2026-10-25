@@ -9,6 +9,7 @@ if (!defined('ABSPATH')) {
 }
 
 require_once __DIR__ . '/budget.php';
+require_once __DIR__ . '/prompt-cache.php';
 require_once __DIR__ . '/models.php';
 
 function cloudflare_ai_provider_boot()

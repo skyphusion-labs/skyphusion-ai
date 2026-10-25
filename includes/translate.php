@@ -69,12 +69,13 @@ function skyphusion_ai_translate_read( $decoded ) {
  * An empty source uses the model default. The same source and target
  * returns the original string and does not call the model.
  *
- * @param string $text   Text to translate.
- * @param string $target Two letter target code.
- * @param string $source Two letter source code, or empty.
+ * @param string $text        Text to translate.
+ * @param string $target      Two letter target code.
+ * @param string $source      Two letter source code, or empty.
+ * @param bool   $regenerate  Whether this call asks for a new answer.
  * @return string|WP_Error
  */
-function skyphusion_ai_translate( $text, $target, $source = '' ) {
+function skyphusion_ai_translate( $text, $target, $source = '', $regenerate = false ) {
 	$text = trim( (string) $text );
 	if ( '' === $text ) {
 		return new WP_Error( 'skyphusion_ai_translate', __( 'The text is empty.', 'skyphusion-ai' ) );
@@ -101,6 +102,16 @@ function skyphusion_ai_translate( $text, $target, $source = '' ) {
 	}
 	if ( '' !== $source && $source === $target ) {
 		return $text;
+	}
+	$cache_prompt = $source . "\n" . $target . "\n" . $text;
+	if ( function_exists( 'skyphusion_ai_prompt_cache_read' ) ) {
+		$cached = skyphusion_ai_prompt_cache_read( 'translate', skyphusion_ai_translate_model(), $cache_prompt, '', $regenerate );
+		if ( is_string( $cached ) ) {
+			if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+				skyphusion_ai_neuron_record( 'text', skyphusion_ai_translate_model(), array(), 'translate' );
+			}
+			return $cached;
+		}
 	}
 	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
 		$refusal = skyphusion_ai_neuron_refusal();
@@ -174,6 +185,9 @@ function skyphusion_ai_translate( $text, $target, $source = '' ) {
 	$translated = skyphusion_ai_translate_read( $decoded );
 	if ( '' === $translated ) {
 		return new WP_Error( 'skyphusion_ai_translate', __( 'The text could not be translated.', 'skyphusion-ai' ) );
+	}
+	if ( function_exists( 'skyphusion_ai_prompt_cache_write' ) ) {
+		skyphusion_ai_prompt_cache_write( 'translate', $model, $cache_prompt, '', $translated );
 	}
 	return $translated;
 }

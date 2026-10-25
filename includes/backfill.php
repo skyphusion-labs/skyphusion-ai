@@ -796,13 +796,23 @@ function skyphusion_ai_backfill_see( $prompt, $image ) {
 /**
  * Ask one model. A spent budget does not leave the site.
  *
- * @param string $prompt  Prompt text.
- * @param string $model   Model id.
- * @param string $feature text or vision.
- * @param string $image   Image URL. Empty for text.
+ * @param string $prompt      Prompt text.
+ * @param string $model       Model id.
+ * @param string $feature     text or vision.
+ * @param string $image       Image URL. Empty for text.
+ * @param bool   $regenerate  Whether this call asks for a new answer.
  * @return string|WP_Error
  */
-function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image ) {
+function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regenerate = false ) {
+	if ( function_exists( 'skyphusion_ai_prompt_cache_read' ) ) {
+		$cached = skyphusion_ai_prompt_cache_read( $feature, $model, $prompt, $image, $regenerate );
+		if ( is_string( $cached ) ) {
+			if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+				skyphusion_ai_neuron_record( $feature, $model, array(), 'backfill' );
+			}
+			return $cached;
+		}
+	}
 	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
 		$refusal = skyphusion_ai_neuron_refusal();
 		if ( is_wp_error( $refusal ) ) {
@@ -882,6 +892,9 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image ) {
 	$written = '';
 	if ( isset( $read['candidates'][0]['text'] ) ) {
 		$written = trim( (string) $read['candidates'][0]['text'] );
+	}
+	if ( '' !== $written && function_exists( 'skyphusion_ai_prompt_cache_write' ) ) {
+		skyphusion_ai_prompt_cache_write( $feature, $model, $prompt, $image, $written );
 	}
 	return $written;
 }
