@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.5.2
+Stable tag: 0.5.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,11 +32,11 @@ You can also add a stock_quantity number field on the instance. That field is a 
 
 This plugin does three jobs, and it does not charge a licence for any of them.
 
-Search. The box is Cloudflare AI Search. On a product page the meta description gains the SKU, the stock status, and the managed stock count, and the dropdown quotes that description. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a licence. They are not this search.
+Search. The box is Cloudflare AI Search. The card shows the product image, the title, and the description. The image is the page image. You do not add a field for it. On a product page the description gains the SKU, the stock status, and the managed stock count. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a licence. They are not this search.
 
-Chat. You can turn on a chat button. It answers in a sentence. It is not a staff inbox, and it has no seats. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month.
+Chat. You can turn on a chat button. It answers in a sentence. It is not a staff inbox, and it has no seats. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month.
 
-Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. This plugin does not edit posts and it does not open an MCP server. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. Pro adds MCP. You still pay the model vendor there. Here the plugin fee is $0, and the usage is Cloudflare's.
+Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. It does not open an MCP server in this release. An MCP server is planned. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. Pro adds MCP. You still pay the model vendor there. Here the plugin fee is $0, and the usage is Cloudflare's.
 
 The tables, the renewal figures, and the page each price came from are in the Compared section of README.md. Every price was read on 2026-10-25 from that vendor's own page.
 
@@ -76,11 +76,11 @@ Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` 
 
 = Does the chat button cost extra? =
 
-This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. The prices are in the Cost section of README.md.
+This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. The prices are in the Cost section of README.md.
 
 = Does search show how many are in stock? =
 
-Yes. On a single product page the plugin adds the SKU, the stock status, and the managed stock count to the meta description. The AI Search dropdown quotes that description after the next crawl. A browser refresh does not start that crawl.
+Yes. The dropdown card shows the product image, the title, and the meta description. The image is the page image. You do not add a field for it. On a single product page the plugin adds the SKU, the stock status, and the managed stock count to that description. The card quotes the new description after the next crawl. A browser refresh does not start that crawl.
 
 The search results page also prints the managed count under each product, for example "4 available." A product that does not manage stock prints the status and no count. A variable product prints a count only when the parent manages stock. Variation counts are not added together. A negative count is not printed. Zero is printed.
 
@@ -120,9 +120,14 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
+No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one.
 
 == Changelog ==
+
+= 0.5.3 =
+
+* The comparison says the dropdown already shows the product image, with the title and the description. The image is the page image. You do not add a field for it. The description still carries the SKU, the stock status, and the managed count.
+* The comparison says you can expand the chat button and the agent calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one.
 
 = 0.5.2 =
 
