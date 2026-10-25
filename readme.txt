@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.4.0
+Stable tag: 0.4.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -67,6 +67,11 @@ The search box only lists pages. The chat button answers in a sentence. It uses 
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 == Changelog ==
+
+= 0.4.1 =
+
+* The plugin directory is now `skyphusion-ai`, matching the slug the plugin is submitted under. Earlier releases installed to `cloudflare-ai-search`.
+* Upgrading from 0.4.0 or earlier: install this release, then remove the old `cloudflare-ai-search` directory from disk. Do NOT use "Delete" in the plugins screen for the old copy, because that runs its uninstall routine and drops the saved settings. Settings live in the database and are not tied to the directory, so a disk removal keeps them.
 
 = 0.4.0 =
 
