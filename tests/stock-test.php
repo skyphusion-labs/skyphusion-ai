@@ -506,13 +506,13 @@ $GLOBALS['cfai_stock_test_current'] = 20;
 if (!function_exists('is_admin')) {
     function is_admin()
     {
-        return false;
+        return !empty($GLOBALS['cfai_stock_test_is_admin']);
     }
 }
 if (!function_exists('is_feed')) {
     function is_feed()
     {
-        return false;
+        return !empty($GLOBALS['cfai_stock_test_is_feed']);
     }
 }
 if (!function_exists('is_embed')) {
@@ -524,6 +524,20 @@ if (!function_exists('is_embed')) {
 if (!function_exists('is_product')) {
     function is_product()
     {
+        if (array_key_exists('cfai_stock_test_is_product', $GLOBALS)) {
+            return (bool) $GLOBALS['cfai_stock_test_is_product'];
+        }
+        return true;
+    }
+}
+if (!function_exists('is_search')) {
+    function is_search()
+    {
+        if (array_key_exists('cfai_stock_test_is_search', $GLOBALS)) {
+            return (bool) $GLOBALS['cfai_stock_test_is_search'];
+        }
+        /* shim-compat-test.php expects a search request when it does not
+         * define this itself. The description tests set the global. */
         return true;
     }
 }
@@ -630,14 +644,20 @@ class Cfai_Stock_Test_Search_Product
     public $mode;
     public $qty;
     public $children;
+    public $sku;
+    public $status;
+    public $price;
 
-    public function __construct($id, $type, $mode, $qty, $children = array())
+    public function __construct($id, $type, $mode, $qty, $children = array(), $sku = '', $status = 'instock')
     {
         $this->id = $id;
         $this->type = $type;
         $this->mode = $mode;
         $this->qty = $qty;
         $this->children = $children;
+        $this->sku = $sku;
+        $this->status = $status;
+        $this->price = '';
     }
 
     public function get_id()
@@ -662,15 +682,15 @@ class Cfai_Stock_Test_Search_Product
     }
     public function get_stock_status()
     {
-        return 'instock';
+        return $this->status;
     }
     public function get_sku()
     {
-        return '';
+        return $this->sku;
     }
     public function get_price()
     {
-        return '';
+        return $this->price;
     }
 }
 
@@ -730,7 +750,7 @@ foreach ((array) $search_hits[1] as $search_callback) {
         $search_missing[] = $search_callback;
     }
 }
-expect('search stock registers three callbacks', count($search_hits[1]), 3);
+expect('search stock registers six callbacks', count($search_hits[1]), 6);
 expect('search stock callbacks exist', $search_missing, array());
 
 /* Deferred to the parent: the pooled count must NOT be claimed by this row. */
@@ -760,3 +780,108 @@ expect('a truthy mode other than parent keeps its count', $truthy['quantity'], 4
 $pooledOut = skyphusion_ai_stock_row_from_product(new Cfai_Stock_Test_Variation('parent', 10, 'outofstock'), true);
 expect('pooled out-of-stock row survives', $pooledOut['stock_status'], 'outofstock');
 expect('pooled out-of-stock row has no count', $pooledOut['quantity'], null);
+
+/*
+ * The dropdown quotes the SEO description. By this point the harness has
+ * replaced two labels with markup, to prove the HTML stock line escapes
+ * them. This path must NOT escape them. Rank Math and Yoast escape the
+ * description when they print the tag. "In stock." is still "Auf Lager."
+ * and the plural is still "Verfuegbar: %d."
+ */
+$desc_managed = new Cfai_Stock_Test_Search_Product(51, 'simple', true, 4, array(), 'woo-beanie', 'instock');
+$desc_managed->price = '18.00';
+$managed_facts = skyphusion_ai_search_stock_facts($desc_managed);
+expect(
+    'description facts name the sku, the status, and the count',
+    $managed_facts,
+    '<i>SKU woo-beanie.</i> Auf Lager. Verfuegbar: 4.'
+);
+expect('description facts do not include the price', strpos($managed_facts, '18.00') !== false, false);
+expect('description facts do not escape the sku label', strpos($managed_facts, '&lt;') !== false, false);
+
+$amp = new Cfai_Stock_Test_Search_Product(52, 'simple', true, 4, array(), 'A&B', 'instock');
+$amp_facts = skyphusion_ai_search_stock_facts($amp);
+expect('description facts keep an ampersand in the sku', strpos($amp_facts, 'A&B') !== false, true);
+expect('description facts do not html-escape the sku', strpos($amp_facts, '&amp;') !== false, false);
+
+$unmanaged_desc = new Cfai_Stock_Test_Search_Product(53, 'simple', false, 9, array(), 'woo-beanie', 'instock');
+$unmanaged_facts = skyphusion_ai_search_stock_facts($unmanaged_desc);
+expect(
+    'unmanaged description facts omit the stored count',
+    $unmanaged_facts,
+    '<i>SKU woo-beanie.</i> Auf Lager.'
+);
+expect('unmanaged description facts do not print the stored nine', strpos($unmanaged_facts, '9') !== false, false);
+
+$zero_desc = new Cfai_Stock_Test_Search_Product(54, 'simple', true, 0, array(), 'ZERO', 'outofstock');
+$zero_facts = skyphusion_ai_search_stock_facts($zero_desc);
+expect(
+    'zero is printed on the description',
+    $zero_facts,
+    '<i>SKU ZERO.</i> <script>alert(1)</script> Verfuegbar: 0.'
+);
+expect('a translated status stays unescaped', strpos($zero_facts, '<script>alert(1)</script>') !== false, true);
+
+$negative_desc = new Cfai_Stock_Test_Search_Product(55, 'simple', true, -3, array(), 'NEG', 'onbackorder');
+$negative_facts = skyphusion_ai_search_stock_facts($negative_desc);
+expect('a negative count is omitted from the description', $negative_facts, '<i>SKU NEG.</i> On backorder.');
+expect('a negative count leaves no digit', strpos($negative_facts, '3') !== false, false);
+
+$variable_desc = new Cfai_Stock_Test_Search_Product(56, 'variable', false, null, array(41, 42), 'PARENT', 'instock');
+$variable_facts = skyphusion_ai_search_stock_facts($variable_desc);
+expect('variable description does not sum children', $variable_facts, '<i>SKU PARENT.</i> Auf Lager.');
+expect('variable description has no child three', strpos($variable_facts, '3') !== false, false);
+expect('variable description has no child five', strpos($variable_facts, '5') !== false, false);
+
+$parent_desc = new Cfai_Stock_Test_Search_Product(57, 'variable', true, 9, array(41, 42), 'POOL', 'instock');
+expect(
+    'parent pool is the description count',
+    skyphusion_ai_search_stock_facts($parent_desc),
+    '<i>SKU POOL.</i> Auf Lager. Verfuegbar: 9.'
+);
+
+$no_sku = new Cfai_Stock_Test_Search_Product(58, 'simple', true, 4, array(), '', 'instock');
+expect('a missing sku is omitted', skyphusion_ai_search_stock_facts($no_sku), 'Auf Lager. Verfuegbar: 4.');
+
+$silent = new Cfai_Stock_Test_Search_Product(59, 'simple', false, null, array(), '', '');
+expect('no sku and no status appends nothing', skyphusion_ai_search_stock_facts($silent), '');
+
+$grouped_desc = new Cfai_Stock_Test_Search_Product(60, 'grouped', false, null, array(41), 'GROUP', 'instock');
+expect(
+    'grouped description does not sum children',
+    skyphusion_ai_search_stock_facts($grouped_desc),
+    '<i>SKU GROUP.</i> Auf Lager.'
+);
+
+$GLOBALS['cfai_stock_test_products'][51] = $desc_managed;
+$GLOBALS['cfai_stock_test_products'][59] = $silent;
+$GLOBALS['cfai_stock_test_current'] = 51;
+$GLOBALS['cfai_stock_test_is_search'] = false;
+$blurb = 'Beanie. On sale for $18.00, regular price $20.00.';
+$once = skyphusion_ai_search_stock_describe($blurb);
+expect('the description keeps its period and gains the facts', $once, $blurb . ' ' . $managed_facts);
+$twice = skyphusion_ai_search_stock_describe($once);
+expect('a second pass does not repeat the facts', $twice, $once);
+expect('trailing space is not kept before the facts', skyphusion_ai_search_stock_describe($blurb . '  '), $once);
+expect('an empty description becomes the facts', skyphusion_ai_search_stock_describe('   '), $managed_facts);
+expect('a non string description is unchanged', skyphusion_ai_search_stock_describe(null), null);
+
+$GLOBALS['cfai_stock_test_is_product'] = false;
+expect('a non product description is unchanged', skyphusion_ai_search_stock_describe($blurb), $blurb);
+unset($GLOBALS['cfai_stock_test_is_product']);
+
+$GLOBALS['cfai_stock_test_is_search'] = true;
+expect('a search description is unchanged', skyphusion_ai_search_stock_describe($blurb), $blurb);
+$GLOBALS['cfai_stock_test_is_search'] = false;
+
+$GLOBALS['cfai_stock_test_is_admin'] = true;
+expect('an admin description is unchanged', skyphusion_ai_search_stock_describe($blurb), $blurb);
+unset($GLOBALS['cfai_stock_test_is_admin']);
+
+$GLOBALS['cfai_stock_test_is_feed'] = true;
+expect('a feed description is unchanged', skyphusion_ai_search_stock_describe($blurb), $blurb);
+unset($GLOBALS['cfai_stock_test_is_feed']);
+
+$GLOBALS['cfai_stock_test_current'] = 59;
+expect('a product with nothing to say leaves the description', skyphusion_ai_search_stock_describe($blurb), $blurb);
+unset($GLOBALS['cfai_stock_test_is_search']);
