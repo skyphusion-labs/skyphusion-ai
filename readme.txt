@@ -102,6 +102,10 @@ The settings screen lists searches that found no page. The words stay in this si
 
 The site assistant is off until you turn it on. It answers from the stored pages and lists those pages. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. Place `[skyphusion_ai_assistant]` on a page.
 
+= Can empty alt text be filled? =
+
+An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent. The screen shows a skipped item and a retry.
+
 = Can I choose the model? =
 
 Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, speech, and embeddings. The plugin reads the models on your Cloudflare account and keeps that list for 12 hours. If the list cannot be read, the built-in models stay. An empty picker uses the built-in model for that job.

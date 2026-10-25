@@ -40,6 +40,8 @@ The settings screen lists searches that found no page. The words stay in this si
 
 A site assistant can answer from the stored pages and list those pages. It is off until you turn it on. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent.
 
+An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent.
+
 If the box does not appear, check the site's content security policy. It has to allow `https://*.search.ai.cloudflare.com` for scripts and connections.
 
 ## WordPress and WooCommerce
