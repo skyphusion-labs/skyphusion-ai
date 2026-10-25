@@ -83,8 +83,9 @@ $backfill_saved = skyphusion_ai_backfill_config();
 $backfill_saved['last_at'] = time() - 3601;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_seo'] = 'yoast';
+$backfill_page = 'This linen shirt is cut for warm weather and a long walk.';
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 8, 'kind' => 'description', 'title' => 'Linen shirt'),
+    array('post_id' => 8, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_page),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
@@ -108,7 +109,7 @@ $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_seo'] = 'rank_math';
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 9, 'kind' => 'description', 'title' => 'Linen shirt'),
+    array('post_id' => 9, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_page),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
@@ -120,7 +121,7 @@ $backfill_saved['last_at'] = 0;
 update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_seo'] = 'seopress';
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 10, 'kind' => 'description', 'title' => 'Linen shirt'),
+    array('post_id' => 10, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_page),
 );
 backfill_clear();
 $GLOBALS['cfais_bodies'] = array($backfill_text);
@@ -133,7 +134,7 @@ update_option('skyphusion_ai_backfill', $backfill_saved, false);
 $GLOBALS['skyphusion_ai_backfill_seo'] = 'aioseo';
 $GLOBALS['skyphusion_ai_backfill_aioseo'] = array(12 => 'Already written');
 $GLOBALS['skyphusion_ai_backfill_candidates'] = array(
-    array('post_id' => 11, 'kind' => 'description', 'title' => 'Linen shirt'),
+    array('post_id' => 11, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_page),
     array('post_id' => 12, 'kind' => 'description', 'title' => 'Wool coat'),
 );
 backfill_clear();
@@ -240,6 +241,80 @@ expect('the job stops at the neuron budget', strpos($backfill_src, 'skyphusion_a
 expect('the job knows the aioseo table', strpos($backfill_src, 'aioseo_posts') !== false, true);
 $backfill_uninstall = (string) file_get_contents(dirname(__DIR__) . '/uninstall.php');
 expect('uninstall removes the empty text option', strpos($backfill_uninstall, 'skyphusion_ai_backfill') !== false, true);
+
+expect(
+    'a title-only seo prompt stays the old sentence',
+    skyphusion_ai_backfill_prompt('description', 'Linen shirt'),
+    'Write one SEO description for this page. Title: Linen shirt'
+);
+expect(
+    'alt text ignores page text',
+    skyphusion_ai_backfill_prompt('alt', 'Linen shirt', $backfill_page),
+    'Write one alt sentence for this image. Title: Linen shirt'
+);
+$backfill_marked = '<p>' . $backfill_page . '</p>[gallery id="1"]';
+$backfill_filled = skyphusion_ai_backfill_prompt('description', 'Linen shirt', $backfill_marked);
+expect('page text is appended', strpos($backfill_filled, "\n\nContent:\n" . $backfill_page) !== false, true);
+expect('tags are not sent', strpos($backfill_filled, '<p>') === false, true);
+expect('a shortcode is not sent', strpos($backfill_filled, 'gallery') === false, true);
+expect(
+    'a short fragment is not appended',
+    skyphusion_ai_backfill_prompt('description', 'Linen shirt', 'Too short.'),
+    'Write one SEO description for this page. Title: Linen shirt'
+);
+$backfill_cut = skyphusion_ai_backfill_prompt('description', 'Linen shirt', str_repeat('a', 6001));
+$backfill_at = strpos($backfill_cut, "Content:\n");
+$backfill_sent = (false === $backfill_at) ? '' : substr($backfill_cut, $backfill_at + 9);
+expect('page text stops at 6000 characters', strlen($backfill_sent), 6000);
+
+$GLOBALS['cfais_embed_post'] = array('ID' => 1, 'post_content' => $backfill_page);
+expect('a different post is not read', skyphusion_ai_backfill_page_text(40), '');
+$GLOBALS['cfais_embed_post'] = array('ID' => 40, 'post_content' => $backfill_marked);
+expect('the matching post is read', skyphusion_ai_backfill_page_text(40), $backfill_marked);
+unset($GLOBALS['cfais_embed_post']);
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_seo'] = 'yoast';
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 40, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => 'Too short.'),
+);
+backfill_clear();
+expect('a short page is skipped', skyphusion_ai_backfill_run(false), 'ran');
+expect('a short page makes no request', $GLOBALS['cfais_calls'], 0);
+expect('a short page is not written', get_post_meta(40, '_yoast_wpseo_metadesc', true), '');
+$backfill_skips = skyphusion_ai_backfill_config();
+$backfill_short_reason = '';
+foreach ($backfill_skips['skips'] as $backfill_row) {
+    if (40 === (int) $backfill_row['post_id']) {
+        $backfill_short_reason = $backfill_row['reason'];
+    }
+}
+expect('a short page records the reason', $backfill_short_reason, 'short');
+expect(
+    'a short page says why',
+    skyphusion_ai_backfill_skip_label(array('post_id' => 40, 'kind' => 'description', 'reason' => 'short')),
+    'The SEO description was skipped. The page text is under 40 characters.'
+);
+
+$backfill_saved = skyphusion_ai_backfill_config();
+$backfill_saved['last_at'] = 0;
+$backfill_saved['skips'] = array();
+update_option('skyphusion_ai_backfill', $backfill_saved, false);
+$GLOBALS['skyphusion_ai_backfill_candidates'] = array(
+    array('post_id' => 41, 'kind' => 'description', 'title' => 'Linen shirt', 'content' => $backfill_marked),
+);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+expect('a long page is filled', skyphusion_ai_backfill_run(false), 'ran');
+expect('a long page makes one request', $GLOBALS['cfais_calls'], 1);
+$backfill_body = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+expect('the request sends the page text', strpos($backfill_body, 'Content:') !== false, true);
+expect('the request does not send the tag', strpos($backfill_body, '<p>') === false, true);
+expect('the request does not send the shortcode', strpos($backfill_body, 'gallery') === false, true);
+expect('the request does not carry the token', strpos($backfill_body, $backfill_token) === false, true);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);
