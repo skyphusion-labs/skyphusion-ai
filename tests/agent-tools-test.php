@@ -32,7 +32,8 @@ expect(
 expect('an unknown surface is an empty record', skyphusion_ai_agent_tools_surface('missing'), array());
 
 $agent_api = skyphusion_ai_agent_tools_surface('cloudflare_api_mcp');
-expect('the Cloudflare API MCP address is the account server', $agent_api['url'], 'https://mcp.cloudflare.com/mcp');
+expect('the Cloudflare API MCP host is mcp.cloudflare.com', $agent_api['host'], 'mcp.cloudflare.com');
+expect('the Cloudflare API MCP path is /mcp', $agent_api['path'], '/mcp');
 expect('the Cloudflare API MCP tools are search, execute, and docs', $agent_api['tools'], array('search', 'execute', 'docs'));
 expect('the Cloudflare API MCP does not change a cart', $agent_api['changes_cart'], false);
 expect('the Cloudflare API MCP manages the account', $agent_api['manages_account'], true);
@@ -128,6 +129,13 @@ expect('the doc names document.modelContext', strpos($agent_doc, 'document.model
 expect('the doc names the adapter path', strpos($agent_doc, '/wp-json/mcp/mcp-adapter-default-server') !== false, true);
 expect('the doc says this plugin does not turn WebMCP on', strpos($agent_doc, 'This plugin does not turn it on.') !== false, true);
 expect('the doc says createMcpHandler', strpos($agent_doc, 'createMcpHandler()') !== false, true);
+expect('the doc cites the Cloudflare API MCP page', strpos($agent_doc, 'https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/') !== false, true);
+expect('the doc cites the AI Search MCP page', strpos($agent_doc, 'https://developers.cloudflare.com/ai-search/api/search/mcp/') !== false, true);
+expect('the doc cites the WebMCP post', strpos($agent_doc, 'https://blog.cloudflare.com/webmcp-commerce/') !== false, true);
+expect('the doc cites the WooCommerce advisory', strpos($agent_doc, 'https://developer.woocommerce.com/2026/10/21/woocommerce-11-3-mcp/') !== false, true);
+expect('the doc cites the remote MCP guide', strpos($agent_doc, 'https://developers.cloudflare.com/agents/model-context-protocol/guides/remote-mcp-server/') !== false, true);
+expect('the doc cites the gateway metadata page', strpos($agent_doc, 'https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/') !== false, true);
+expect('the plugin record does not embed a remote address', strpos($agent_php, 'https://') !== false, false);
 expect('README points at the agent tools doc', strpos($agent_readme, 'docs/agent-tools.md') !== false, true);
 expect('readme.txt points at the agent tools doc', strpos($agent_readme_txt, 'docs/agent-tools.md') !== false, true);
 expect('the record does not name the shop host', strpos($agent_php . $agent_doc, 'ggc.sh') !== false, false);

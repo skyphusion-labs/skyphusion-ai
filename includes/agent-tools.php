@@ -86,8 +86,8 @@ function skyphusion_ai_agent_tools_cloudflare_api() {
 		'id'               => 'cloudflare_api_mcp',
 		'name'             => 'Cloudflare API MCP',
 		'vendor'           => 'cloudflare',
-		'url'              => 'https://mcp.cloudflare.com/mcp',
-		'docs'             => 'https://developers.cloudflare.com/agents/model-context-protocol/cloudflare/servers-for-cloudflare/',
+		'host'             => 'mcp.cloudflare.com',
+		'path'             => '/mcp',
 		'docs_updated'     => '2026-10-22',
 		'tools'            => array( 'search', 'execute', 'docs' ),
 		'changes_cart'     => false,
@@ -104,16 +104,15 @@ function skyphusion_ai_agent_tools_cloudflare_api() {
  */
 function skyphusion_ai_agent_tools_ai_search() {
 	return array(
-		'id'                => 'ai_search_mcp',
-		'name'              => 'AI Search MCP',
-		'vendor'            => 'cloudflare',
-		'path'              => '/mcp',
-		'namespace_prefix'  => 'ns-',
-		'docs'              => 'https://developers.cloudflare.com/ai-search/api/search/mcp/',
-		'docs_updated'      => '2026-08-06',
-		'tools'             => array( 'search' ),
-		'changes_cart'      => false,
-		'searches_pages'    => true,
+		'id'                      => 'ai_search_mcp',
+		'name'                    => 'AI Search MCP',
+		'vendor'                  => 'cloudflare',
+		'path'                    => '/mcp',
+		'namespace_prefix'        => 'ns-',
+		'docs_updated'            => '2026-08-06',
+		'tools'                   => array( 'search' ),
+		'changes_cart'            => false,
+		'searches_pages'          => true,
 		'default_host_stays_open' => true,
 	);
 }
@@ -128,7 +127,6 @@ function skyphusion_ai_agent_tools_webmcp() {
 		'id'                   => 'webmcp',
 		'name'                 => 'WebMCP',
 		'vendor'               => 'cloudflare',
-		'docs'                 => 'https://blog.cloudflare.com/webmcp-commerce/',
 		'docs_updated'         => '2026-10-21',
 		'browser_object'       => 'document.modelContext',
 		'experimental'         => true,
@@ -150,9 +148,7 @@ function skyphusion_ai_agent_tools_woocommerce() {
 		'name'               => 'WooCommerce MCP',
 		'vendor'             => 'woocommerce',
 		'cloudflare_product' => false,
-		'docs'               => 'https://developer.woocommerce.com/docs/features/mcp/',
 		'announced'          => '2026-10-21',
-		'announcement'       => 'https://developer.woocommerce.com/2026/10/21/woocommerce-11-3-mcp/',
 		'woocommerce'        => '11.3',
 		'abilities'          => array( 'product', 'order' ),
 		'removed_path'       => '/wp-json/woocommerce/mcp',
@@ -212,7 +208,7 @@ function skyphusion_ai_agent_tools_surface( $id ) {
 /**
  * A new remote MCP server is not a switch in this plugin.
  *
- * createMcpHandler is the stateless path. McpAgent is the older path.
+ * The stateless path is createMcpHandler. The older path is McpAgent.
  *
  * @return array<string, mixed>
  */
@@ -221,7 +217,6 @@ function skyphusion_ai_agent_tools_remote() {
 		'handler'      => 'createMcpHandler',
 		'stateless'    => true,
 		'older_object' => 'McpAgent',
-		'docs'         => 'https://developers.cloudflare.com/agents/model-context-protocol/guides/remote-mcp-server/',
 		'docs_updated' => '2026-10-22',
 		'is_a_switch'  => false,
 		'auth'         => array( 'absent', 'cloudflare_access', 'oauth' ),
@@ -263,7 +258,6 @@ function skyphusion_ai_agent_tools_gateway() {
 		'host'             => 'gateway.ai.cloudflare.com',
 		'direct_host'      => 'api.cloudflare.com',
 		'header_on_direct' => false,
-		'docs'             => 'https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/',
 		'docs_updated'     => '2026-09-24',
 	);
 }
