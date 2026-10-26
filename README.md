@@ -6,7 +6,7 @@ Why this plugin was written: other plugin solutions did not meet our needs. We w
 
 This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
-The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md. The comparison below is those three jobs against the plugins that charge for each one.
+The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin license. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md. The comparison below covers those three jobs against the plugins that charge for each one.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
@@ -42,7 +42,7 @@ A single post or product can list related pages. The list uses the stored vector
 
 The settings screen lists searches that found no page. The words stay in this site's database. An IP address is not stored. A repeat from the same visitor within one hour is skipped. Rows older than 90 days are removed. An admin can ask once for a topic to write.
 
-A site assistant can answer from the stored pages and list those pages. It is off until you turn it on. You can deploy an assistant Worker from this screen, or with `wp skyphusion-ai worker deploy`. A blank address keeps the PHP call and streams the answer. The page does not show the token. A saved address streams from that Worker. The Worker also finds the pages and asks the site each hour for the next empty text. See `docs/worker.md`. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own.
+A site assistant can answer from the stored pages and list those pages. It is off until you turn it on. You can deploy an assistant Worker from this screen, or with `wp skyphusion-ai worker deploy`. A blank address keeps the PHP call and streams the answer. The page does not show the token. A saved address streams from that Worker. The Worker also finds the pages and asks the site each hour for the next empty text. See `docs/worker.md`. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own.
 
 An hourly job can fill empty alt text and an empty SEO description. It is off until you turn it on. It does not replace text you wrote. It writes the field used by Yoast, Rank Math, All in One SEO, or SEOPress. It stops when the daily neuron budget is spent. Each hour continues until the empty fields are done or today's backfill limit is reached. That limit does not stop the other tools. The SEO job sends the title and the page text. It skips a page with fewer than 40 characters of text. It cuts the text at 6000 characters. The alt text job reads the image. A decorative image is marked and the alt field stays empty.
 
@@ -165,7 +165,7 @@ Flags:
 
 Use `0` or `1` for the on and off flags. Omitted flags stay as they are.
 
-`--accent-color` sets the accent colour. `--color` is a deprecated alias and still works. WP-CLI reserves `--color` as a global flag and consumes it, so the plugin reads that one from the raw arguments. Pass `--accent-color` instead and WP-CLI parses it normally. Passing both uses `--accent-color`.
+`--accent-color` sets the accent color. `--color` is a deprecated alias and still works. WP-CLI reserves `--color` as a global flag and consumes it, so the plugin reads that one from the raw arguments. Pass `--accent-color` instead and WP-CLI parses it normally. Passing both uses `--accent-color`.
 
 The search box only lists pages. The chat button answers in a sentence. It uses more of the Cloudflare allowance. Leave `--chat=0` unless that cost is accepted.
 
@@ -199,37 +199,37 @@ This plugin uses Cloudflare. Cloudflare free plans include 10,000 neurons a day.
 
 Prices below were read on 2026-10-25 from each vendor's own page, and checked again the same day. They are introductory or listed prices, in the currency that page uses, and they renew on that vendor's terms. Confirm them before you budget.
 
-This plugin is the harness for three jobs: search, chat, and the AI Client. It does not charge a licence for any of them. The other rows are plugins that sell one of those jobs, plus AIPCF, which is also a Cloudflare provider. A blank cell means that page did not say.
+This plugin is the harness for three jobs: search, chat, and the AI Client. It does not charge a license for any of them. The other rows are plugins that sell one of those jobs, plus AIPCF, which is also a Cloudflare provider. A blank cell means that page did not say.
 
 ### Search
 
 These plugins are keyword or instant search. They are not Cloudflare AI Search.
 
-| plugin | licence | what a result shows |
+| plugin | license | what a result shows |
 | --- | --- | --- |
 | SearchWP Standard | $99 for the first year, renewal $199, 1 site | the pricing page does not list SKU or stock |
 | SearchWP Pro | $199 for the first year, renewal $399, 3 sites. WooCommerce product data is on this tier | the pricing page does not list a stock count |
 | SearchWP All Access | $399 for the first year, renewal $699, up to 100 sites. Includes WPFilters | the pricing page does not list a stock count |
 | FiboSearch | free. Pro is $59, $99, or $249 for the first year, for 1 site (10,000 products), 3 sites (50,000 each), or 25 sites (150,000 each). Renewals are 15% off: $50.15, $84.15, and $211.65 | the pricing page lists image, price, and SKU. It does not list a stock count |
 | Relevanssi | free. Premium is €100 per year, or €335 once. Unlimited sites. The page says prices exclude tax | the buy page does not list SKU or a stock count |
-| YITH WooCommerce Ajax Search | a free plugin, plus a premium licence. The product page did not print a price | the Free vs Premium table lists an optional price, SKU, and stock line in YITH's own results |
+| YITH WooCommerce Ajax Search | a free plugin, plus a premium license. The product page did not print a price | the Free vs Premium table lists an optional price, SKU, and stock line in YITH's own results |
 | Skyphusion AI | $0 | the card shows the product image, the title, and the description. The image is the page image. The description carries the SKU, the stock status, and the managed count. The search results page also prints the managed count |
 
 ### Chat
 
 The chat button in this plugin is the Cloudflare snippet. It answers in a sentence from the indexed site. That answer is generation, so it spends Workers AI Neurons. The button is off until you turn it on. It is not a staff inbox. It has no seats, no tickets, and no handoff to a person. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Other code calls the Cloudflare provider for text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send those calls through `gateway.ai.cloudflare.com`.
 
-| plugin | licence | what the visitor gets |
+| plugin | license | what the visitor gets |
 | --- | --- | --- |
 | Tidio | Free is $0, with 50 billable conversations and 10 seats. Starter is $24.17 a month on annual billing, for 100 conversations. Growth starts at $49.17 a month, from 250 conversations. Plus starts at $300 a month plus usage. Premium did not print a price. Lyro, the AI agent, starts at $32.50 a month for 50 AI conversations. The first 50 Lyro conversations are one-off, not a monthly allowance | live chat, tickets, and an AI agent that can hand the thread to a person. Tidio ships a WordPress plugin. This is a help desk |
 | AIPCF | the plugin is free. The plugin page lists no paid tier. The site assistant spends neurons on your Cloudflare account | a chat that answers from the site's posts and pages. It is off until you turn it on. It is not a help desk |
-| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence answer. No inbox. You can expand that with Workers AI or with AI Gateway. The plugin does not send the site to another company |
+| Skyphusion AI | $0 for the plugin. Generation uses the Neuron cap above, then $0.011 per 1,000 Neurons | one chat button and a sentence from the index. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. No inbox and no add to cart. The plugin does not send the site to another company |
 
 ### Agents
 
 The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour. A saved gateway id adds five fields to each Workers AI log. The fields are the site, the feature, the model, the user id, and the plugin version. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. The four agent tools sit next to WooCommerce in docs/agent-tools.md. You still do not pay a plugin fee to make the Cloudflare call. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
-| plugin | licence | what the agent can do |
+| plugin | license | what the agent can do |
 | --- | --- | --- |
 | AI Engine (Meow Apps) | the plugin is free. Pro is $69 a year for 1 site, $99 for 5 sites, or $179 for 20 sites. Lifetime is $499 for 5 sites, $799 for 20, $999 for 500, or $1,699 for 2,500. You still pay the model vendor. The Pro page says a refund is available within 14 days | a chatbot, and, on Pro, MCP so Claude or ChatGPT can act on the site. Pro also lists embeddings, AI forms, and voice |
 | AIPCF | the plugin is free. The plugin page lists no paid tier. You use your own Cloudflare account. Cloudflare free plans include 10,000 neurons a day. Past that, you pay Cloudflare. The readme also offers Qdrant and PostgreSQL as places to store embeddings | a Cloudflare provider for the WordPress AI Client. It needs WordPress 7.0 and PHP 8.2. It writes titles, excerpts, meta descriptions, and alt text, and a background job fills empty fields. It also has embeddings, a site assistant, related posts, and member search. The page lists version 1.11.2 |
