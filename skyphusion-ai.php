@@ -25,6 +25,7 @@ require_once __DIR__ . '/includes/routes.php';
 require_once __DIR__ . '/includes/settings.php';
 require_once __DIR__ . '/includes/defaults.php';
 require_once __DIR__ . '/includes/reset.php';
+require_once __DIR__ . '/includes/activity.php';
 require_once __DIR__ . '/includes/upgrade.php';
 require_once __DIR__ . '/includes/stock.php';
 require_once __DIR__ . '/includes/search-stock.php';

@@ -1411,6 +1411,15 @@ function skyphusion_ai_neuron_record( $feature, $model, $decoded, $tool = null )
 		is_string( $model ) ? $model : '',
 		$neurons
 	);
+	if ( function_exists( 'skyphusion_ai_activity_add' ) ) {
+		$ok = ! ( function_exists( 'is_wp_error' ) && is_wp_error( $decoded ) );
+		skyphusion_ai_activity_add(
+			is_string( $feature ) ? $feature : '',
+			is_string( $model ) ? $model : '',
+			$ok ? $neurons : 0,
+			$ok
+		);
+	}
 	return $state;
 }
 

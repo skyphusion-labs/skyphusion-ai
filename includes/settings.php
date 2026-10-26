@@ -719,6 +719,9 @@ function skyphusion_ai_render_page()
 	if ( function_exists( 'skyphusion_ai_reset_render' ) ) {
 		skyphusion_ai_reset_render();
 	}
+	if ( function_exists( 'skyphusion_ai_activity_render' ) ) {
+		skyphusion_ai_activity_render();
+	}
 	if ( ! function_exists( 'skyphusion_ai_embed_render' ) ) {
 		require_once __DIR__ . '/embed.php';
 	}
