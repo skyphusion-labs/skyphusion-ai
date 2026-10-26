@@ -13,28 +13,139 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * Reason shown beside a related page. It is not written by a model.
+ * Names stored on one vector, or on one post.
  *
- * @return string
+ * @param mixed $raw A string, a list, or anything else.
+ * @return array<int, string>
  */
-function skyphusion_ai_related_reason() {
-	return __( 'Close to this page.', 'skyphusion-ai' );
+function skyphusion_ai_related_term_list( $raw ) {
+	$parts = array();
+	if ( is_array( $raw ) ) {
+		$parts = $raw;
+	} elseif ( is_string( $raw ) ) {
+		$parts = explode( ',', $raw );
+	}
+	$names = array();
+	foreach ( $parts as $name ) {
+		$name = trim( (string) $name );
+		if ( '' === $name || in_array( $name, $names, true ) ) {
+			continue;
+		}
+		$names[] = $name;
+		if ( count( $names ) >= 8 ) {
+			break;
+		}
+	}
+	return $names;
 }
 
 /**
- * Read one stored vector. An empty result means this post is not in the index.
+ * Categories and tags already on the post array.
+ *
+ * @param array<string, mixed> $post One post.
+ * @return array<int, string>
+ */
+function skyphusion_ai_related_post_terms( $post ) {
+	$names = array();
+	foreach ( array( 'categories', 'tags' ) as $bucket ) {
+		if ( ! isset( $post[ $bucket ] ) || ! is_array( $post[ $bucket ] ) ) {
+			continue;
+		}
+		foreach ( skyphusion_ai_related_term_list( $post[ $bucket ] ) as $name ) {
+			if ( in_array( $name, $names, true ) ) {
+				continue;
+			}
+			$names[] = $name;
+		}
+	}
+	return $names;
+}
+
+/**
+ * Terms that both stored records share. The match order is kept.
+ *
+ * @param array<int, string> $own    Terms for the current page.
+ * @param array<int, string> $theirs Terms for the neighbour.
+ * @return array<int, string>
+ */
+function skyphusion_ai_related_shared( $own, $theirs ) {
+	$shared = array();
+	foreach ( $theirs as $name ) {
+		if ( ! in_array( $name, $own, true ) || in_array( $name, $shared, true ) ) {
+			continue;
+		}
+		$shared[] = $name;
+		if ( count( $shared ) >= 3 ) {
+			break;
+		}
+	}
+	return $shared;
+}
+
+/**
+ * Why this neighbour matches. The line uses stored terms or the stored score.
+ *
+ * It does not call a model.
+ *
+ * @param array<string, mixed> $metadata Neighbour metadata.
+ * @param float|null           $score    Stored score, or null when the row has none.
+ * @param array<int, string>   $own      Terms for the current page.
+ * @return string
+ */
+function skyphusion_ai_related_why( $metadata, $score, $own ) {
+	$terms = array();
+	if ( isset( $metadata['terms'] ) ) {
+		$terms = skyphusion_ai_related_term_list( $metadata['terms'] );
+	}
+	$shared = skyphusion_ai_related_shared( $own, $terms );
+	$count  = count( $shared );
+	if ( 1 === $count ) {
+		/* translators: %s: one shared category or tag. */
+		return sprintf( __( 'Also about %s.', 'skyphusion-ai' ), $shared[0] );
+	}
+	if ( 2 === $count ) {
+		/* translators: 1: first shared term, 2: second shared term. */
+		return sprintf( __( 'Also about %1$s and %2$s.', 'skyphusion-ai' ), $shared[0], $shared[1] );
+	}
+	if ( 3 <= $count ) {
+		$last = (string) array_pop( $shared );
+		/* translators: 1: shared terms before the last, 2: last shared term. */
+		return sprintf( __( 'Also about %1$s, and %2$s.', 'skyphusion-ai' ), implode( ', ', $shared ), $last );
+	}
+	if ( is_numeric( $score ) ) {
+		$percent = (int) round( (float) $score * 100 );
+		if ( 0 > $percent ) {
+			$percent = 0;
+		}
+		if ( 100 < $percent ) {
+			$percent = 100;
+		}
+		/* translators: %d: how close the stored vectors are, as a whole percent. */
+		return sprintf( __( '%d%% the same subject.', 'skyphusion-ai' ), $percent );
+	}
+	return __( 'Close in subject.', 'skyphusion-ai' );
+}
+
+/**
+ * Read one stored vector and its metadata.
+ *
+ * An empty values list means this post is not in the index.
  *
  * @param int                   $post_id     Post id.
  * @param array<string, mixed>  $config      Saved choices.
  * @param array<string, string> $credentials Account id and token.
- * @return array<int, float>
+ * @return array{values: array<int, float>, metadata: array<string, mixed>}
  */
-function skyphusion_ai_related_vector( $post_id, $config, $credentials ) {
-	$url  = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'get_by_ids' );
-	$body = wp_json_encode( array( 'ids' => array( skyphusion_ai_embed_vector_id( $post_id ) ) ) );
-	$read = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $body, 'application/json' );
+function skyphusion_ai_related_stored( $post_id, $config, $credentials ) {
+	$empty = array(
+		'values'   => array(),
+		'metadata' => array(),
+	);
+	$url   = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'get_by_ids' );
+	$body  = wp_json_encode( array( 'ids' => array( skyphusion_ai_embed_vector_id( $post_id ) ) ) );
+	$read  = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $body, 'application/json' );
 	if ( is_wp_error( $read ) ) {
-		return array();
+		return $empty;
 	}
 	$rows = array();
 	if ( isset( $read['result'] ) && is_array( $read['result'] ) && isset( $read['result'][0] ) ) {
@@ -49,13 +160,33 @@ function skyphusion_ai_related_vector( $post_id, $config, $credentials ) {
 		$values = array();
 		foreach ( $row['values'] as $number ) {
 			if ( ! is_numeric( $number ) ) {
-				return array();
+				return $empty;
 			}
 			$values[] = (float) $number;
 		}
-		return $values;
+		$metadata = array();
+		if ( isset( $row['metadata'] ) && is_array( $row['metadata'] ) ) {
+			$metadata = $row['metadata'];
+		}
+		return array(
+			'values'   => $values,
+			'metadata' => $metadata,
+		);
 	}
-	return array();
+	return $empty;
+}
+
+/**
+ * Read one stored vector. An empty result means this post is not in the index.
+ *
+ * @param int                   $post_id     Post id.
+ * @param array<string, mixed>  $config      Saved choices.
+ * @param array<string, string> $credentials Account id and token.
+ * @return array<int, float>
+ */
+function skyphusion_ai_related_vector( $post_id, $config, $credentials ) {
+	$stored = skyphusion_ai_related_stored( $post_id, $config, $credentials );
+	return $stored['values'];
 }
 
 /**
@@ -74,7 +205,8 @@ function skyphusion_ai_related_rows( $post ) {
 		return array();
 	}
 	$credentials = skyphusion_ai_embed_credentials();
-	$vector      = skyphusion_ai_related_vector( $post_id, $config, $credentials );
+	$stored      = skyphusion_ai_related_stored( $post_id, $config, $credentials );
+	$vector      = $stored['values'];
 	if ( array() === $vector ) {
 		return array();
 	}
@@ -90,9 +222,14 @@ function skyphusion_ai_related_rows( $post ) {
 	if ( is_wp_error( $decoded ) || ! isset( $decoded['result']['matches'] ) || ! is_array( $decoded['result']['matches'] ) ) {
 		return array();
 	}
-	$own    = skyphusion_ai_embed_vector_id( $post_id );
-	$rows   = array();
-	$reason = skyphusion_ai_related_reason();
+	$own   = skyphusion_ai_embed_vector_id( $post_id );
+	$rows  = array();
+	$terms = skyphusion_ai_related_term_list( isset( $stored['metadata']['terms'] ) ? $stored['metadata']['terms'] : array() );
+	foreach ( skyphusion_ai_related_post_terms( $post ) as $name ) {
+		if ( ! in_array( $name, $terms, true ) ) {
+			$terms[] = $name;
+		}
+	}
 	foreach ( $decoded['result']['matches'] as $match ) {
 		if ( ! is_array( $match ) ) {
 			continue;
@@ -105,14 +242,18 @@ function skyphusion_ai_related_rows( $post ) {
 		if ( isset( $match['metadata'] ) && is_array( $match['metadata'] ) ) {
 			$metadata = $match['metadata'];
 		}
-		$title  = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
-		$link   = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
+		$title = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
+		$link  = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
+		$score = null;
+		if ( isset( $match['score'] ) && is_numeric( $match['score'] ) ) {
+			$score = (float) $match['score'];
+		}
 		$rows[] = array(
 			'id'     => $id,
 			'title'  => $title,
 			'url'    => $link,
-			'reason' => $reason,
-			'score'  => isset( $match['score'] ) ? (float) $match['score'] : 0,
+			'reason' => skyphusion_ai_related_why( $metadata, $score, $terms ),
+			'score'  => null === $score ? 0 : $score,
 		);
 		if ( count( $rows ) >= 5 ) {
 			break;
@@ -132,7 +273,9 @@ function skyphusion_ai_related_html( $post ) {
 	if ( array() === $rows ) {
 		return '';
 	}
-	$html = '<section class="skyphusion-ai-related"><ul>';
+	$config = skyphusion_ai_embed_config();
+	$show   = ! empty( $config['related_why'] );
+	$html   = '<section class="skyphusion-ai-related"><ul>';
 	foreach ( $rows as $row ) {
 		$html .= '<li>';
 		if ( '' !== $row['url'] ) {
@@ -140,14 +283,68 @@ function skyphusion_ai_related_html( $post ) {
 		} else {
 			$html .= esc_html( $row['title'] );
 		}
-		$html .= ' <span>' . esc_html( $row['reason'] ) . '</span></li>';
+		if ( $show && isset( $row['reason'] ) && '' !== (string) $row['reason'] ) {
+			$html .= ' <span class="skyphusion-ai-related-why">' . esc_html( (string) $row['reason'] ) . '</span>';
+		}
+		$html .= '</li>';
 	}
 	$html .= '</ul></section>';
 	return $html;
 }
 
 /**
- * Append the list when the switch is on. The shortcode is left as it is.
+ * Put the list after the content, before it, or after one paragraph.
+ *
+ * A missing paragraph puts the list at the end.
+ *
+ * @param string               $content Page body.
+ * @param string               $html    Related list.
+ * @param array<string, mixed> $config  Saved choices.
+ * @return string
+ */
+function skyphusion_ai_related_place( $content, $html, $config ) {
+	$place = 'after';
+	if ( isset( $config['related_place'] ) && in_array( (string) $config['related_place'], array( 'after', 'before', 'paragraph' ), true ) ) {
+		$place = (string) $config['related_place'];
+	}
+	if ( 'before' === $place ) {
+		return $html . $content;
+	}
+	if ( 'paragraph' === $place ) {
+		$index = 1;
+		if ( isset( $config['related_paragraph'] ) && is_numeric( $config['related_paragraph'] ) ) {
+			$index = (int) $config['related_paragraph'];
+		}
+		if ( 1 > $index ) {
+			$index = 1;
+		}
+		$parts = preg_split( '/(<\/p>)/i', $content, -1, PREG_SPLIT_DELIM_CAPTURE );
+		if ( is_array( $parts ) && 1 < count( $parts ) ) {
+			$seen  = 0;
+			$out   = '';
+			$count = count( $parts );
+			for ( $i = 0; $i < $count; $i++ ) {
+				$out .= $parts[ $i ];
+				if ( '</p>' !== strtolower( (string) $parts[ $i ] ) ) {
+					continue;
+				}
+				++$seen;
+				if ( $index !== $seen ) {
+					continue;
+				}
+				$rest = '';
+				for ( $next = $i + 1; $next < $count; $next++ ) {
+					$rest .= $parts[ $next ];
+				}
+				return $out . $html . $rest;
+			}
+		}
+	}
+	return $content . $html;
+}
+
+/**
+ * Place the list when the switch is on. The shortcode is left as it is.
  *
  * @param string               $content Page body.
  * @param array<string, mixed> $post    One post.
@@ -167,7 +364,11 @@ function skyphusion_ai_related_append( $content, $post ) {
 	if ( false !== strpos( $content, '[skyphusion_ai_related]' ) ) {
 		return $content;
 	}
-	return $content . skyphusion_ai_related_html( $post );
+	$html = skyphusion_ai_related_html( $post );
+	if ( '' === $html ) {
+		return $content;
+	}
+	return skyphusion_ai_related_place( $content, $html, $config );
 }
 
 /**

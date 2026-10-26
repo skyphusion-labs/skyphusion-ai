@@ -62,6 +62,7 @@ for ($related_i = 7; $related_i <= 12; $related_i++) {
     $related_matches[] = array(
         'id' => 'p' . $related_i,
         'values' => array(0.1),
+        'score' => 0.64,
         'metadata' => array(
             'title' => 'Other ' . $related_i,
             'url' => 'https://example.test/p' . $related_i,
@@ -115,7 +116,7 @@ foreach ($related_rows as $related_row) {
 }
 expect('the current vector id is absent', in_array('p6', $related_ids, true), false);
 expect('a row has no vector values', isset($related_rows[0]['values']), false);
-expect('the reason is a fixed sentence', $related_rows[0]['reason'], 'Close to this page.');
+expect('the reason uses the stored score', $related_rows[0]['reason'], '64% the same subject.');
 expect('a page view makes two vectorize requests', $GLOBALS['cfais_calls'], 2);
 expect('a page view does not call the embeddings route', $GLOBALS['cfais_last_post'], array('marker' => 1));
 $related_url = isset($GLOBALS['cfais_last_request']['url']) ? (string) $GLOBALS['cfais_last_request']['url'] : '';
@@ -141,7 +142,7 @@ related_clear();
 $GLOBALS['cfais_bodies'] = array($related_got, $related_query);
 $related_html = skyphusion_ai_related_html($related_page);
 expect('the list names a neighbour', strpos($related_html, 'Other 7') !== false, true);
-expect('the list includes the reason', strpos($related_html, 'Close to this page.') !== false, true);
+expect('the list includes the reason', strpos($related_html, '64% the same subject.') !== false, true);
 expect('the list links the public address', strpos($related_html, 'href="https://example.test/p7"') !== false, true);
 expect('the list uses the related class', strpos($related_html, 'skyphusion-ai-related') !== false, true);
 expect('the list does not show the token', strpos($related_html, $related_token) === false, true);
@@ -238,6 +239,27 @@ $related_off = skyphusion_ai_embed_apply(array('related' => ''));
 expect('an empty related field turns the switch off', $related_off['related'], 0);
 $related_on = skyphusion_ai_embed_apply(array('related' => '1'));
 expect('a related field turns the switch on', $related_on['related'], 1);
+$related_placed = skyphusion_ai_embed_apply(array(
+    'related_place' => 'paragraph',
+    'related_paragraph' => '2',
+    'related_why' => '1',
+));
+expect('a paragraph place is saved', $related_placed['related_place'], 'paragraph');
+expect('the paragraph number is saved', $related_placed['related_paragraph'], 2);
+expect('a why field turns the line on', $related_placed['related_why'], 1);
+$related_kept_place = skyphusion_ai_embed_apply(array('index' => 'skyphusion-ai'));
+expect('a later save keeps the place', $related_kept_place['related_place'], 'paragraph');
+expect('a later save keeps the why line', $related_kept_place['related_why'], 1);
+$related_bad_place = skyphusion_ai_embed_apply(array('related_place' => 'sidebar', 'related_why' => ''));
+expect('an unknown place falls back to after', $related_bad_place['related_place'], 'after');
+expect('an empty why field turns the line off', $related_bad_place['related_why'], 0);
+$related_before = skyphusion_ai_embed_apply(array(
+    'related_place' => 'before',
+    'related_why' => '1',
+    'related_paragraph' => '0',
+));
+expect('before is a saved place', $related_before['related_place'], 'before');
+expect('a paragraph number below one becomes one', $related_before['related_paragraph'], 1);
 
 $GLOBALS['skyphusion_ai_embed_posts'] = array();
 $GLOBALS['cfais_calls'] = 0;
@@ -245,6 +267,10 @@ ob_start();
 skyphusion_ai_embed_render();
 $related_screen = (string) ob_get_clean();
 expect('the screen offers the related switch', strpos($related_screen, 'name="skyphusion_ai_related"') !== false, true);
+expect('the screen offers a place', strpos($related_screen, 'name="skyphusion_ai_related_place"') !== false, true);
+expect('the screen offers a paragraph number', strpos($related_screen, 'name="skyphusion_ai_related_paragraph"') !== false, true);
+expect('the screen offers the why line', strpos($related_screen, 'name="skyphusion_ai_related_why"') !== false, true);
+expect('the screen selects before', strpos($related_screen, 'value="before" selected="selected"') !== false, true);
 expect('the screen checks the switch when it is on', strpos($related_screen, 'checked="checked"') !== false, true);
 expect('the screen makes no request', $GLOBALS['cfais_calls'], 0);
 expect('the screen does not show the token', strpos($related_screen, $related_token) === false, true);
@@ -271,11 +297,103 @@ $GLOBALS['cfais_calls'] = 0;
 $GLOBALS['cfais_cli_log'] = array();
 skyphusion_ai_related_cli(array('show', '6'), array());
 expect('show prints the saved neighbour', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'p7') !== false, true);
-expect('show prints the reason', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'Close to this page.') !== false, true);
+expect('show prints the reason', strpos(implode("\n", $GLOBALS['cfais_cli_log']), '64% the same subject.') !== false, true);
 expect('show uses the saved list', $GLOBALS['cfais_calls'], 0);
 $GLOBALS['cfais_cli_log'] = array();
 skyphusion_ai_related_cli(array('translate'), array());
 expect('translation is not a related command', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'related_state=unknown') !== false, true);
+
+related_store(1, 1);
+$related_why_off = skyphusion_ai_embed_config();
+$related_why_off['related_why'] = 0;
+update_option('skyphusion_ai_vectorize', $related_why_off, false);
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$related_quiet = skyphusion_ai_related_html($related_page);
+expect('the why line can stay off', strpos($related_quiet, 'skyphusion-ai-related-why') === false, true);
+expect('the title stays when the why line is off', strpos($related_quiet, 'Other 7') !== false, true);
+expect('the why switch does not call the embeddings model', strpos((string) $GLOBALS['cfais_last_request']['url'], '/ai/run/') === false, true);
+
+$related_before_config = skyphusion_ai_embed_config();
+$related_before_config['related_place'] = 'before';
+$related_before_config['related_why'] = 1;
+$related_before_config['related'] = 1;
+update_option('skyphusion_ai_vectorize', $related_before_config, false);
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$related_before_html = skyphusion_ai_related_append('Body.', $related_page);
+expect('before places the list first', strpos($related_before_html, '<section class="skyphusion-ai-related">') === 0, true);
+expect('before keeps the page body', substr($related_before_html, -5), 'Body.');
+
+$related_para = skyphusion_ai_embed_config();
+$related_para['related_place'] = 'paragraph';
+$related_para['related_paragraph'] = 1;
+update_option('skyphusion_ai_vectorize', $related_para, false);
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$related_para_html = skyphusion_ai_related_append('<p>One.</p><p>Two.</p>', $related_page);
+expect('a paragraph place follows the first paragraph', strpos($related_para_html, '<p>One.</p><section class="skyphusion-ai-related">') === 0, true);
+expect('the second paragraph stays after the list', strpos($related_para_html, '</section><p>Two.</p>') !== false, true);
+
+$related_para['related_paragraph'] = 9;
+update_option('skyphusion_ai_vectorize', $related_para, false);
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$related_late = skyphusion_ai_related_append('<p>One.</p>', $related_page);
+expect('a later paragraph puts the list at the end', strpos($related_late, '</p><section class="skyphusion-ai-related">') !== false, true);
+
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$related_nop = skyphusion_ai_related_append('Body.', $related_page);
+expect('text with no paragraph keeps the list at the end', strpos($related_nop, 'Body.<section class="skyphusion-ai-related">') === 0, true);
+
+$related_term_got = wp_json_encode(array(
+    'success' => true,
+    'result' => array(array(
+        'id' => 'p6',
+        'values' => array(0.25, 0.5),
+        'metadata' => array('title' => 'This page', 'terms' => 'Linen, Cotton'),
+    )),
+));
+$related_term_query = wp_json_encode(array(
+    'success' => true,
+    'result' => array('matches' => array(array(
+        'id' => 'p7',
+        'score' => 0.64,
+        'metadata' => array(
+            'title' => 'Other 7',
+            'url' => 'https://example.test/p7',
+            'terms' => 'Cotton, Wool',
+        ),
+    ))),
+));
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_term_got, $related_term_query);
+$related_term_rows = skyphusion_ai_related_rows($related_page);
+expect('shared stored terms say why', $related_term_rows[0]['reason'], 'Also about Cotton.');
+$related_two = embed_post(6, 'This page', 'Body', array('categories' => array('Linen'), 'tags' => array('Wool')));
+related_clear();
+$GLOBALS['cfais_bodies'] = array($related_got, $related_term_query);
+$related_two_rows = skyphusion_ai_related_rows($related_two);
+expect('a stored tag on the post says why', $related_two_rows[0]['reason'], 'Also about Wool.');
+expect(
+    'three shared terms stay in one sentence',
+    skyphusion_ai_related_why(array('terms' => 'Wool, Cotton, Linen'), 0.2, array('Linen', 'Cotton', 'Wool')),
+    'Also about Wool, Cotton, and Linen.'
+);
+expect(
+    'two shared terms use and',
+    skyphusion_ai_related_why(array('terms' => 'Linen, Cotton'), 0.2, array('Linen', 'Cotton')),
+    'Also about Linen and Cotton.'
+);
+$related_meta = skyphusion_ai_embed_metadata(embed_post(6, 'This page', 'Body', array(
+    'categories' => array('Linen'),
+    'tags' => array('Cotton'),
+)));
+expect('stored metadata keeps the terms', $related_meta['terms'], 'Linen, Cotton');
+expect('stored metadata still omits the body', isset($related_meta['post_content']), false);
+expect('a row with no stored clue says it is close', skyphusion_ai_related_why(array(), null, array()), 'Close in subject.');
+expect('a high paragraph number becomes twenty', skyphusion_ai_embed_apply(array('related_paragraph' => '40'))['related_paragraph'], 20);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);

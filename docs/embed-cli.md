@@ -38,5 +38,9 @@ The upsert format is documented at https://developers.cloudflare.com/api/resourc
 `wp skyphusion-ai related show 123` prints each saved row with its score and the reason.
 A page view still reads the index when no list is saved.
 Neither command calls the embeddings model.
+The settings screen places that list after the content, before the content, or after one paragraph.
+Each row can say why it matches.
+The why line uses terms stored on the vectors, or the stored score.
+It does not call a model.
 
 There is no WP-CLI command for backfill, translation, or usage.
