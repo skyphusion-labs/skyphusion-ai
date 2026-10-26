@@ -39,6 +39,7 @@ function skyphusion_ai_reset_option_names() {
 		'skyphusion_ai_prompt_last',
 		'skyphusion_ai_gateway_down',
 		'skyphusion_ai_activity',
+		'skyphusion_ai_model_licences',
 	);
 }
 

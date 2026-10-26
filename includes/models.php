@@ -8,6 +8,9 @@
  * The cache stores ids, names, and task names. A price is stored only when
  * the account list sends one. It does not store the token.
  *
+ * Marker: model-labels. Context, neurons per 1,000 tokens, and tool or
+ * vision flags are copied from that payload. A missing number is not filled in.
+ *
  * @package skyphusion-ai
  */
 
@@ -207,10 +210,16 @@ function skyphusion_ai_account_models_from_body( $decoded ) {
 	}
 	$out = array();
 	foreach ( $rows as $row ) {
-		if ( ! is_array( $row ) || ! isset( $row['id'] ) || ! function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		if ( ! is_array( $row ) || ! function_exists( 'cloudflare_ai_provider_model_id' ) ) {
 			continue;
 		}
-		$id = cloudflare_ai_provider_model_id( $row['id'] );
+		$id = '';
+		if ( isset( $row['id'] ) ) {
+			$id = cloudflare_ai_provider_model_id( $row['id'] );
+		}
+		if ( '' === $id && isset( $row['name'] ) ) {
+			$id = cloudflare_ai_provider_model_id( $row['name'] );
+		}
 		if ( '' === $id ) {
 			continue;
 		}
@@ -233,8 +242,8 @@ function skyphusion_ai_account_models_from_body( $decoded ) {
 			'name' => $name,
 			'task' => strtolower( trim( $task ) ),
 		);
-		foreach ( skyphusion_ai_account_model_prices( $row ) as $price_key => $price_value ) {
-			$clean[ $price_key ] = $price_value;
+		foreach ( skyphusion_ai_account_model_labels( $row ) as $label_key => $label_value ) {
+			$clean[ $label_key ] = $label_value;
 		}
 		$out[] = $clean;
 	}
@@ -257,16 +266,182 @@ function skyphusion_ai_account_model_prices( $row ) {
 			$out[ $key ] = (float) $row[ $key ];
 		}
 	}
+	if ( isset( $row['price'] ) && is_array( $row['price'] ) ) {
+		skyphusion_ai_account_model_price_tiers( $out, $row['price'] );
+	}
 	if ( isset( $row['properties'] ) && is_array( $row['properties'] ) ) {
 		foreach ( $row['properties'] as $property ) {
-			if ( ! is_array( $property ) || ! isset( $property['value'] ) || ! is_numeric( $property['value'] ) ) {
+			if ( ! is_array( $property ) || ! isset( $property['value'] ) ) {
 				continue;
 			}
 			$name = isset( $property['property_id'] ) ? strtolower( (string) $property['property_id'] ) : '';
-			if ( in_array( $name, array( 'price_in', 'price_out', 'price' ), true ) ) {
+			if ( is_numeric( $property['value'] ) && in_array( $name, array( 'price_in', 'price_out', 'price' ), true ) ) {
 				$out[ $name ] = (float) $property['value'];
+				continue;
+			}
+			if ( 'price' === $name && is_array( $property['value'] ) ) {
+				skyphusion_ai_account_model_price_tiers( $out, $property['value'] );
 			}
 		}
+	}
+	return $out;
+}
+
+/**
+ * Copy token prices from a tier list. A tier without a number is skipped.
+ *
+ * @param array<string, float> $out   Prices already found.
+ * @param array<int, mixed>    $tiers Tier rows from the account.
+ * @return void
+ */
+function skyphusion_ai_account_model_price_tiers( &$out, $tiers ) {
+	foreach ( $tiers as $tier ) {
+		if ( ! is_array( $tier ) || ! isset( $tier['unit'], $tier['price'] ) || ! is_numeric( $tier['price'] ) ) {
+			continue;
+		}
+		$slot = skyphusion_ai_account_model_price_slot( $tier['unit'] );
+		if ( '' === $slot || isset( $out[ $slot ] ) ) {
+			continue;
+		}
+		$out[ $slot ] = (float) $tier['price'];
+	}
+}
+
+/**
+ * Price key for one tier unit. Any other unit is ignored.
+ *
+ * @param mixed $unit Unit string from the account.
+ * @return string
+ */
+function skyphusion_ai_account_model_price_slot( $unit ) {
+	$unit = strtolower( trim( (string) $unit ) );
+	if ( 'per m input tokens' === $unit ) {
+		return 'price_in';
+	}
+	if ( 'per m output tokens' === $unit ) {
+		return 'price_out';
+	}
+	return '';
+}
+
+/**
+ * Property values keyed by property id.
+ *
+ * @param array<string, mixed> $row Account row.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_account_model_property_map( $row ) {
+	$map = array();
+	if ( ! isset( $row['properties'] ) || ! is_array( $row['properties'] ) ) {
+		return $map;
+	}
+	foreach ( $row['properties'] as $property ) {
+		if ( ! is_array( $property ) || ! isset( $property['property_id'] ) || ! array_key_exists( 'value', $property ) ) {
+			continue;
+		}
+		$name = strtolower( trim( (string) $property['property_id'] ) );
+		if ( '' === $name ) {
+			continue;
+		}
+		$map[ $name ] = $property['value'];
+	}
+	return $map;
+}
+
+/**
+ * True only for the account's own true values.
+ *
+ * @param mixed $value Property value.
+ * @return bool
+ */
+function skyphusion_ai_account_model_truthy( $value ) {
+	if ( true === $value || 1 === $value ) {
+		return true;
+	}
+	if ( ! is_string( $value ) ) {
+		return false;
+	}
+	$lower = strtolower( $value );
+	return '1' === $lower || 'true' === $lower;
+}
+
+/**
+ * Dollars per million tokens, as neurons per 1,000 tokens.
+ *
+ * Cloudflare prices Workers AI at $0.011 per 1,000 neurons. The dollar
+ * figure has to be on the account row. A missing figure stays missing.
+ *
+ * @param mixed $usd Dollars per million tokens, or null.
+ * @return float|null
+ */
+function skyphusion_ai_account_model_neurons( $usd ) {
+	if ( ! is_numeric( $usd ) || (float) $usd <= 0 ) {
+		return null;
+	}
+	return (float) $usd / 0.011;
+}
+
+/**
+ * Labels the account list sent. A missing label is left off the row.
+ *
+ * @param array<string, mixed> $row Account row, raw or already stored.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_account_model_labels( $row ) {
+	$out = array();
+	if ( ! is_array( $row ) ) {
+		return $out;
+	}
+	foreach ( skyphusion_ai_account_model_prices( $row ) as $price_key => $price_value ) {
+		$out[ $price_key ] = $price_value;
+	}
+	$props   = skyphusion_ai_account_model_property_map( $row );
+	$context = null;
+	if ( isset( $row['context'] ) && is_numeric( $row['context'] ) ) {
+		$context = (int) $row['context'];
+	} elseif ( isset( $props['context_window'] ) && is_numeric( $props['context_window'] ) ) {
+		$context = (int) $props['context_window'];
+	}
+	if ( null !== $context && $context > 0 ) {
+		$out['context'] = $context;
+	}
+	$tools = null;
+	if ( array_key_exists( 'tools', $row ) ) {
+		$tools = ! empty( $row['tools'] );
+	} elseif ( array_key_exists( 'function_calling', $props ) ) {
+		$tools = skyphusion_ai_account_model_truthy( $props['function_calling'] );
+	}
+	if ( true === $tools ) {
+		$out['tools'] = 1;
+	}
+	$vision = ! empty( $row['vision'] );
+	if ( ! $vision && isset( $props['vision'] ) ) {
+		$vision = skyphusion_ai_account_model_truthy( $props['vision'] );
+	}
+	if ( $vision ) {
+		$out['vision'] = 1;
+	}
+	$sides = array(
+		'in'  => isset( $out['price_in'] ) ? $out['price_in'] : null,
+		'out' => isset( $out['price_out'] ) ? $out['price_out'] : null,
+	);
+	foreach ( $sides as $side => $usd ) {
+		$key = 'neurons_' . $side;
+		if ( isset( $row[ $key ] ) && is_numeric( $row[ $key ] ) && (float) $row[ $key ] > 0 ) {
+			$out[ $key ] = (float) $row[ $key ];
+			continue;
+		}
+		if ( isset( $props[ $key ] ) && is_numeric( $props[ $key ] ) && (float) $props[ $key ] > 0 ) {
+			$out[ $key ] = (float) $props[ $key ];
+			continue;
+		}
+		$neurons = skyphusion_ai_account_model_neurons( $usd );
+		if ( null !== $neurons ) {
+			$out[ $key ] = $neurons;
+		}
+	}
+	if ( ! empty( $row['licence'] ) ) {
+		$out['licence'] = 1;
 	}
 	return $out;
 }
@@ -304,8 +479,8 @@ function skyphusion_ai_account_model_as_entry( $model ) {
 		'id'     => $model['id'],
 		'name'   => $model['name'],
 		'kind'   => $kind[0],
-		'tools'  => false,
-		'vision' => $kind[1],
+		'tools'  => ! empty( $model['tools'] ),
+		'vision' => $kind[1] || ! empty( $model['vision'] ),
 		'json'   => false,
 	);
 }
@@ -413,8 +588,8 @@ function skyphusion_ai_account_models_store( $account, $models, $ok ) {
 			'name' => isset( $model['name'] ) ? (string) $model['name'] : (string) $model['id'],
 			'task' => isset( $model['task'] ) ? (string) $model['task'] : '',
 		);
-		foreach ( skyphusion_ai_account_model_prices( $model ) as $price_key => $price_value ) {
-			$clean_row[ $price_key ] = $price_value;
+		foreach ( skyphusion_ai_account_model_labels( $model ) as $label_key => $label_value ) {
+			$clean_row[ $label_key ] = $label_value;
 		}
 		$clean[] = $clean_row;
 	}
@@ -608,15 +783,33 @@ function skyphusion_ai_model_id_allowed( $id, $job, $models = null ) {
 function skyphusion_ai_model_options( $job, $models = null ) {
 	$options = array();
 	$seen    = array();
-	$add     = function ( $id, $name ) use ( &$options, &$seen ) {
+	$add     = function ( $id, $name, $labels = array() ) use ( &$options, &$seen ) {
 		if ( isset( $seen[ $id ] ) ) {
+			$index = $seen[ $id ];
+			if ( is_array( $labels ) ) {
+				foreach ( $labels as $label_key => $label_value ) {
+					if ( 'id' === $label_key || 'name' === $label_key || array_key_exists( $label_key, $options[ $index ] ) ) {
+						continue;
+					}
+					$options[ $index ][ $label_key ] = $label_value;
+				}
+			}
 			return;
 		}
-		$seen[ $id ] = true;
-		$options[]   = array(
+		$seen[ $id ] = count( $options );
+		$row         = array(
 			'id'   => $id,
 			'name' => $name,
 		);
+		if ( is_array( $labels ) ) {
+			foreach ( $labels as $label_key => $label_value ) {
+				if ( 'id' === $label_key || 'name' === $label_key ) {
+					continue;
+				}
+				$row[ $label_key ] = $label_value;
+			}
+		}
+		$options[] = $row;
 	};
 	if ( 'embeddings' === $job ) {
 		$default = skyphusion_ai_model_default( 'embeddings' );
@@ -637,8 +830,8 @@ function skyphusion_ai_model_options( $job, $models = null ) {
 			continue;
 		}
 		$kind = skyphusion_ai_account_model_kind( isset( $model['task'] ) ? $model['task'] : '' );
-		if ( skyphusion_ai_model_matches( $job, $kind[0], $kind[1] ) ) {
-			$add( $model['id'], isset( $model['name'] ) ? $model['name'] : $model['id'] );
+		if ( skyphusion_ai_model_matches( $job, $kind[0], $kind[1] || ! empty( $model['vision'] ) ) ) {
+			$add( $model['id'], isset( $model['name'] ) ? $model['name'] : $model['id'], skyphusion_ai_account_model_labels( $model ) );
 		}
 	}
 	$choice = skyphusion_ai_model_choice( $job );
@@ -769,6 +962,198 @@ function skyphusion_ai_model_sanitize_option( $value, $option = '', $original = 
 }
 
 /**
+ * Vendor segment of a model id. An id without one is an empty string.
+ *
+ * @param string $id Model id.
+ * @return string
+ */
+function skyphusion_ai_model_vendor( $id ) {
+	if ( 1 === preg_match( '#^@cf/([^/]+)/#', (string) $id, $match ) ) {
+		return strtolower( $match[1] );
+	}
+	return '';
+}
+
+/**
+ * Publisher name for a model id. Meta stays Meta. Any other segment is titled.
+ *
+ * @param string $id Model id.
+ * @return string
+ */
+function skyphusion_ai_model_publisher( $id ) {
+	$vendor = skyphusion_ai_model_vendor( $id );
+	if ( 'meta' === $vendor ) {
+		return 'Meta';
+	}
+	if ( '' === $vendor ) {
+		return 'publisher';
+	}
+	return ucwords( str_replace( array( '-', '_' ), ' ', $vendor ) );
+}
+
+/**
+ * Rows grouped by vendor segment.
+ *
+ * @param array<int, array<string, mixed>> $rows Model rows.
+ * @return array<string, array<int, array<string, mixed>>>
+ */
+function skyphusion_ai_model_groups( $rows ) {
+	$groups = array();
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) || empty( $row['id'] ) ) {
+			continue;
+		}
+		$vendor = skyphusion_ai_model_vendor( $row['id'] );
+		if ( '' === $vendor ) {
+			$vendor = 'other';
+		}
+		if ( ! isset( $groups[ $vendor ] ) ) {
+			$groups[ $vendor ] = array();
+		}
+		$groups[ $vendor ][] = $row;
+	}
+	ksort( $groups );
+	return $groups;
+}
+
+/**
+ * One decimal for a neuron figure. Zero and non-numbers stay blank.
+ *
+ * @param mixed $value Neurons per 1,000 tokens.
+ * @return string
+ */
+function skyphusion_ai_model_neuron_text( $value ) {
+	if ( ! is_numeric( $value ) || (float) $value <= 0 ) {
+		return '';
+	}
+	return number_format( (float) $value, 1, '.', '' );
+}
+
+/**
+ * Short context size. 128000 is 128K.
+ *
+ * @param int $tokens Context window.
+ * @return string
+ */
+function skyphusion_ai_model_context_text( $tokens ) {
+	$tokens = (int) $tokens;
+	if ( $tokens >= 1000000 ) {
+		$text = number_format( $tokens / 1000000, 1, '.', '' );
+		$text = rtrim( rtrim( $text, '0' ), '.' );
+		return $text . 'M';
+	}
+	if ( $tokens >= 1000 ) {
+		return (string) (int) round( $tokens / 1000 ) . 'K';
+	}
+	return (string) $tokens;
+}
+
+/**
+ * Picker text for one account row. Missing labels are left out.
+ *
+ * @param array<string, mixed> $row Account row.
+ * @return string
+ */
+function skyphusion_ai_model_label( $row ) {
+	if ( ! is_array( $row ) ) {
+		return '';
+	}
+	$name = '';
+	if ( isset( $row['name'] ) && '' !== trim( (string) $row['name'] ) ) {
+		$name = (string) $row['name'];
+	} elseif ( isset( $row['id'] ) ) {
+		$name = (string) $row['id'];
+	}
+	$bits = array();
+	$in   = isset( $row['neurons_in'] ) ? skyphusion_ai_model_neuron_text( $row['neurons_in'] ) : '';
+	$out  = isset( $row['neurons_out'] ) ? skyphusion_ai_model_neuron_text( $row['neurons_out'] ) : '';
+	if ( '' !== $in && '' !== $out && $in === $out ) {
+		$bits[] = sprintf(
+			/* translators: %s: neurons per 1,000 tokens. */
+			__( '%s neurons per 1,000 tokens', 'skyphusion-ai' ),
+			$in
+		);
+	} elseif ( '' !== $in && '' !== $out ) {
+		$bits[] = sprintf(
+			/* translators: 1: neurons per 1,000 input tokens, 2: neurons per 1,000 output tokens. */
+			__( '%1$s neurons per 1,000 input tokens, %2$s per 1,000 output tokens', 'skyphusion-ai' ),
+			$in,
+			$out
+		);
+	} elseif ( '' !== $in ) {
+		$bits[] = sprintf(
+			/* translators: %s: neurons per 1,000 input tokens. */
+			__( '%s neurons per 1,000 input tokens', 'skyphusion-ai' ),
+			$in
+		);
+	} elseif ( '' !== $out ) {
+		$bits[] = sprintf(
+			/* translators: %s: neurons per 1,000 output tokens. */
+			__( '%s neurons per 1,000 output tokens', 'skyphusion-ai' ),
+			$out
+		);
+	}
+	if ( isset( $row['context'] ) && (int) $row['context'] > 0 ) {
+		$bits[] = sprintf(
+			/* translators: %s: context window, such as 128K. */
+			__( '%s context', 'skyphusion-ai' ),
+			skyphusion_ai_model_context_text( (int) $row['context'] )
+		);
+	}
+	if ( ! empty( $row['tools'] ) ) {
+		$bits[] = __( 'tools', 'skyphusion-ai' );
+	}
+	$vision = ! empty( $row['vision'] );
+	if ( ! $vision && isset( $row['task'] ) ) {
+		$kind   = skyphusion_ai_account_model_kind( (string) $row['task'] );
+		$vision = ! empty( $kind[1] );
+	}
+	if ( $vision ) {
+		$bits[] = __( 'vision', 'skyphusion-ai' );
+	}
+	if ( array() === $bits ) {
+		return $name;
+	}
+	return $name . ' (' . implode( ', ', $bits ) . ')';
+}
+
+/**
+ * One select, grouped by vendor.
+ *
+ * @param string                           $name    Field name.
+ * @param string                           $id_attr Element id.
+ * @param string                           $current Selected model id.
+ * @param array<int, array<string, mixed>> $options Picker rows.
+ * @param string|null                      $blank   First empty option, or null.
+ * @return void
+ */
+function skyphusion_ai_model_select( $name, $id_attr, $current, $options, $blank ) {
+	if ( ! function_exists( 'esc_attr' ) || ! function_exists( 'esc_html' ) ) {
+		return;
+	}
+	echo '<select name="' . esc_attr( $name ) . '" id="' . esc_attr( $id_attr ) . '">';
+	if ( is_string( $blank ) ) {
+		echo '<option value=""';
+		if ( '' === (string) $current ) {
+			echo ' selected="selected"';
+		}
+		echo '>' . esc_html( $blank ) . '</option>';
+	}
+	foreach ( skyphusion_ai_model_groups( $options ) as $vendor => $rows ) {
+		echo '<optgroup label="' . esc_attr( (string) $vendor ) . '">';
+		foreach ( $rows as $option ) {
+			echo '<option value="' . esc_attr( $option['id'] ) . '"';
+			if ( isset( $option['id'] ) && $option['id'] === $current ) {
+				echo ' selected="selected"';
+			}
+			echo '>' . esc_html( skyphusion_ai_model_label( $option ) ) . '</option>';
+		}
+		echo '</optgroup>';
+	}
+	echo '</select>';
+}
+
+/**
  * One picker.
  *
  * @param string $job Job name.
@@ -778,16 +1163,13 @@ function skyphusion_ai_model_field( $job ) {
 	if ( ! function_exists( 'esc_attr' ) || ! function_exists( 'esc_html' ) ) {
 		return;
 	}
-	$current = skyphusion_ai_model_choice( $job );
-	echo '<select name="skyphusion_ai_settings[model_' . esc_attr( $job ) . ']" id="skyphusion_ai_model_' . esc_attr( $job ) . '">';
-	foreach ( skyphusion_ai_model_options( $job ) as $option ) {
-		echo '<option value="' . esc_attr( $option['id'] ) . '"';
-		if ( $option['id'] === $current ) {
-			echo ' selected="selected"';
-		}
-		echo '>' . esc_html( $option['name'] ) . '</option>';
-	}
-	echo '</select>';
+	skyphusion_ai_model_select(
+		'skyphusion_ai_settings[model_' . $job . ']',
+		'skyphusion_ai_model_' . $job,
+		skyphusion_ai_model_choice( $job ),
+		skyphusion_ai_model_options( $job ),
+		null
+	);
 }
 
 /**
@@ -808,21 +1190,13 @@ function skyphusion_ai_field_model_light() {
 	if ( ! function_exists( 'esc_attr' ) || ! function_exists( 'esc_html' ) ) {
 		return;
 	}
-	$current = skyphusion_ai_model_light_id();
-	echo '<select name="skyphusion_ai_settings[model_light]" id="skyphusion_ai_model_light">';
-	echo '<option value=""';
-	if ( '' === $current ) {
-		echo ' selected="selected"';
-	}
-	echo '>' . esc_html__( 'Use the writing model', 'skyphusion-ai' ) . '</option>';
-	foreach ( skyphusion_ai_model_options( 'writing' ) as $option ) {
-		echo '<option value="' . esc_attr( $option['id'] ) . '"';
-		if ( $option['id'] === $current ) {
-			echo ' selected="selected"';
-		}
-		echo '>' . esc_html( $option['name'] ) . '</option>';
-	}
-	echo '</select>';
+	skyphusion_ai_model_select(
+		'skyphusion_ai_settings[model_light]',
+		'skyphusion_ai_model_light',
+		skyphusion_ai_model_light_id(),
+		skyphusion_ai_model_options( 'writing' ),
+		__( 'Use the writing model', 'skyphusion-ai' )
+	);
 	echo '<p class="description">' . esc_html__( 'Short tasks use this model. Titles, excerpts, meta descriptions, moderation, and alt wording. Leave it empty and the writing model stays in use. A model the editor already picked stays that model.', 'skyphusion-ai' ) . '</p>';
 }
 
@@ -863,6 +1237,242 @@ function skyphusion_ai_field_model_embeddings() {
 }
 
 /**
+ * Option that remembers which models need a publisher licence.
+ *
+ * The upstream message is not stored. It can contain a secret.
+ *
+ * @return string
+ */
+function skyphusion_ai_model_licence_option() {
+	return 'skyphusion_ai_model_licences';
+}
+
+/**
+ * True when this error body is a publisher-licence gate.
+ *
+ * @param mixed $decoded Response JSON, or anything else.
+ * @return bool
+ */
+function skyphusion_ai_model_licence_is_gate( $decoded ) {
+	if ( ! is_array( $decoded ) || ! isset( $decoded['errors'] ) || ! is_array( $decoded['errors'] ) ) {
+		return false;
+	}
+	foreach ( $decoded['errors'] as $error ) {
+		if ( ! is_array( $error ) ) {
+			continue;
+		}
+		if ( isset( $error['code'] ) && 5016 === (int) $error['code'] ) {
+			return true;
+		}
+		$message = isset( $error['message'] ) ? strtolower( (string) $error['message'] ) : '';
+		if ( false !== strpos( $message, 'model agreement' ) ) {
+			return true;
+		}
+		if ( false !== strpos( $message, 'publisher' ) && false !== strpos( $message, 'licen' ) ) {
+			return true;
+		}
+	}
+	return false;
+}
+
+/**
+ * Stored model ids that need a publisher licence.
+ *
+ * @return array<string, int>
+ */
+function skyphusion_ai_model_licence_stored() {
+	if ( ! function_exists( 'get_option' ) ) {
+		return array();
+	}
+	$stored = get_option( skyphusion_ai_model_licence_option(), array() );
+	if ( ! is_array( $stored ) ) {
+		return array();
+	}
+	$clean = array();
+	foreach ( array_keys( $stored ) as $key ) {
+		$id = '';
+		if ( function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+			$id = cloudflare_ai_provider_model_id( is_string( $key ) ? $key : '' );
+		}
+		if ( '' === $id ) {
+			continue;
+		}
+		$clean[ $id ] = 1;
+	}
+	return $clean;
+}
+
+/**
+ * Remember one model. The message is not written.
+ *
+ * @param string $model_id Model id.
+ * @param string $message  Unused. Callers pass the upstream text. It is dropped.
+ * @return void
+ */
+function skyphusion_ai_model_licence_record( $model_id, $message ) {
+	if ( is_string( $message ) && false !== stripos( $message, 'Bearer ' ) ) {
+		$message = '';
+	}
+	if ( ! function_exists( 'cloudflare_ai_provider_model_id' ) || ! function_exists( 'update_option' ) ) {
+		return;
+	}
+	$model_id = cloudflare_ai_provider_model_id( $model_id );
+	if ( '' === $model_id ) {
+		return;
+	}
+	$stored              = skyphusion_ai_model_licence_stored();
+	$stored[ $model_id ] = 1;
+	update_option( skyphusion_ai_model_licence_option(), $stored, false );
+}
+
+/**
+ * Record a gate seen on a model call. Other responses are ignored.
+ *
+ * @param string $model_or_url Model id, or a URL that contains one.
+ * @param mixed  $decoded      Response JSON.
+ * @return void
+ */
+function skyphusion_ai_model_licence_note( $model_or_url, $decoded ) {
+	if ( ! skyphusion_ai_model_licence_is_gate( $decoded ) ) {
+		return;
+	}
+	$id = '';
+	if ( function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		$id = cloudflare_ai_provider_model_id( $model_or_url );
+	}
+	if ( '' === $id && is_string( $model_or_url ) && 1 === preg_match( '#(@cf/[a-z0-9][a-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*)#', $model_or_url, $match ) ) {
+		$id = $match[1];
+	}
+	if ( '' === $id ) {
+		return;
+	}
+	skyphusion_ai_model_licence_record( $id, '' );
+}
+
+/**
+ * Say which models need a publisher licence. This does not send the acceptance.
+ *
+ * @return void
+ */
+function skyphusion_ai_model_licence_notice() {
+	if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	if ( ! function_exists( 'esc_html' ) || ! function_exists( 'esc_attr' ) ) {
+		return;
+	}
+	$stored = skyphusion_ai_model_licence_stored();
+	if ( array() === $stored ) {
+		return;
+	}
+	foreach ( array_keys( $stored ) as $model_id ) {
+		echo '<p>' . esc_html(
+			sprintf(
+				/* translators: 1: model id, 2: publisher name, such as Meta. */
+				__( '%1$s needs a %2$s publisher licence.', 'skyphusion-ai' ),
+				$model_id,
+				skyphusion_ai_model_publisher( $model_id )
+			)
+		) . '</p>';
+		if ( ! function_exists( 'admin_url' ) || ! function_exists( 'esc_url' ) ) {
+			continue;
+		}
+		echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+		echo '<input type="hidden" name="action" value="skyphusion_ai_model_licence" />';
+		echo '<input type="hidden" name="skyphusion_ai_model" value="' . esc_attr( $model_id ) . '" />';
+		if ( function_exists( 'wp_nonce_field' ) ) {
+			wp_nonce_field( 'skyphusion_ai_model_licence' );
+		}
+		echo '<button type="submit">' . esc_html__( 'Accept the publisher licence', 'skyphusion-ai' ) . '</button>';
+		echo '</form>';
+	}
+}
+
+/**
+ * Send the acceptance after the admin asks. A false ask does not send.
+ *
+ * @param string $model_id Model id.
+ * @param bool   $asked    True only when the admin submitted the button.
+ * @return string
+ */
+function skyphusion_ai_model_licence_accept( $model_id, $asked ) {
+	$quiet = __( 'The publisher licence was not sent.', 'skyphusion-ai' );
+	if ( true !== $asked ) {
+		return $quiet;
+	}
+	if ( ! function_exists( 'cloudflare_ai_provider_model_id' ) ) {
+		return $quiet;
+	}
+	$model_id = cloudflare_ai_provider_model_id( $model_id );
+	if ( '' === $model_id || ! isset( skyphusion_ai_model_licence_stored()[ $model_id ] ) ) {
+		return $quiet;
+	}
+	if ( ! function_exists( 'wp_remote_post' ) || ! function_exists( 'skyphusion_ai_model_credentials' ) ) {
+		return $quiet;
+	}
+	$credentials = skyphusion_ai_model_credentials();
+	$account     = $credentials['account_id'];
+	$token       = $credentials['token'];
+	if ( '' === $account || '' === $token || ! function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+		return $quiet;
+	}
+	$url = cloudflare_ai_provider_run_url( $account, '', $model_id );
+	if ( '' === $url ) {
+		return $quiet;
+	}
+	$response = wp_remote_post(
+		$url,
+		array(
+			'timeout' => 15,
+			'headers' => array(
+				'Content-Type'  => 'application/json',
+				'Authorization' => 'Bearer ' . $token,
+			),
+			'body'    => function_exists( 'wp_json_encode' ) ? wp_json_encode( array( 'prompt' => 'agree' ) ) : '{"prompt":"agree"}',
+		)
+	);
+	$failed   = function_exists( 'is_wp_error' ) && is_wp_error( $response );
+	$code     = function_exists( 'wp_remote_retrieve_response_code' ) ? (int) wp_remote_retrieve_response_code( $response ) : 0;
+	if ( $failed || $code < 200 || $code >= 300 ) {
+		return __( 'The publisher licence was not accepted.', 'skyphusion-ai' );
+	}
+	return __( 'Publisher licence sent.', 'skyphusion-ai' );
+}
+
+/**
+ * Admin button. The page view does not call this.
+ *
+ * @return void
+ */
+function skyphusion_ai_model_licence_handle() {
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'manage_options' ) ) {
+		return;
+	}
+	if ( function_exists( 'check_admin_referer' ) ) {
+		check_admin_referer( 'skyphusion_ai_model_licence' );
+	}
+	$typed = '';
+	if ( isset( $_POST['skyphusion_ai_model'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- check_admin_referer ran above.
+		$typed = wp_unslash( $_POST['skyphusion_ai_model'] ); // phpcs:ignore WordPress.Security.NonceVerification.Missing, WordPress.Security.ValidatedSanitizedInput.InputNotSanitized -- the model id checker is the sanitizer.
+	}
+	$message = skyphusion_ai_model_licence_accept( is_string( $typed ) ? $typed : '', true );
+	if ( function_exists( 'set_transient' ) && function_exists( 'get_current_user_id' ) ) {
+		set_transient(
+			'skyphusion_ai_check_' . get_current_user_id(),
+			array(
+				'ok'      => __( 'Publisher licence sent.', 'skyphusion-ai' ) === $message,
+				'message' => $message,
+			),
+			60
+		);
+	}
+	if ( function_exists( 'wp_safe_redirect' ) && function_exists( 'admin_url' ) ) {
+		wp_safe_redirect( admin_url( 'options-general.php?page=cloudflare-ai-search' ) );
+		exit;
+	}
+}
+
+/**
  * What the model section tells the admin.
  *
  * @return void
@@ -874,6 +1484,7 @@ function skyphusion_ai_model_section() {
 	echo '<p>';
 	esc_html_e( 'The account list is kept for 12 hours. A failed read keeps the built-in models. An empty choice uses the built-in model for that job.', 'skyphusion-ai' );
 	echo '</p>';
+	skyphusion_ai_model_licence_notice();
 }
 
 /**
@@ -901,6 +1512,7 @@ function skyphusion_ai_model_register_fields() {
 
 if ( function_exists( 'add_action' ) ) {
 	add_action( 'admin_init', 'skyphusion_ai_model_register_fields', 20 );
+	add_action( 'admin_post_skyphusion_ai_model_licence', 'skyphusion_ai_model_licence_handle' );
 }
 if ( function_exists( 'add_filter' ) ) {
 	add_filter( 'sanitize_option_skyphusion_ai_settings', 'skyphusion_ai_model_sanitize_option', 20, 3 );
