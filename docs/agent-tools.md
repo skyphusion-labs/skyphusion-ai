@@ -82,6 +82,8 @@ Source: https://developers.cloudflare.com/agents/model-context-protocol/guides/r
 
 ## A later build
 
+The plugin already registers `skyphusion-ai/search`.
+The steps are in docs/search-ability.md.
 A later build waits until you ask for it.
 That build keeps the search box.
 An agent can use the AI Search `/mcp` search tool for indexed pages.

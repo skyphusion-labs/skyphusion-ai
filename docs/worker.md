@@ -17,6 +17,9 @@ It reads the Vectorize index on your account.
 It does not call your site between those two steps.
 
 The assistant streams the answer from those pages.
+A product answer shows the image, the SKU, the stock status, and the managed count.
+The answer links to the product.
+It does not add the product to the cart.
 A chat of more than ten turns does not send every earlier turn to the model.
 The Worker summarizes the older turns in one short block.
 That summary is one text call.
