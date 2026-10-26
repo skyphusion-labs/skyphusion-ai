@@ -174,12 +174,13 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one.
+No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md.
 
 == Changelog ==
 
 = 0.5.3 =
 
+* The plugin records four agent tools next to WooCommerce. See docs/agent-tools.md. This release does not open an MCP server.
 * The comparison says the dropdown already shows the product image, with the title and the description. The image is the page image. You do not add a field for it. The description still carries the SKU, the stock status, and the managed count.
 * The comparison says you can expand the chat button and the agent calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one.
 
