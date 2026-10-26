@@ -6,7 +6,7 @@ Why this plugin was written: other plugin solutions did not meet our needs. We w
 
 This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
-The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The comparison below is those three jobs against the plugins that charge for each one.
+The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin licence. You can expand the chat button and those agent calls with Cloudflare Workers AI or with Cloudflare AI Gateway. An MCP server is planned. This release does not open one. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md. The comparison below is those three jobs against the plugins that charge for each one.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
