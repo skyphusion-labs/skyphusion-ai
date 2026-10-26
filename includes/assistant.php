@@ -6,6 +6,8 @@
  * separate snippet and stays as it is. A saved chat needs consent.
  * An IP address is not stored. A chat longer than ten turns sends one
  * short summary of the older turns. The page still shows every turn.
+ * A blank Worker address streams that answer through PHP. The token
+ * stays on the server.
  * A chat that was not saved is not stored to make that summary.
  *
  * @package skyphusion-ai
@@ -350,55 +352,18 @@ function skyphusion_ai_assistant_text( $prompt, $regenerate = false ) {
 			return $tool_refusal;
 		}
 	}
-	$model       = skyphusion_ai_assistant_model();
-	$credentials = array(
-		'account_id' => '',
-		'token'      => '',
-	);
-	if ( function_exists( 'skyphusion_ai_embed_credentials' ) ) {
-		$credentials = skyphusion_ai_embed_credentials();
+	$spec = skyphusion_ai_assistant_stream_spec( $prompt );
+	if ( is_wp_error( $spec ) ) {
+		return $spec;
 	}
-	$gateway = '';
-	if ( function_exists( 'skyphusion_ai_settings' ) ) {
-		$settings = skyphusion_ai_settings();
-		if ( isset( $settings['gateway_id'] ) ) {
-			$gateway = (string) $settings['gateway_id'];
-		}
-	}
-	$url = '';
-	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
-		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
-	}
-	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_remote_post' ) ) {
-		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
-	}
-	$body = array();
-	if ( function_exists( 'cloudflare_ai_provider_chat_body' ) ) {
-		$body = cloudflare_ai_provider_chat_body(
-			array(
-				'model'    => $model,
-				'messages' => array(
-					array(
-						'role' => 'user',
-						'text' => $prompt,
-					),
-				),
-			)
-		);
-	}
-	$headers = array(
-		'Content-Type'  => 'application/json',
-		'Authorization' => 'Bearer ' . $credentials['token'],
-	);
-	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
-	}
+	$model    = $spec['model'];
+	$url      = $spec['url'];
 	$response = wp_remote_post(
 		$url,
 		array(
 			'timeout' => 30,
-			'headers' => $headers,
-			'body'    => wp_json_encode( $body ),
+			'headers' => $spec['headers'],
+			'body'    => $spec['body'],
 		)
 	);
 	if ( is_wp_error( $response ) ) {
@@ -877,6 +842,82 @@ function skyphusion_ai_assistant_usage_marker( $config ) {
 }
 
 /**
+ * Decide whether this question can call the model.
+ *
+ * A stop row is the result to show. A ready row is the prompt, the
+ * citations, and the question. Earlier turns are not in the prompt yet.
+ *
+ * @param string $question Visitor question.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_assistant_gate( $question ) {
+	$config = skyphusion_ai_assistant_config();
+	if ( empty( $config['enabled'] ) ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'off', '', array() ) );
+	}
+	$question = trim( (string) $question );
+	if ( '' === $question ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'empty', skyphusion_ai_assistant_miss_text(), array() ) );
+	}
+	if ( ! skyphusion_ai_assistant_allowed( $config ) ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'closed', '', array() ) );
+	}
+	if ( skyphusion_ai_assistant_topic_blocked( $question, $config ) ) {
+		$reply = isset( $config['blocked_reply'] ) ? (string) $config['blocked_reply'] : '';
+		if ( '' === $reply ) {
+			$reply = skyphusion_ai_assistant_miss_text();
+		}
+		return array( 'stop' => skyphusion_ai_assistant_result( 'blocked', $reply, array() ) );
+	}
+	if ( skyphusion_ai_assistant_limit_blocked( $config ) ) {
+		return array(
+			'stop' => skyphusion_ai_assistant_result( 'blocked', __( 'The assistant limit is spent. It resumes at 00:00 UTC. The other tools continue.', 'skyphusion-ai' ), array() ),
+		);
+	}
+	if ( skyphusion_ai_assistant_turnstile_required( $config ) && ! cfturnstile_check() ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'closed', '', array() ) );
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
+		$refusal = skyphusion_ai_neuron_refusal();
+		if ( is_wp_error( $refusal ) ) {
+			$text = function_exists( 'skyphusion_ai_neuron_refusal_text' ) ? skyphusion_ai_neuron_refusal_text() : '';
+			return array( 'stop' => skyphusion_ai_assistant_result( 'blocked', $text, array() ) );
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'assistant' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			$text = function_exists( 'skyphusion_ai_tool_refusal_text' ) ? skyphusion_ai_tool_refusal_text() : '';
+			return array( 'stop' => skyphusion_ai_assistant_result( 'blocked', $text, array() ) );
+		}
+	}
+	if ( ! empty( $config['safety'] ) && ! skyphusion_ai_assistant_safety_ok( $question ) ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'blocked', skyphusion_ai_assistant_miss_text(), array() ) );
+	}
+	$found = array( 'state' => 'blocked' );
+	if ( function_exists( 'skyphusion_ai_embed_search' ) ) {
+		$found = skyphusion_ai_embed_search( $question, 5 );
+	}
+	if ( is_array( $found ) && isset( $found['state'] ) && 'not_created' === $found['state'] ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'not_created', __( 'The assistant needs the embedding index first.', 'skyphusion-ai' ), array() ) );
+	}
+	$citations = skyphusion_ai_assistant_citations( $found );
+	if ( array() === $citations ) {
+		return array( 'stop' => skyphusion_ai_assistant_result( 'empty', skyphusion_ai_assistant_miss_text(), array() ) );
+	}
+	$prompt = skyphusion_ai_assistant_prompt( $question, $citations );
+	$rules  = isset( $config['rules'] ) ? trim( (string) $config['rules'] ) : '';
+	if ( '' !== $rules ) {
+		$prompt .= "\n" . $rules;
+	}
+	return array(
+		'prompt'    => $prompt,
+		'citations' => $citations,
+		'question'  => $question,
+	);
+}
+
+/**
  * Answer one question from the embedding index.
  *
  * The third argument is earlier pairs for this question only. The consent
@@ -888,64 +929,15 @@ function skyphusion_ai_assistant_usage_marker( $config ) {
  * @return array{state: string, answer: string, citations: array<int, array{title: string, url: string}>}
  */
 function skyphusion_ai_assistant_ask( $question, $consent, $history = array() ) {
-	$config = skyphusion_ai_assistant_config();
-	if ( empty( $config['enabled'] ) ) {
-		return skyphusion_ai_assistant_result( 'off', '', array() );
+	$gated = skyphusion_ai_assistant_gate( $question );
+	if ( isset( $gated['stop'] ) ) {
+		return $gated['stop'];
 	}
-	$question = trim( (string) $question );
-	if ( '' === $question ) {
-		return skyphusion_ai_assistant_result( 'empty', skyphusion_ai_assistant_miss_text(), array() );
-	}
-	if ( ! skyphusion_ai_assistant_allowed( $config ) ) {
-		return skyphusion_ai_assistant_result( 'closed', '', array() );
-	}
-	if ( skyphusion_ai_assistant_topic_blocked( $question, $config ) ) {
-		$reply = isset( $config['blocked_reply'] ) ? (string) $config['blocked_reply'] : '';
-		if ( '' === $reply ) {
-			$reply = skyphusion_ai_assistant_miss_text();
-		}
-		return skyphusion_ai_assistant_result( 'blocked', $reply, array() );
-	}
-	if ( skyphusion_ai_assistant_limit_blocked( $config ) ) {
-		return skyphusion_ai_assistant_result( 'blocked', __( 'The assistant limit is spent. It resumes at 00:00 UTC. The other tools continue.', 'skyphusion-ai' ), array() );
-	}
-	if ( skyphusion_ai_assistant_turnstile_required( $config ) && ! cfturnstile_check() ) {
-		return skyphusion_ai_assistant_result( 'closed', '', array() );
-	}
-	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
-		$refusal = skyphusion_ai_neuron_refusal();
-		if ( is_wp_error( $refusal ) ) {
-			$text = function_exists( 'skyphusion_ai_neuron_refusal_text' ) ? skyphusion_ai_neuron_refusal_text() : '';
-			return skyphusion_ai_assistant_result( 'blocked', $text, array() );
-		}
-	}
-	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
-		$tool_refusal = skyphusion_ai_tool_refusal( 'assistant' );
-		if ( is_wp_error( $tool_refusal ) ) {
-			$text = function_exists( 'skyphusion_ai_tool_refusal_text' ) ? skyphusion_ai_tool_refusal_text() : '';
-			return skyphusion_ai_assistant_result( 'blocked', $text, array() );
-		}
-	}
-	if ( ! empty( $config['safety'] ) && ! skyphusion_ai_assistant_safety_ok( $question ) ) {
-		return skyphusion_ai_assistant_result( 'blocked', skyphusion_ai_assistant_miss_text(), array() );
-	}
-	$found = array( 'state' => 'blocked' );
-	if ( function_exists( 'skyphusion_ai_embed_search' ) ) {
-		$found = skyphusion_ai_embed_search( $question, 5 );
-	}
-	if ( is_array( $found ) && isset( $found['state'] ) && 'not_created' === $found['state'] ) {
-		return skyphusion_ai_assistant_result( 'not_created', __( 'The assistant needs the embedding index first.', 'skyphusion-ai' ), array() );
-	}
-	$citations = skyphusion_ai_assistant_citations( $found );
-	if ( array() === $citations ) {
-		return skyphusion_ai_assistant_result( 'empty', skyphusion_ai_assistant_miss_text(), array() );
-	}
-	$prompt = skyphusion_ai_assistant_prompt( $question, $citations );
-	$rules  = isset( $config['rules'] ) ? trim( (string) $config['rules'] ) : '';
-	if ( '' !== $rules ) {
-		$prompt .= "\n" . $rules;
-	}
-	$before = 0;
+	$question  = $gated['question'];
+	$citations = $gated['citations'];
+	$prompt    = $gated['prompt'];
+	$config    = skyphusion_ai_assistant_config();
+	$before    = 0;
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
 		$before = (int) skyphusion_ai_neuron_state()['neurons'];
 	}
@@ -1169,6 +1161,610 @@ function skyphusion_ai_assistant_handle_save() {
 }
 
 /**
+ * One SSE line, or an empty string when the line is not text.
+ *
+ * @param string $line One upstream line.
+ * @return string
+ */
+function skyphusion_ai_assistant_stream_line( $line ) {
+	$line = trim( (string) $line );
+	if ( ! str_starts_with( $line, 'data:' ) ) {
+		return '';
+	}
+	$data = trim( substr( $line, 5 ) );
+	if ( '' === $data || '[DONE]' === $data ) {
+		return '';
+	}
+	$parsed = json_decode( $data, true );
+	if ( ! is_array( $parsed ) ) {
+		return '';
+	}
+	if ( isset( $parsed['text'] ) && is_string( $parsed['text'] ) && '' !== $parsed['text'] ) {
+		return $parsed['text'];
+	}
+	if ( isset( $parsed['response'] ) && is_string( $parsed['response'] ) && '' !== $parsed['response'] ) {
+		return $parsed['response'];
+	}
+	if ( isset( $parsed['choices'][0]['delta']['content'] ) && is_string( $parsed['choices'][0]['delta']['content'] ) ) {
+		return (string) $parsed['choices'][0]['delta']['content'];
+	}
+	if ( isset( $parsed['choices'][0]['message']['content'] ) && is_string( $parsed['choices'][0]['message']['content'] ) ) {
+		return (string) $parsed['choices'][0]['message']['content'];
+	}
+	if ( isset( $parsed['result']['response'] ) && is_string( $parsed['result']['response'] ) ) {
+		return (string) $parsed['result']['response'];
+	}
+	return '';
+}
+
+/**
+ * Text pieces in arrival order. This does not join them.
+ *
+ * A string is one chunk. An iterable is pulled in order.
+ *
+ * @param mixed $lines Upstream SSE text.
+ * @return string[]
+ */
+function skyphusion_ai_assistant_stream_events( $lines ) {
+	$pieces = array();
+	$carry  = '';
+	skyphusion_ai_assistant_stream_walk( $lines, $carry, $pieces, null );
+	return $pieces;
+}
+
+/**
+ * Write each piece before the next line is pulled.
+ *
+ * @param mixed    $lines Upstream SSE text.
+ * @param callable $write Receives one piece.
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_emit( $lines, $write ) {
+	if ( ! is_callable( $write ) ) {
+		return;
+	}
+	$pieces = array();
+	$carry  = '';
+	skyphusion_ai_assistant_stream_walk( $lines, $carry, $pieces, $write );
+}
+
+/**
+ * Pull chunks and take complete lines.
+ *
+ * The write runs before the next chunk is pulled.
+ *
+ * @param mixed         $lines  Upstream SSE text.
+ * @param string        $carry  Incomplete tail.
+ * @param string[]      $pieces Pieces already taken.
+ * @param callable|null $write  Optional piece writer.
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_walk( $lines, &$carry, &$pieces, $write ) {
+	if ( is_string( $lines ) ) {
+		$lines = array( $lines );
+	}
+	if ( ! is_iterable( $lines ) ) {
+		return;
+	}
+	foreach ( $lines as $chunk ) {
+		$carry .= (string) $chunk;
+		while ( false !== strpos( $carry, "\n" ) ) {
+			$break = strpos( $carry, "\n" );
+			$row   = substr( $carry, 0, $break );
+			$carry = (string) substr( $carry, $break + 1 );
+			$text  = skyphusion_ai_assistant_stream_line( $row );
+			if ( '' === $text ) {
+				continue;
+			}
+			$pieces[] = $text;
+			if ( is_callable( $write ) ) {
+				$write( $text );
+			}
+		}
+	}
+	if ( '' === trim( $carry ) ) {
+		return;
+	}
+	$text = skyphusion_ai_assistant_stream_line( $carry );
+	if ( '' === $text ) {
+		$text = skyphusion_ai_assistant_stream_line( 'data: ' . trim( $carry ) );
+	}
+	if ( '' === $text ) {
+		return;
+	}
+	$pieces[] = $text;
+	if ( is_callable( $write ) ) {
+		$write( $text );
+	}
+	$carry = '';
+}
+
+/**
+ * Workers AI request for one streamed answer.
+ *
+ * An empty gateway id stays on api.cloudflare.com. A saved gateway id
+ * uses the gateway host. The token is a header, not part of the URL.
+ *
+ * @param string $prompt Prompt text.
+ * @return array{url: string, headers: array<string, string>, body: string, model: string}|WP_Error
+ */
+function skyphusion_ai_assistant_stream_spec( $prompt ) {
+	$model       = skyphusion_ai_assistant_model();
+	$credentials = array(
+		'account_id' => '',
+		'token'      => '',
+	);
+	if ( function_exists( 'skyphusion_ai_embed_credentials' ) ) {
+		$credentials = skyphusion_ai_embed_credentials();
+	}
+	$gateway = '';
+	if ( function_exists( 'skyphusion_ai_settings' ) ) {
+		$settings = skyphusion_ai_settings();
+		if ( isset( $settings['gateway_id'] ) ) {
+			$gateway = (string) $settings['gateway_id'];
+		}
+	}
+	$url = '';
+	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
+	}
+	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_json_encode' ) ) {
+		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
+	}
+	$body = array();
+	if ( function_exists( 'cloudflare_ai_provider_chat_body' ) ) {
+		$body = cloudflare_ai_provider_chat_body(
+			array(
+				'model'    => $model,
+				'messages' => array(
+					array(
+						'role' => 'user',
+						'text' => $prompt,
+					),
+				),
+			)
+		);
+	}
+	if ( ! is_array( $body ) ) {
+		$body = array();
+	}
+	$body['stream'] = true;
+	$headers        = array(
+		'Content-Type'  => 'application/json',
+		'Authorization' => 'Bearer ' . $credentials['token'],
+	);
+	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+	}
+	$encoded = wp_json_encode( $body );
+	if ( ! is_string( $encoded ) ) {
+		$encoded = '';
+	}
+	return array(
+		'url'     => $url,
+		'headers' => $headers,
+		'body'    => $encoded,
+		'model'   => $model,
+	);
+}
+
+/**
+ * Send one piece to the browser as an event.
+ *
+ * @param string $piece Answer text so far, one piece.
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_write_piece( $piece ) {
+	$piece = (string) $piece;
+	if ( '' === $piece || ! function_exists( 'wp_json_encode' ) ) {
+		return;
+	}
+	$encoded = wp_json_encode( array( 'text' => $piece ) );
+	if ( ! is_string( $encoded ) || '' === $encoded ) {
+		return;
+	}
+	// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Event JSON, not HTML.
+	echo 'data: ' . $encoded . "\n\n";
+	if ( function_exists( 'flush' ) ) {
+		flush();
+	}
+}
+
+/**
+ * Curl write callback. Complete lines are emitted before the next chunk.
+ *
+ * @param resource|object $handle Curl handle. Unused.
+ * @param string          $chunk  Bytes from the upstream.
+ * @return int
+ */
+function skyphusion_ai_assistant_stream_curl_write( $handle, $chunk ) {
+	unset( $handle );
+	$chunk = (string) $chunk;
+	if ( ! isset( $GLOBALS['skyphusion_ai_assistant_stream_raw'] ) ) {
+		$GLOBALS['skyphusion_ai_assistant_stream_raw'] = '';
+	}
+	$GLOBALS['skyphusion_ai_assistant_stream_raw'] .= $chunk;
+	$carry = '';
+	if ( isset( $GLOBALS['skyphusion_ai_assistant_stream_carry'] ) ) {
+		$carry = (string) $GLOBALS['skyphusion_ai_assistant_stream_carry'];
+	}
+	$carry .= $chunk;
+	$ready  = '';
+	while ( false !== strpos( $carry, "\n" ) ) {
+		$break  = strpos( $carry, "\n" );
+		$ready .= substr( $carry, 0, $break + 1 );
+		$carry  = (string) substr( $carry, $break + 1 );
+	}
+	$GLOBALS['skyphusion_ai_assistant_stream_carry'] = $carry;
+	if ( '' !== $ready ) {
+		skyphusion_ai_assistant_stream_emit( $ready, 'skyphusion_ai_assistant_stream_write_piece' );
+	}
+	return strlen( $chunk );
+}
+
+/**
+ * Read the model response and emit each piece as it arrives.
+ *
+ * @param array{url: string, headers: array<string, string>, body: string, model: string} $spec Request.
+ * @return array{raw: string, status: int}
+ */
+function skyphusion_ai_assistant_stream_relay( $spec ) {
+	$GLOBALS['skyphusion_ai_assistant_stream_raw']   = '';
+	$GLOBALS['skyphusion_ai_assistant_stream_carry'] = '';
+	if ( function_exists( 'curl_init' ) && function_exists( 'curl_exec' ) ) {
+		// phpcs:disable WordPress.WP.AlternativeFunctions -- The HTTP API returns the whole body. This path writes each piece as it arrives.
+		$handle = curl_init( $spec['url'] );
+		if ( false === $handle ) {
+			return array(
+				'raw'    => '',
+				'status' => 0,
+			);
+		}
+		$header_lines = array();
+		foreach ( $spec['headers'] as $name => $value ) {
+			$header_lines[] = $name . ': ' . $value;
+		}
+		curl_setopt( $handle, CURLOPT_POST, true );
+		curl_setopt( $handle, CURLOPT_POSTFIELDS, $spec['body'] );
+		curl_setopt( $handle, CURLOPT_HTTPHEADER, $header_lines );
+		curl_setopt( $handle, CURLOPT_TIMEOUT, 30 );
+		curl_setopt( $handle, CURLOPT_WRITEFUNCTION, 'skyphusion_ai_assistant_stream_curl_write' );
+		curl_exec( $handle );
+		$status = (int) curl_getinfo( $handle, CURLINFO_RESPONSE_CODE );
+		// phpcs:enable WordPress.WP.AlternativeFunctions
+		$carry = '';
+		if ( isset( $GLOBALS['skyphusion_ai_assistant_stream_carry'] ) ) {
+			$carry = (string) $GLOBALS['skyphusion_ai_assistant_stream_carry'];
+		}
+		if ( '' !== trim( $carry ) ) {
+			skyphusion_ai_assistant_stream_emit( $carry, 'skyphusion_ai_assistant_stream_write_piece' );
+		}
+		$raw = (string) $GLOBALS['skyphusion_ai_assistant_stream_raw'];
+		unset( $GLOBALS['skyphusion_ai_assistant_stream_raw'], $GLOBALS['skyphusion_ai_assistant_stream_carry'] );
+		return array(
+			'raw'    => $raw,
+			'status' => $status,
+		);
+	}
+	if ( ! function_exists( 'wp_remote_post' ) ) {
+		return array(
+			'raw'    => '',
+			'status' => 0,
+		);
+	}
+	$response = wp_remote_post(
+		$spec['url'],
+		array(
+			'timeout' => 30,
+			'headers' => $spec['headers'],
+			'body'    => $spec['body'],
+		)
+	);
+	if ( is_wp_error( $response ) ) {
+		return array(
+			'raw'    => '',
+			'status' => 0,
+		);
+	}
+	$raw    = (string) wp_remote_retrieve_body( $response );
+	$status = (int) wp_remote_retrieve_response_code( $response );
+	skyphusion_ai_assistant_stream_emit( $raw, 'skyphusion_ai_assistant_stream_write_piece' );
+	return array(
+		'raw'    => $raw,
+		'status' => $status,
+	);
+}
+
+/**
+ * Stream one answer. A cached sentence is one piece.
+ *
+ * @param string $prompt Prompt text.
+ * @return string
+ */
+function skyphusion_ai_assistant_stream_live( $prompt ) {
+	if ( skyphusion_ai_assistant_limit_blocked( skyphusion_ai_assistant_config() ) ) {
+		return '';
+	}
+	$model = skyphusion_ai_assistant_model();
+	if ( function_exists( 'skyphusion_ai_prompt_cache_read' ) ) {
+		$cached = skyphusion_ai_prompt_cache_read( 'assistant', $model, $prompt, '', false );
+		if ( is_string( $cached ) && '' !== $cached ) {
+			if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+				skyphusion_ai_neuron_record( 'text', $model, array(), 'assistant' );
+			}
+			skyphusion_ai_assistant_stream_emit(
+				'data: ' . wp_json_encode( array( 'response' => $cached ) ) . "\n",
+				'skyphusion_ai_assistant_stream_write_piece'
+			);
+			return $cached;
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
+		$refusal = skyphusion_ai_neuron_refusal();
+		if ( is_wp_error( $refusal ) ) {
+			return '';
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool_refusal = skyphusion_ai_tool_refusal( 'assistant' );
+		if ( is_wp_error( $tool_refusal ) ) {
+			return '';
+		}
+	}
+	$spec = skyphusion_ai_assistant_stream_spec( $prompt );
+	if ( is_wp_error( $spec ) ) {
+		return '';
+	}
+	$relay  = skyphusion_ai_assistant_stream_relay( $spec );
+	$raw    = $relay['raw'];
+	$status = (int) $relay['status'];
+	if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
+		if ( 0 === $status ) {
+			skyphusion_ai_gateway_note( $spec['url'], 'text', new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) ) );
+		} else {
+			skyphusion_ai_gateway_note(
+				$spec['url'],
+				'text',
+				array(
+					'response' => array(
+						'code' => $status,
+					),
+				)
+			);
+		}
+	}
+	$decoded = json_decode( $raw, true );
+	if ( function_exists( 'skyphusion_ai_worker_sse_text' ) && '' !== skyphusion_ai_worker_sse_text( $raw ) ) {
+		$neurons = 0;
+		if ( function_exists( 'skyphusion_ai_worker_sse_neurons' ) ) {
+			$neurons = skyphusion_ai_worker_sse_neurons( $raw );
+		}
+		$decoded = array(
+			'usage' => array(
+				'neurons' => $neurons,
+			),
+		);
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+		skyphusion_ai_neuron_record( 'text', $spec['model'], is_array( $decoded ) ? $decoded : array(), 'assistant' );
+	}
+	$text = implode( '', skyphusion_ai_assistant_stream_events( $raw ) );
+	if ( '' !== $text && function_exists( 'skyphusion_ai_prompt_cache_write' ) ) {
+		skyphusion_ai_prompt_cache_write( 'assistant', $spec['model'], $prompt, '', $text );
+	}
+	if ( '' === $text || $status < 200 || $status >= 300 ) {
+		return '';
+	}
+	return $text;
+}
+
+/**
+ * Event headers. The browser reads this response as a stream.
+ *
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_headers() {
+	if ( function_exists( 'nocache_headers' ) ) {
+		nocache_headers();
+	}
+	while ( function_exists( 'ob_get_level' ) && ob_get_level() > 0 ) {
+		ob_end_flush();
+	}
+	if ( ! headers_sent() ) {
+		header( 'Content-Type: text/event-stream; charset=utf-8' );
+		header( 'Cache-Control: no-cache' );
+		header( 'X-Accel-Buffering: no' );
+	}
+}
+
+/**
+ * Send the page list once, before the answer pieces.
+ *
+ * @param mixed $rows Citation rows.
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_citations( $rows ) {
+	if ( ! is_array( $rows ) || array() === $rows || ! function_exists( 'wp_json_encode' ) ) {
+		return;
+	}
+	$clean = array();
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+		$title = isset( $row['title'] ) ? (string) $row['title'] : '';
+		$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
+		if ( '' === $title && '' === $url ) {
+			continue;
+		}
+		$clean[] = array(
+			'title' => $title,
+			'url'   => $url,
+		);
+	}
+	if ( array() === $clean ) {
+		return;
+	}
+	$encoded = wp_json_encode( array( 'citations' => $clean ) );
+	if ( ! is_string( $encoded ) || '' === $encoded ) {
+		return;
+	}
+	// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Event JSON, not HTML.
+	echo 'data: ' . $encoded . "\n\n";
+	if ( function_exists( 'flush' ) ) {
+		flush();
+	}
+}
+
+/**
+ * Keep the latest result for the next view.
+ *
+ * @param mixed $result Ask result.
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_store( $result ) {
+	if ( function_exists( 'set_transient' ) && is_array( $result ) ) {
+		set_transient( 'skyphusion_ai_assistant_last', $result, 120 );
+	}
+}
+
+/**
+ * Stop the event response.
+ *
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_finish() {
+	if ( function_exists( 'flush' ) ) {
+		flush();
+	}
+	exit;
+}
+
+/**
+ * Earlier turns posted with this question. The cap is thirty.
+ *
+ * @return array<int, array{question: string, answer: string}>
+ */
+function skyphusion_ai_assistant_posted_history() {
+	if ( function_exists( 'check_ajax_referer' ) ) {
+		check_ajax_referer( 'skyphusion_ai_assistant_stream' );
+	}
+	$questions = array();
+	$answers   = array();
+	if ( isset( $_POST['skyphusion_ai_assistant_turn_question'] ) && is_array( $_POST['skyphusion_ai_assistant_turn_question'] ) ) {
+		$questions = array_map( 'sanitize_text_field', wp_unslash( $_POST['skyphusion_ai_assistant_turn_question'] ) );
+	}
+	if ( isset( $_POST['skyphusion_ai_assistant_turn_answer'] ) && is_array( $_POST['skyphusion_ai_assistant_turn_answer'] ) ) {
+		$answers = array_map( 'sanitize_text_field', wp_unslash( $_POST['skyphusion_ai_assistant_turn_answer'] ) );
+	}
+	$cap = 30;
+	if ( count( $questions ) > $cap ) {
+		$questions = array_slice( $questions, -1 * $cap );
+	}
+	if ( count( $answers ) > $cap ) {
+		$answers = array_slice( $answers, -1 * $cap );
+	}
+	$count = count( $questions );
+	if ( count( $answers ) < $count ) {
+		$count = count( $answers );
+	}
+	$history = array();
+	for ( $index = 0; $index < $count; $index++ ) {
+		$history[] = array(
+			'question' => $questions[ $index ],
+			'answer'   => $answers[ $index ],
+		);
+	}
+	return $history;
+}
+
+/**
+ * Browser script for the blank Worker address.
+ *
+ * The token is not in this script. The request stays on this site.
+ *
+ * @return string
+ */
+function skyphusion_ai_assistant_stream_script() {
+	$script = '(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-php");forms.forEach(function(form){form._turns=[];var nodes=form.getElementsByTagName("input");var questions=[];var answers=[];for(var i=0;i<nodes.length;i++){if(nodes[i].name==="skyphusion_ai_assistant_turn_question[]"){questions.push(nodes[i].value);}if(nodes[i].name==="skyphusion_ai_assistant_turn_answer[]"){answers.push(nodes[i].value);}}var count=questions.length;if(answers.length<count){count=answers.length;}for(var n=0;n<count;n++){form._turns.push({question:questions[n],answer:answers[n]});}form.addEventListener("submit",function(event){event.preventDefault();var input=form.querySelector("input[type=text]");var asked=input.value;var out=form.querySelector(".skyphusion-ai-assistant-stream");var transcript=form.querySelector(".skyphusion-ai-assistant-transcript");var askedLine=document.createElement("p");askedLine.textContent=asked;transcript.appendChild(askedLine);out.textContent="";var body=new FormData();body.append("action","skyphusion_ai_assistant_stream");body.append("_wpnonce",form.getAttribute("data-nonce")||"");body.append("skyphusion_ai_assistant_question",asked);var consent=form.querySelector("input[type=checkbox]");if(consent&&consent.checked){body.append("skyphusion_ai_assistant_consent","1");}form._turns.forEach(function(turn){body.append("skyphusion_ai_assistant_turn_question[]",turn.question);body.append("skyphusion_ai_assistant_turn_answer[]",turn.answer);});fetch(form.getAttribute("data-stream"),{method:"POST",body:body,credentials:"same-origin"}).then(function(response){if(!response.body||!response.body.getReader){return;}var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){var reply=document.createElement("p");reply.textContent=out.textContent;transcript.appendChild(reply);form._turns.push({question:asked,answer:out.textContent});out.textContent="";input.value="";return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}if(parsed.citations&&parsed.citations.length){var list=document.createElement("ul");parsed.citations.forEach(function(row){if(!row||!row.title){return;}var item=document.createElement("li");var url=row.url||"";if(url.indexOf("https://")===0||url.indexOf("http://")===0){var link=document.createElement("a");link.href=url;link.textContent=row.title;item.appendChild(link);}else{item.textContent=row.title;}list.appendChild(item);});transcript.appendChild(list);}}catch(error){}});return pump();});}return pump();});});});})();';
+	return $script;
+}
+
+/**
+ * Answer a blank-URL question as a stream.
+ *
+ * The sentence is written as each piece arrives. The saved result is
+ * stored after those pieces are written.
+ *
+ * @return void
+ */
+function skyphusion_ai_assistant_stream_handle() {
+	if ( function_exists( 'check_ajax_referer' ) ) {
+		check_ajax_referer( 'skyphusion_ai_assistant_stream' );
+	}
+	skyphusion_ai_assistant_stream_headers();
+	$question = '';
+	if ( isset( $_POST['skyphusion_ai_assistant_question'] ) ) {
+		$question = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_assistant_question'] ) );
+	}
+	$consent = isset( $_POST['skyphusion_ai_assistant_consent'] );
+	$history = skyphusion_ai_assistant_posted_history();
+	$gated   = skyphusion_ai_assistant_gate( $question );
+	if ( isset( $gated['stop'] ) ) {
+		$answer = '';
+		if ( isset( $gated['stop']['answer'] ) ) {
+			$answer = (string) $gated['stop']['answer'];
+		}
+		if ( '' !== $answer ) {
+			skyphusion_ai_assistant_stream_emit(
+				'data: ' . wp_json_encode( array( 'response' => $answer ) ) . "\n",
+				'skyphusion_ai_assistant_stream_write_piece'
+			);
+		}
+		skyphusion_ai_assistant_stream_store( $gated['stop'] );
+		skyphusion_ai_assistant_stream_finish();
+	}
+	$question  = $gated['question'];
+	$citations = $gated['citations'];
+	$prompt    = $gated['prompt'];
+	$config    = skyphusion_ai_assistant_config();
+	$before    = 0;
+	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
+		$before = (int) skyphusion_ai_neuron_state()['neurons'];
+	}
+	$earlier = skyphusion_ai_assistant_compact_history( $history, isset( $config['turns'] ) ? (int) $config['turns'] : 10 );
+	if ( '' !== $earlier ) {
+		$prompt .= "\n" . $earlier;
+	}
+	skyphusion_ai_assistant_stream_citations( $citations );
+	$text  = skyphusion_ai_assistant_stream_live( $prompt );
+	$after = $before;
+	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
+		$after = (int) skyphusion_ai_neuron_state()['neurons'];
+	}
+	skyphusion_ai_assistant_add_neurons( $after - $before );
+	if ( '' === $text ) {
+		$text = __( 'The assistant could not answer.', 'skyphusion-ai' );
+		skyphusion_ai_assistant_stream_emit(
+			'data: ' . wp_json_encode( array( 'response' => $text ) ) . "\n",
+			'skyphusion_ai_assistant_stream_write_piece'
+		);
+		$result = skyphusion_ai_assistant_result( 'blocked', $text, $citations );
+	} else {
+		skyphusion_ai_assistant_remember( $question, $text, (bool) $consent );
+		$result = skyphusion_ai_assistant_result( 'answered', $text, $citations );
+	}
+	$turns                = skyphusion_ai_assistant_history_rows( $history );
+	$turns[]              = array(
+		'question' => $question,
+		'answer'   => $text,
+	);
+	$result['transcript'] = $turns;
+	skyphusion_ai_assistant_stream_store( $result );
+	skyphusion_ai_assistant_stream_finish();
+}
+
+/**
  * Shortcode. It prints nothing while the assistant is off.
  *
  * @return string
@@ -1194,22 +1790,33 @@ function skyphusion_ai_assistant_shortcode() {
 			$html .= skyphusion_ai_assistant_html( $last );
 		}
 	}
-	$html .= '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
-	$html .= '<input type="hidden" name="action" value="skyphusion_ai_assistant" />';
-	if ( function_exists( 'wp_nonce_field' ) ) {
-		$html .= wp_nonce_field( 'skyphusion_ai_assistant', '_wpnonce', true, false );
+	$nonce = '';
+	if ( function_exists( 'wp_create_nonce' ) ) {
+		$nonce = wp_create_nonce( 'skyphusion_ai_assistant_stream' );
+	}
+	$ajax = '';
+	if ( function_exists( 'admin_url' ) ) {
+		$ajax = admin_url( 'admin-ajax.php' );
+	}
+	$html .= '<form class="skyphusion-ai-assistant-php" method="post" action="' . esc_url( $ajax ) . '" data-stream="' . esc_attr( $ajax ) . '" data-nonce="' . esc_attr( $nonce ) . '">';
+	$html .= '<input type="hidden" name="action" value="skyphusion_ai_assistant_stream" />';
+	if ( '' !== $nonce ) {
+		$html .= '<input type="hidden" name="_wpnonce" value="' . esc_attr( $nonce ) . '" />';
 	}
 	$transcript = array();
 	if ( isset( $last['transcript'] ) && is_array( $last['transcript'] ) ) {
 		$transcript = $last['transcript'];
 	}
 	$html .= skyphusion_ai_assistant_turn_fields( $transcript );
+	$html .= '<div class="skyphusion-ai-assistant-transcript"></div>';
 	$html .= '<p><label>' . esc_html__( 'Ask this site', 'skyphusion-ai' ) . ' ';
 	$html .= '<input type="text" name="skyphusion_ai_assistant_question" value="" /></label></p>';
 	$html .= '<p><label><input type="checkbox" name="skyphusion_ai_assistant_consent" value="1" /> ';
 	$html .= esc_html__( 'Save this chat on this site.', 'skyphusion-ai' ) . '</label></p>';
 	$html .= '<button type="submit">' . esc_html__( 'Ask', 'skyphusion-ai' ) . '</button>';
+	$html .= '<pre class="skyphusion-ai-assistant-stream"></pre>';
 	$html .= '</form>';
+	$html .= '<script>' . skyphusion_ai_assistant_stream_script() . '</script>';
 	return $html;
 }
 
@@ -1282,3 +1889,5 @@ add_action( 'init', 'skyphusion_ai_assistant_boot' );
 add_action( 'admin_post_skyphusion_ai_assistant_save', 'skyphusion_ai_assistant_handle_save' );
 add_action( 'admin_post_skyphusion_ai_assistant', 'skyphusion_ai_assistant_handle' );
 add_action( 'admin_post_nopriv_skyphusion_ai_assistant', 'skyphusion_ai_assistant_handle' );
+add_action( 'wp_ajax_skyphusion_ai_assistant_stream', 'skyphusion_ai_assistant_stream_handle' );
+add_action( 'wp_ajax_nopriv_skyphusion_ai_assistant_stream', 'skyphusion_ai_assistant_stream_handle' );
