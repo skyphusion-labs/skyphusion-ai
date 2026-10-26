@@ -112,6 +112,7 @@ function skyphusion_ai_related_rows( $post ) {
 			'title'  => $title,
 			'url'    => $link,
 			'reason' => $reason,
+			'score'  => isset( $match['score'] ) ? (float) $match['score'] : 0,
 		);
 		if ( count( $rows ) >= 5 ) {
 			break;
@@ -224,3 +225,116 @@ function skyphusion_ai_related_boot() {
 	}
 }
 add_action( 'init', 'skyphusion_ai_related_boot' );
+
+/**
+ * Post meta that holds one saved related list.
+ *
+ * @return string
+ */
+function skyphusion_ai_related_list_key() {
+	return 'skyphusion_ai_related_list';
+}
+
+/**
+ * Build related lists now and store them. The embeddings model is not called.
+ *
+ * @param array<int, mixed> $posts Posts to refresh.
+ * @return array{state: string, saved: int}
+ */
+function skyphusion_ai_related_refresh( $posts ) {
+	$saved = 0;
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		$rows    = skyphusion_ai_related_rows( $post );
+		if ( function_exists( 'update_post_meta' ) ) {
+			update_post_meta( $post_id, skyphusion_ai_related_list_key(), $rows );
+		}
+		++$saved;
+	}
+	return array(
+		'state' => 'refreshed',
+		'saved' => $saved,
+	);
+}
+
+/**
+ * Saved list, or null when this post has not been refreshed.
+ *
+ * @param int $post_id Post id.
+ * @return array<int, array<string, mixed>>|null
+ */
+function skyphusion_ai_related_saved( $post_id ) {
+	if ( ! function_exists( 'get_post_meta' ) ) {
+		return null;
+	}
+	$value = get_post_meta( (int) $post_id, skyphusion_ai_related_list_key(), true );
+	if ( ! is_array( $value ) ) {
+		return null;
+	}
+	return $value;
+}
+
+/**
+ * WP-CLI for related refresh and related show.
+ *
+ * @param array<int, string>    $args       Positional arguments.
+ * @param array<string, string> $assoc_args Flags.
+ * @return void
+ */
+function skyphusion_ai_related_cli( $args, $assoc_args ) {
+	if ( ! class_exists( 'WP_CLI' ) ) {
+		return;
+	}
+	$command = '';
+	if ( isset( $args[0] ) ) {
+		$command = (string) $args[0];
+	}
+	if ( 'refresh' === $command ) {
+		$posts = skyphusion_ai_embed_collect();
+		$one   = 0;
+		if ( ! isset( $assoc_args['all'] ) && isset( $args[1] ) ) {
+			$one = (int) $args[1];
+		}
+		if ( $one > 0 ) {
+			$post  = skyphusion_ai_embed_load( $one );
+			$posts = is_array( $post ) ? array( $post ) : array();
+		}
+		$result = skyphusion_ai_related_refresh( $posts );
+		WP_CLI::log( 'related_state=' . $result['state'] );
+		WP_CLI::log( 'related_saved=' . (string) $result['saved'] );
+		WP_CLI::log( 'embed_called=0' );
+		return;
+	}
+	if ( 'show' === $command ) {
+		$post_id = isset( $args[1] ) ? (int) $args[1] : 0;
+		$saved   = skyphusion_ai_related_saved( $post_id );
+		$rows    = $saved;
+		if ( null === $rows ) {
+			$post = skyphusion_ai_embed_load( $post_id );
+			$rows = is_array( $post ) ? skyphusion_ai_related_rows( $post ) : array();
+		}
+		if ( ! is_array( $rows ) || array() === $rows ) {
+			WP_CLI::log( 'related_state=empty' );
+			return;
+		}
+		foreach ( $rows as $row ) {
+			if ( ! is_array( $row ) ) {
+				continue;
+			}
+			$id     = isset( $row['id'] ) ? (string) $row['id'] : '';
+			$score  = isset( $row['score'] ) ? (string) $row['score'] : '0';
+			$title  = isset( $row['title'] ) ? (string) $row['title'] : '';
+			$reason = isset( $row['reason'] ) ? (string) $row['reason'] : '';
+			WP_CLI::log( $id . ' ' . $score . ' ' . $title . ' ' . $reason );
+		}
+		return;
+	}
+	WP_CLI::log( 'related_state=unknown' );
+}
+
+if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
+	WP_CLI::add_command( 'skyphusion-ai related', 'skyphusion_ai_related_cli' );
+}

@@ -67,6 +67,12 @@ function skyphusion_ai_embed_config() {
 	if ( ! empty( $stored['created'] ) ) {
 		$created = 1;
 	}
+	$enabled = 0;
+	if ( array_key_exists( 'enabled', $stored ) ) {
+		$enabled = empty( $stored['enabled'] ) ? 0 : 1;
+	} elseif ( 1 === $created ) {
+		$enabled = 1;
+	}
 	$related = 0;
 	if ( ! empty( $stored['related'] ) ) {
 		$related = 1;
@@ -111,6 +117,7 @@ function skyphusion_ai_embed_config() {
 		'fields'     => $fields,
 		'model'      => $model,
 		'created'    => $created,
+		'enabled'    => $enabled,
 		'related'    => $related,
 		'statuses'   => $statuses,
 		'images'     => empty( $stored['images'] ) ? 0 : 1,
@@ -452,6 +459,59 @@ function skyphusion_ai_embed_hash_set( $post_id, $hash ) {
 }
 
 /**
+ * Post meta for an embedding that did not store.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_fail_key() {
+	return 'skyphusion_ai_embed_failed';
+}
+
+/**
+ * Remember or forget a failed store.
+ *
+ * @param int  $post_id Post id.
+ * @param bool $failed  True when the last store did not finish.
+ * @return void
+ */
+function skyphusion_ai_embed_fail_set( $post_id, $failed ) {
+	if ( $failed ) {
+		if ( function_exists( 'update_post_meta' ) ) {
+			update_post_meta( (int) $post_id, skyphusion_ai_embed_fail_key(), '1' );
+		}
+		return;
+	}
+	if ( function_exists( 'delete_post_meta' ) ) {
+		delete_post_meta( (int) $post_id, skyphusion_ai_embed_fail_key() );
+	}
+}
+
+/**
+ * True when the last store for this post did not finish.
+ *
+ * @param int $post_id Post id.
+ * @return bool
+ */
+function skyphusion_ai_embed_failed( $post_id ) {
+	if ( ! function_exists( 'get_post_meta' ) ) {
+		return false;
+	}
+	return '1' === (string) get_post_meta( (int) $post_id, skyphusion_ai_embed_fail_key(), true );
+}
+
+/**
+ * True when embeddings are on.
+ *
+ * A missing switch follows the index. An explicit zero stays off.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @return bool
+ */
+function skyphusion_ai_embed_on( $config ) {
+	return ! empty( $config['enabled'] );
+}
+
+/**
  * Account id and token from the same places as Workers AI.
  *
  * @return array{account_id: string, token: string}
@@ -577,6 +637,7 @@ function skyphusion_ai_embed_ensure( $config ) {
 		return array( 'state' => 'blocked' );
 	}
 	$config['created'] = 1;
+	$config['enabled'] = 1;
 	$config['model']   = $model;
 	update_option( skyphusion_ai_embed_option_name(), $config, false );
 	return array( 'state' => 'ready' );
@@ -686,6 +747,7 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	$hash     = '' === $text ? '' : hash( 'sha256', $text );
 	$stored   = skyphusion_ai_embed_hash_get( $post_id );
 	if ( $included && $hash === $stored ) {
+		skyphusion_ai_embed_fail_set( $post_id, false );
 		return array( 'state' => 'unchanged' );
 	}
 	$model = '@cf/baai/bge-large-en-v1.5';
@@ -701,9 +763,14 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	}
 	if ( ! $included ) {
 		if ( '' === $stored ) {
+			skyphusion_ai_embed_fail_set( $post_id, false );
 			return array( 'state' => 'removed' );
 		}
-		return skyphusion_ai_embed_remove( $post_id, $config, $credentials );
+		$removed = skyphusion_ai_embed_remove( $post_id, $config, $credentials );
+		if ( 'removed' === $removed['state'] ) {
+			skyphusion_ai_embed_fail_set( $post_id, false );
+		}
+		return $removed;
 	}
 	if ( ! function_exists( 'cloudflare_ai_provider_embeddings' ) ) {
 		return array( 'state' => 'blocked' );
@@ -717,6 +784,7 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	}
 	$vectors = cloudflare_ai_provider_embeddings( array( $text ) );
 	if ( is_wp_error( $vectors ) || ! is_array( $vectors ) || ! isset( $vectors[0] ) || ! is_array( $vectors[0] ) ) {
+		skyphusion_ai_embed_fail_set( $post_id, true );
 		return array( 'state' => 'blocked' );
 	}
 	$line = wp_json_encode(
@@ -729,9 +797,11 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	$url  = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'upsert' );
 	$save = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $line . "\n", 'application/x-ndjson' );
 	if ( is_wp_error( $save ) ) {
+		skyphusion_ai_embed_fail_set( $post_id, true );
 		return array( 'state' => 'blocked' );
 	}
 	skyphusion_ai_embed_hash_set( $post_id, $hash );
+	skyphusion_ai_embed_fail_set( $post_id, false );
 	$after = $before;
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
 		$after = (int) skyphusion_ai_neuron_state()['neurons'];
@@ -911,6 +981,7 @@ function skyphusion_ai_embed_delete_index( $confirmed ) {
 		return array( 'state' => 'blocked' );
 	}
 	$config['created'] = 0;
+	$config['enabled'] = 0;
 	$config['model']   = '';
 	update_option( skyphusion_ai_embed_option_name(), $config, false );
 	return array( 'state' => 'deleted' );
@@ -1297,50 +1368,504 @@ function skyphusion_ai_embed_redirect() {
 }
 
 /**
- * WP-CLI entry. Without --yes the model is not called.
+ * Count stored, waiting, and failed posts. This does not call the model.
+ *
+ * @param array<int, mixed>    $posts  Posts to consider.
+ * @param array<string, mixed> $config Saved choices.
+ * @return array{embedded: int, waiting: int, failed: int}
+ */
+function skyphusion_ai_embed_tally( $posts, $config ) {
+	$embedded = 0;
+	$waiting  = 0;
+	$failed   = 0;
+	$fields   = array();
+	if ( isset( $config['fields'] ) && is_array( $config['fields'] ) ) {
+		$fields = $config['fields'];
+	}
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) || ! skyphusion_ai_embed_included( $post, $config ) ) {
+			continue;
+		}
+		$text = skyphusion_ai_embed_text( $post, $fields );
+		if ( '' === $text ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		if ( skyphusion_ai_embed_failed( $post_id ) ) {
+			++$failed;
+			continue;
+		}
+		$hash = hash( 'sha256', $text );
+		if ( skyphusion_ai_embed_hash_get( $post_id ) === $hash ) {
+			++$embedded;
+			continue;
+		}
+		++$waiting;
+	}
+	return array(
+		'embedded' => $embedded,
+		'waiting'  => $waiting,
+		'failed'   => $failed,
+	);
+}
+
+/**
+ * Remove vectors for posts that no longer belong. The model is not called.
+ *
+ * @param array<int, mixed> $posts Posts to consider.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_embed_reconcile( $posts ) {
+	$config = skyphusion_ai_embed_config();
+	if ( ! skyphusion_ai_embed_on( $config ) ) {
+		return array(
+			'state'   => 'off',
+			'removed' => 0,
+			'waiting' => 0,
+		);
+	}
+	$fields = array();
+	if ( isset( $config['fields'] ) && is_array( $config['fields'] ) ) {
+		$fields = $config['fields'];
+	}
+	$removed     = 0;
+	$credentials = skyphusion_ai_embed_credentials();
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		$text    = skyphusion_ai_embed_text( $post, $fields );
+		$keep    = skyphusion_ai_embed_included( $post, $config ) && '' !== $text;
+		$stored  = skyphusion_ai_embed_hash_get( $post_id );
+		if ( $keep || '' === $stored ) {
+			continue;
+		}
+		$result = skyphusion_ai_embed_remove( $post_id, $config, $credentials );
+		if ( 'removed' === $result['state'] ) {
+			++$removed;
+		}
+	}
+	$tally = skyphusion_ai_embed_tally( $posts, skyphusion_ai_embed_config() );
+	return array(
+		'state'   => 'reconciled',
+		'removed' => $removed,
+		'waiting' => $tally['waiting'],
+	);
+}
+
+/**
+ * Store failed posts again.
+ *
+ * @param array<int, mixed> $posts Posts to consider.
+ * @return array{state: string, retried: int}
+ */
+function skyphusion_ai_embed_retry( $posts ) {
+	$config = skyphusion_ai_embed_config();
+	if ( ! skyphusion_ai_embed_on( $config ) ) {
+		return array(
+			'state'   => 'off',
+			'retried' => 0,
+		);
+	}
+	$retried = 0;
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		if ( ! skyphusion_ai_embed_failed( $post_id ) ) {
+			continue;
+		}
+		$result = skyphusion_ai_embed_sync_post( $post );
+		if ( 'embedded' === $result['state'] ) {
+			++$retried;
+		}
+	}
+	return array(
+		'state'   => 'retried',
+		'retried' => $retried,
+	);
+}
+
+/**
+ * Forget stored hashes and embed the selection again.
+ *
+ * @param array<int, mixed> $posts Posts to consider.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_embed_rebuild( $posts ) {
+	$config = skyphusion_ai_embed_config();
+	if ( ! skyphusion_ai_embed_on( $config ) ) {
+		return array( 'state' => 'off' );
+	}
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		skyphusion_ai_embed_hash_set( $post_id, '' );
+		skyphusion_ai_embed_fail_set( $post_id, false );
+	}
+	return skyphusion_ai_embed_run( $posts, true );
+}
+
+/**
+ * Vector count from the index.
+ *
+ * The field is result.vectorCount on GET /vectorize/v2/indexes/{name}/info.
+ * See https://developers.cloudflare.com/api/resources/vectorize/
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @return int|null Null when the index is missing or the call failed.
+ */
+function skyphusion_ai_embed_store_count( $config ) {
+	if ( empty( $config['created'] ) ) {
+		return null;
+	}
+	$credentials = skyphusion_ai_embed_credentials();
+	$url         = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'info' );
+	$read        = skyphusion_ai_vectorize_request( 'GET', $url, $credentials['token'], '', 'application/json' );
+	if ( is_wp_error( $read ) || ! isset( $read['result']['vectorCount'] ) ) {
+		return null;
+	}
+	return (int) $read['result']['vectorCount'];
+}
+
+/**
+ * Copy stored vectors into another Vectorize index. The model is not called.
+ *
+ * @param string            $destination Index name.
+ * @param array<int, mixed> $posts       Posts whose vectors are copied.
+ * @return array{state: string, moved: int}
+ */
+function skyphusion_ai_embed_move( $destination, $posts ) {
+	$target = skyphusion_ai_embed_index_name( $destination );
+	$config = skyphusion_ai_embed_config();
+	if ( '' === $target || $target === (string) $config['index'] ) {
+		return array(
+			'state' => 'blocked',
+			'moved' => 0,
+		);
+	}
+	if ( empty( $config['created'] ) ) {
+		return array(
+			'state' => 'not_created',
+			'moved' => 0,
+		);
+	}
+	$ids = array();
+	foreach ( $posts as $post ) {
+		if ( ! is_array( $post ) ) {
+			continue;
+		}
+		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+		if ( '' === skyphusion_ai_embed_hash_get( $post_id ) ) {
+			continue;
+		}
+		$ids[] = skyphusion_ai_embed_vector_id( $post_id );
+	}
+	if ( array() === $ids ) {
+		return array(
+			'state' => 'copied',
+			'moved' => 0,
+		);
+	}
+	$credentials = skyphusion_ai_embed_credentials();
+	$model       = isset( $config['model'] ) ? (string) $config['model'] : '';
+	$create      = skyphusion_ai_embed_create_body( $target, $model );
+	if ( null !== $create ) {
+		$create_url = skyphusion_ai_vectorize_url( $credentials['account_id'], '', '' );
+		skyphusion_ai_vectorize_request(
+			'POST',
+			$create_url,
+			$credentials['token'],
+			(string) wp_json_encode( $create ),
+			'application/json'
+		);
+	}
+	$read_url = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'get_by_ids' );
+	$read     = skyphusion_ai_vectorize_request(
+		'POST',
+		$read_url,
+		$credentials['token'],
+		(string) wp_json_encode( array( 'ids' => $ids ) ),
+		'application/json'
+	);
+	if ( is_wp_error( $read ) ) {
+		return array(
+			'state' => 'blocked',
+			'moved' => 0,
+		);
+	}
+	$rows = array();
+	if ( isset( $read['result'] ) && is_array( $read['result'] ) && isset( $read['result'][0] ) ) {
+		$rows = $read['result'];
+	} elseif ( isset( $read['result']['vectors'] ) && is_array( $read['result']['vectors'] ) ) {
+		$rows = $read['result']['vectors'];
+	}
+	$lines = array();
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) || ! isset( $row['id'] ) || ! isset( $row['values'] ) || ! is_array( $row['values'] ) ) {
+			continue;
+		}
+		$values  = array();
+		$numeric = true;
+		foreach ( $row['values'] as $number ) {
+			if ( ! is_numeric( $number ) ) {
+				$numeric = false;
+				break;
+			}
+			$values[] = (float) $number;
+		}
+		if ( ! $numeric || array() === $values ) {
+			continue;
+		}
+		$line = array(
+			'id'     => (string) $row['id'],
+			'values' => $values,
+		);
+		if ( isset( $row['metadata'] ) && is_array( $row['metadata'] ) ) {
+			$line['metadata'] = $row['metadata'];
+		}
+		$encoded = wp_json_encode( $line );
+		if ( is_string( $encoded ) ) {
+			$lines[] = $encoded;
+		}
+	}
+	if ( array() === $lines ) {
+		return array(
+			'state' => 'blocked',
+			'moved' => 0,
+		);
+	}
+	$write_url = skyphusion_ai_vectorize_url( $credentials['account_id'], $target, 'upsert' );
+	$write     = skyphusion_ai_vectorize_request(
+		'POST',
+		$write_url,
+		$credentials['token'],
+		implode( "\n", $lines ) . "\n",
+		'application/x-ndjson'
+	);
+	if ( is_wp_error( $write ) ) {
+		return array(
+			'state' => 'blocked',
+			'moved' => 0,
+		);
+	}
+	return array(
+		'state' => 'copied',
+		'moved' => count( $lines ),
+	);
+}
+
+/**
+ * WP-CLI jobs for the Vectorize index.
+ *
+ * Marker: embed-cli. run, reconcile, and rebuild stop while embeddings are off.
+ * move copies stored vectors and does not call the embeddings model.
  *
  * @param array<int, string>    $args       Positional arguments.
  * @param array<string, string> $assoc_args Flags.
  * @return void
  */
 function skyphusion_ai_embed_cli( $args, $assoc_args ) {
+	if ( ! class_exists( 'WP_CLI' ) ) {
+		return;
+	}
 	$command = '';
 	if ( isset( $args[0] ) ) {
 		$command = (string) $args[0];
 	}
 	$confirmed = isset( $assoc_args['yes'] );
+	if ( '' === $command ) {
+		$command = $confirmed ? 'run' : 'estimate';
+	}
 	if ( 'status' === $command ) {
-		$config = skyphusion_ai_embed_config();
-		WP_CLI::log( 'embed_index=' . $config['index'] );
-		WP_CLI::log( 'embed_created=' . (string) $config['created'] );
-		WP_CLI::log( 'embed_model=' . (string) $config['model'] );
+		skyphusion_ai_embed_cli_status( $assoc_args );
+		return;
+	}
+	if ( 'estimate' === $command ) {
+		skyphusion_ai_embed_cli_estimate();
+		return;
+	}
+	if ( 'run' === $command || 'reconcile' === $command || 'rebuild' === $command ) {
+		skyphusion_ai_embed_cli_job( $command );
+		return;
+	}
+	if ( 'retry' === $command ) {
+		skyphusion_ai_embed_cli_retry();
 		return;
 	}
 	if ( 'search' === $command ) {
-		$query = trim( implode( ' ', array_slice( $args, 1 ) ) );
-		$rows  = skyphusion_ai_embed_search( $query, 5 );
-		if ( isset( $rows['state'] ) ) {
-			WP_CLI::log( 'embed_search=' . (string) $rows['state'] );
-			return;
-		}
-		foreach ( $rows as $row ) {
-			WP_CLI::log( $row['id'] . ' ' . $row['title'] );
-		}
+		skyphusion_ai_embed_cli_search( $args );
 		return;
 	}
-	if ( 'delete-index' === $command ) {
-		$result = skyphusion_ai_embed_delete_index( $confirmed );
-		WP_CLI::log( 'embed_delete=' . $result['state'] );
+	if ( 'purge' === $command || 'delete-index' === $command ) {
+		skyphusion_ai_embed_cli_purge( $command, $confirmed );
 		return;
 	}
-	$result = skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), $confirmed );
-	if ( 'estimate' === $result['state'] ) {
-		WP_CLI::log( 'embed_posts=' . (string) $result['estimate']['posts'] );
-		WP_CLI::log( 'embed_neurons=' . (string) $result['estimate']['neurons'] );
+	if ( 'move' === $command ) {
+		skyphusion_ai_embed_cli_move( $assoc_args );
+		return;
+	}
+	WP_CLI::log( 'embed_state=unknown' );
+}
+
+/**
+ * Print local counts, and the index count when asked.
+ *
+ * @param array<string, string> $assoc_args Flags.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_status( $assoc_args ) {
+	$config = skyphusion_ai_embed_config();
+	$tally  = skyphusion_ai_embed_tally( skyphusion_ai_embed_collect(), $config );
+	WP_CLI::log( 'embed_index=' . $config['index'] );
+	WP_CLI::log( 'embed_created=' . (string) $config['created'] );
+	WP_CLI::log( 'embed_model=' . (string) $config['model'] );
+	WP_CLI::log( 'embed_on=' . ( skyphusion_ai_embed_on( $config ) ? '1' : '0' ) );
+	WP_CLI::log( 'embed_embedded=' . (string) $tally['embedded'] );
+	WP_CLI::log( 'embed_waiting=' . (string) $tally['waiting'] );
+	WP_CLI::log( 'embed_failed=' . (string) $tally['failed'] );
+	if ( ! isset( $assoc_args['store'] ) ) {
+		return;
+	}
+	$count = skyphusion_ai_embed_store_count( $config );
+	if ( null === $count ) {
+		WP_CLI::log( 'embed_vectors=0' );
+		return;
+	}
+	WP_CLI::log( 'embed_vectors=' . (string) $count );
+}
+
+/**
+ * Print the estimate. The model is not called.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_cli_estimate() {
+	$result   = skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), false );
+	$estimate = $result['estimate'];
+	WP_CLI::log( 'embed_posts=' . (string) $estimate['posts'] );
+	WP_CLI::log( 'embed_neurons=' . (string) $estimate['neurons'] );
+	WP_CLI::log( 'embed_passages=' . (string) $estimate['passages'] );
+	WP_CLI::log( 'embed_days=' . (string) $estimate['days'] );
+	WP_CLI::log( 'embed_stored=' . (string) $estimate['stored'] );
+	WP_CLI::log( 'embed_called=0' );
+}
+
+/**
+ * Say that the job stopped because embeddings are off.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_cli_refuse() {
+	WP_CLI::log( 'embed_state=off' );
+	WP_CLI::log( 'embed_called=0' );
+}
+
+/**
+ * Run, reconcile, or rebuild. Each stops while embeddings are off.
+ *
+ * @param string $command Job name.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_job( $command ) {
+	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
+		skyphusion_ai_embed_cli_refuse();
+		return;
+	}
+	$posts = skyphusion_ai_embed_collect();
+	if ( 'reconcile' === $command ) {
+		$result = skyphusion_ai_embed_reconcile( $posts );
+		WP_CLI::log( 'embed_state=' . $result['state'] );
+		WP_CLI::log( 'embed_removed=' . (string) $result['removed'] );
+		WP_CLI::log( 'embed_waiting=' . (string) $result['waiting'] );
 		WP_CLI::log( 'embed_called=0' );
 		return;
 	}
+	if ( 'rebuild' === $command ) {
+		$result = skyphusion_ai_embed_rebuild( $posts );
+		WP_CLI::log( 'embed_state=' . $result['state'] );
+		return;
+	}
+	$result = skyphusion_ai_embed_run( $posts, true );
 	WP_CLI::log( 'embed_state=' . $result['state'] );
+}
+
+/**
+ * Try failed posts again. This stops while embeddings are off.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_cli_retry() {
+	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
+		skyphusion_ai_embed_cli_refuse();
+		return;
+	}
+	$result = skyphusion_ai_embed_retry( skyphusion_ai_embed_collect() );
+	WP_CLI::log( 'embed_state=' . $result['state'] );
+	WP_CLI::log( 'embed_retried=' . (string) $result['retried'] );
+}
+
+/**
+ * Search the index. This does not write vectors.
+ *
+ * @param array<int, string> $args Positional arguments.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_search( $args ) {
+	$query = trim( implode( ' ', array_slice( $args, 1 ) ) );
+	$rows  = skyphusion_ai_embed_search( $query, 5 );
+	if ( isset( $rows['state'] ) ) {
+		WP_CLI::log( 'embed_search=' . (string) $rows['state'] );
+		return;
+	}
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+		$title = isset( $row['title'] ) ? (string) $row['title'] : '';
+		$id    = isset( $row['id'] ) ? (string) $row['id'] : '';
+		WP_CLI::log( $id . ' ' . $title );
+	}
+}
+
+/**
+ * Delete the index. purge always confirms. delete-index waits for the yes flag.
+ *
+ * @param string $command   purge or delete-index.
+ * @param bool   $confirmed True when the yes flag is set.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_purge( $command, $confirmed ) {
+	if ( 'delete-index' === $command && ! $confirmed ) {
+		$result = skyphusion_ai_embed_delete_index( false );
+		WP_CLI::log( 'embed_delete=' . $result['state'] );
+		return;
+	}
+	$result = skyphusion_ai_embed_delete_index( true );
+	WP_CLI::log( 'embed_delete=' . $result['state'] );
+	WP_CLI::log( 'embed_on=' . ( skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ? '1' : '0' ) );
+	WP_CLI::log( 'embed_called=0' );
+}
+
+/**
+ * Copy vectors to the index named by the flag. The model is not called.
+ *
+ * @param array<string, string> $assoc_args Flags.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_move( $assoc_args ) {
+	$destination = '';
+	if ( isset( $assoc_args['index'] ) ) {
+		$destination = (string) $assoc_args['index'];
+	}
+	$result = skyphusion_ai_embed_move( $destination, skyphusion_ai_embed_collect() );
+	WP_CLI::log( 'embed_state=' . $result['state'] );
+	WP_CLI::log( 'embed_moved=' . (string) $result['moved'] );
+	WP_CLI::log( 'embed_called=0' );
 }
 
 add_action( 'save_post', 'skyphusion_ai_embed_on_save', 20, 1 );

@@ -21,6 +21,10 @@ if (!function_exists('wp_remote_request')) {
     {
         $GLOBALS['cfais_calls']++;
         $GLOBALS['cfais_last_request'] = array('url' => $url, 'args' => $args);
+        if (!isset($GLOBALS['cfais_request_urls']) || !is_array($GLOBALS['cfais_request_urls'])) {
+            $GLOBALS['cfais_request_urls'] = array();
+        }
+        $GLOBALS['cfais_request_urls'][] = (string) $url;
         if (!empty($GLOBALS['cfais_transport_error'])) {
             return new WP_Error('http_request_failed', 'The site could not reach Cloudflare.');
         }
@@ -424,6 +428,178 @@ $embed_related = (string) file_get_contents(dirname(__DIR__) . '/includes/relate
 $embed_links = (string) file_get_contents(dirname(__DIR__) . '/includes/links.php');
 expect('related posts do not call the embeddings model', strpos($embed_related, 'cloudflare_ai_provider_embeddings') === false, true);
 expect('the link box does not call the embeddings model', strpos($embed_links, 'cloudflare_ai_provider_embeddings') === false && strpos($embed_links, 'skyphusion_ai_embed_search') === false, true);
+expect('the embed cli marker is present', strpos($embed_src, 'embed-cli') !== false, true);
+expect('cli does not add a backfill command', strpos($embed_cli, 'function backfill') === false, true);
+expect('cli does not add a translation command', strpos($embed_cli, 'function translate') === false, true);
+expect('cli does not add a usage command', strpos($embed_cli, 'function usage') === false, true);
+
+function embed_cli_lines()
+{
+    return implode("\n", $GLOBALS['cfais_cli_log']);
+}
+
+function embed_cli_off()
+{
+    update_option('skyphusion_ai_vectorize', array(
+        'index' => 'skyphusion-ai',
+        'post_types' => array('post', 'product'),
+        'fields' => array('title', 'content', 'excerpt'),
+        'model' => '@cf/baai/bge-large-en-v1.5',
+        'created' => 1,
+        'enabled' => 0,
+    ), false);
+}
+
+embed_cli_off();
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(90, 'Off', 'Do not send'));
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_cli_log'] = array();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+unset($GLOBALS['cfais_bodies']);
+skyphusion_ai_embed_cli(array('run'), array('yes' => true));
+expect('run refuses while embeddings are off', strpos(embed_cli_lines(), 'embed_state=off') !== false, true);
+expect('run while off does not call the model', $GLOBALS['cfais_calls'], 0);
+expect('run while off does not post', $GLOBALS['cfais_last_post'], array('marker' => 1));
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('reconcile'), array());
+expect('reconcile refuses while embeddings are off', strpos(embed_cli_lines(), 'embed_state=off') !== false, true);
+expect('reconcile while off makes no request', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['cfais_embed_meta'][90]['skyphusion_ai_embed_hash'] = 'keep-this-hash';
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('rebuild'), array());
+expect('rebuild refuses while embeddings are off', strpos(embed_cli_lines(), 'embed_state=off') !== false, true);
+expect('rebuild while off makes no request', $GLOBALS['cfais_calls'], 0);
+expect('rebuild while off keeps the hash', $GLOBALS['cfais_embed_meta'][90]['skyphusion_ai_embed_hash'], 'keep-this-hash');
+
+embed_ready();
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(91, 'Estimate', 'Four words here'));
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_cli_log'] = array();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+skyphusion_ai_embed_cli(array('estimate'), array('yes' => true));
+expect('estimate does not run when the yes flag is set', strpos(embed_cli_lines(), 'embed_called=0') !== false, true);
+expect('estimate names passages', strpos(embed_cli_lines(), 'embed_passages=1') !== false, true);
+expect('estimate makes no request', $GLOBALS['cfais_calls'], 0);
+expect('estimate does not post', $GLOBALS['cfais_last_post'], array('marker' => 1));
+
+$GLOBALS['cfais_embed_meta'][91]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text(embed_post(91, 'Estimate', 'Four words here'), array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('status'), array());
+expect('status counts the stored post', strpos(embed_cli_lines(), 'embed_embedded=1') !== false, true);
+expect('status says embeddings are on', strpos(embed_cli_lines(), 'embed_on=1') !== false, true);
+expect('status makes no request', $GLOBALS['cfais_calls'], 0);
+
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{"vectorCount":4}}');
+$GLOBALS['cfais_request_urls'] = array();
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('status'), array('store' => true));
+expect('status with store prints the index count', strpos(embed_cli_lines(), 'embed_vectors=4') !== false, true);
+expect('status with store reads index info', strpos((string) $GLOBALS['cfais_last_request']['url'], '/info') !== false, true);
+
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_request_urls'] = array();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"matches":[{"id":"p91","score":0.5,"metadata":{"title":"Estimate","post_id":"91"}}]}}',
+);
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('search', 'red', 'bats'), array());
+expect('search prints the title', strpos(embed_cli_lines(), 'Estimate') !== false, true);
+$embed_search_wrote = false;
+foreach ($GLOBALS['cfais_request_urls'] as $embed_search_url) {
+    if (strpos($embed_search_url, 'upsert') !== false || strpos($embed_search_url, 'delete_by_ids') !== false || strpos($embed_search_url, '/insert') !== false) {
+        $embed_search_wrote = true;
+    }
+}
+expect('search does not write the index', $embed_search_wrote, false);
+
+$embed_kept = embed_post(92, 'Kept', 'Still here');
+$embed_dropped = embed_post(93, 'Dropped', 'Leave now', array('post_password' => 'locked'));
+$GLOBALS['cfais_embed_meta'][92]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_kept, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][93]['skyphusion_ai_embed_hash'] = 'old-hash';
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_kept, $embed_dropped);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('reconcile'), array());
+expect('reconcile removes a post that no longer belongs', strpos(embed_cli_lines(), 'embed_removed=1') !== false, true);
+expect('reconcile does not call the model', $GLOBALS['cfais_last_post'], array('marker' => 1));
+expect('reconcile deletes by id', strpos((string) $GLOBALS['cfais_last_request']['url'], '/delete_by_ids') !== false, true);
+expect('reconcile says the model was not called', strpos(embed_cli_lines(), 'embed_called=0') !== false, true);
+
+$GLOBALS['cfais_embed_meta'][94]['skyphusion_ai_embed_failed'] = '1';
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(94, 'Retry', 'Try again'));
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"mutationId":"retry1"}}',
+);
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('retry'), array());
+expect('retry stores the failed post', strpos(embed_cli_lines(), 'embed_retried=1') !== false, true);
+expect('retry clears the failed flag', isset($GLOBALS['cfais_embed_meta'][94]['skyphusion_ai_embed_failed']), false);
+
+$GLOBALS['cfais_embed_meta'][95]['skyphusion_ai_embed_hash'] = 'stale';
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(95, 'Rebuild', 'Fresh text'));
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"mutationId":"rebuild1"}}',
+);
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('rebuild'), array());
+expect('rebuild stores the post again', strpos(embed_cli_lines(), 'embed_state=ran') !== false, true);
+expect('rebuild called the model', $GLOBALS['cfais_calls'] >= 2, true);
+
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('purge'), array());
+expect('purge deletes the index', strpos(embed_cli_lines(), 'embed_delete=deleted') !== false, true);
+expect('purge turns embeddings off', skyphusion_ai_embed_on(skyphusion_ai_embed_config()), false);
+expect('purge does not call the model', strpos(embed_cli_lines(), 'embed_called=0') !== false, true);
+
+embed_ready();
+$embed_move_post = embed_post(96, 'Move', 'Copy this');
+$GLOBALS['cfais_embed_meta'][96]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_move_post, array('title', 'content', 'excerpt')));
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_move_post);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_request_urls'] = array();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+$GLOBALS['cfais_bodies'] = array(
+    '{"success":true,"result":{"name":"shop-copy"}}',
+    '{"success":true,"result":[{"id":"p96","values":[0.25,0.5],"metadata":{"title":"Move"}}]}',
+    '{"success":true,"result":{"mutationId":"move1"}}',
+);
+$embed_neurons_before = (int) skyphusion_ai_embed_config()['neurons'];
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('move'), array('index' => 'shop-copy'));
+expect('move copies the vector', strpos(embed_cli_lines(), 'embed_moved=1') !== false, true);
+expect('move does not call the model', $GLOBALS['cfais_last_post'], array('marker' => 1));
+expect('move spends no neurons', (int) skyphusion_ai_embed_config()['neurons'], $embed_neurons_before);
+expect('move says the model was not called', strpos(embed_cli_lines(), 'embed_called=0') !== false, true);
+$embed_move_upsert = false;
+$embed_move_model = false;
+foreach ($GLOBALS['cfais_request_urls'] as $embed_move_url) {
+    if (strpos($embed_move_url, '/shop-copy/upsert') !== false) {
+        $embed_move_upsert = true;
+    }
+    if (strpos($embed_move_url, '/ai/run/') !== false) {
+        $embed_move_model = true;
+    }
+}
+expect('move writes the other index', $embed_move_upsert, true);
+expect('move does not use the embeddings route', $embed_move_model, false);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('backfill'), array());
+expect('backfill is not an embed command', strpos(embed_cli_lines(), 'embed_state=unknown') !== false, true);
+expect('an unknown command makes no request', $GLOBALS['cfais_calls'], 0);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);

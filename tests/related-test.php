@@ -254,6 +254,28 @@ expect('related posts do not name another vector store', stripos($related_src, '
 expect('the shortcode is registered', strpos($related_src, "add_shortcode( 'skyphusion_ai_related'") !== false, true);
 expect('the content filter is registered', strpos($related_src, "'the_content'") !== false, true);
 expect('a page view does not call the embeddings function', strpos($related_src, 'cloudflare_ai_provider_embeddings') === false, true);
+expect('related cli is registered', strpos($related_src, "WP_CLI::add_command( 'skyphusion-ai related'") !== false, true);
+
+related_store(1, 1);
+related_clear();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+$GLOBALS['cfais_bodies'] = array($related_got, $related_query);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($related_page);
+$GLOBALS['cfais_embed_post'] = $related_page;
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_related_cli(array('refresh', '6'), array());
+expect('refresh stores one list', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'related_saved=1') !== false, true);
+expect('refresh does not call the embeddings model', $GLOBALS['cfais_last_post'], array('marker' => 1));
+expect('refresh says the model was not called', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'embed_called=0') !== false, true);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_related_cli(array('show', '6'), array());
+expect('show prints the saved neighbour', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'p7') !== false, true);
+expect('show prints the reason', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'Close to this page.') !== false, true);
+expect('show uses the saved list', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_related_cli(array('translate'), array());
+expect('translation is not a related command', strpos(implode("\n", $GLOBALS['cfais_cli_log']), 'related_state=unknown') !== false, true);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);
