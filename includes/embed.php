@@ -883,10 +883,13 @@ function skyphusion_ai_embed_ensure( $config ) {
 /**
  * Public http address, or an empty string.
  *
- * @param string $url Raw address.
+ * A page image can be longer than a post address, so the caller sets the cap.
+ *
+ * @param string $url   Raw address.
+ * @param int    $limit Longest address to keep.
  * @return string
  */
-function skyphusion_ai_embed_public_url( $url ) {
+function skyphusion_ai_embed_public_url( $url, $limit = 200 ) {
 	$url = trim( $url );
 	if ( '' === $url || preg_match( '/\s/', $url ) ) {
 		return '';
@@ -907,7 +910,11 @@ function skyphusion_ai_embed_public_url( $url ) {
 	if ( 'https' !== $scheme && 'http' !== $scheme ) {
 		return '';
 	}
-	if ( strlen( $url ) > 200 ) {
+	$limit = (int) $limit;
+	if ( 1 > $limit ) {
+		$limit = 200;
+	}
+	if ( strlen( $url ) > $limit ) {
 		return '';
 	}
 	return $url;
@@ -917,7 +924,7 @@ function skyphusion_ai_embed_public_url( $url ) {
  * Metadata stored beside the vector. The post body is not included.
  *
  * @param array<string, mixed> $post One post.
- * @return array<string, string>
+ * @return array<string, string|int>
  */
 function skyphusion_ai_embed_metadata( $post ) {
 	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
@@ -944,6 +951,15 @@ function skyphusion_ai_embed_metadata( $post ) {
 	$term_line = skyphusion_ai_embed_term_line( $post );
 	if ( '' !== $term_line ) {
 		$metadata['terms'] = $term_line;
+	}
+	if ( 'product' === $type && function_exists( 'skyphusion_ai_assistant_product_meta' ) ) {
+		$product_meta = skyphusion_ai_assistant_product_meta( $post_id );
+		foreach ( array( 'image', 'sku', 'stock_status', 'count' ) as $key ) {
+			if ( ! array_key_exists( $key, $product_meta ) ) {
+				continue;
+			}
+			$metadata[ $key ] = $product_meta[ $key ];
+		}
 	}
 	return $metadata;
 }
@@ -1441,13 +1457,34 @@ function skyphusion_ai_embed_search( $query, $limit ) {
 		}
 		$title     = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
 		$url_value = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
-		$rows[]    = array(
+		$row       = array(
 			'id'      => isset( $match['id'] ) ? (string) $match['id'] : '',
 			'score'   => isset( $match['score'] ) ? (float) $match['score'] : 0,
 			'post_id' => $matched,
 			'title'   => $title,
 			'url'     => $url_value,
 		);
+		if ( isset( $metadata['post_type'] ) ) {
+			$row['post_type'] = (string) $metadata['post_type'];
+		}
+		if ( isset( $metadata['image'] ) ) {
+			$row['image'] = (string) $metadata['image'];
+		}
+		if ( isset( $metadata['sku'] ) ) {
+			$row['sku'] = (string) $metadata['sku'];
+		}
+		if ( isset( $metadata['stock_status'] ) ) {
+			$row['stock_status'] = (string) $metadata['stock_status'];
+		}
+		if ( array_key_exists( 'count', $metadata ) ) {
+			$row['count'] = $metadata['count'];
+		} elseif ( array_key_exists( 'quantity', $metadata ) ) {
+			$row['quantity'] = $metadata['quantity'];
+		}
+		if ( array_key_exists( 'managing_stock', $metadata ) ) {
+			$row['managing_stock'] = $metadata['managing_stock'];
+		}
+		$rows[] = $row;
 		if ( count( $rows ) >= $limit ) {
 			break;
 		}

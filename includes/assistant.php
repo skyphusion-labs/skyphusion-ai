@@ -9,6 +9,8 @@
  * A blank Worker address streams that answer through PHP. The token
  * stays on the server.
  * A chat that was not saved is not stored to make that summary.
+ * A product page also shows its image, its SKU, its stock status, and
+ * its managed count. The link goes to that product.
  *
  * @package skyphusion-ai
  */
@@ -222,23 +224,314 @@ function skyphusion_ai_assistant_miss_text() {
 }
 
 /**
+ * Public image address. A post address stays on the shorter cap.
+ *
+ * @param string $url Raw address.
+ * @return string
+ */
+function skyphusion_ai_assistant_cite_image( $url ) {
+	if ( ! function_exists( 'skyphusion_ai_embed_public_url' ) ) {
+		return '';
+	}
+	return skyphusion_ai_embed_public_url( (string) $url, 500 );
+}
+
+/**
+ * Whole managed count, or null when the value is not one.
+ *
+ * A negative count is not shown. A fraction is not shown.
+ *
+ * @param mixed $value Raw count.
+ * @return int|null
+ */
+function skyphusion_ai_assistant_cite_count( $value ) {
+	if ( is_int( $value ) ) {
+		return 0 > $value ? null : $value;
+	}
+	if ( is_string( $value ) && is_numeric( $value ) && trim( $value ) === (string) (int) $value ) {
+		$count = (int) $value;
+		return 0 > $count ? null : $count;
+	}
+	return null;
+}
+
+/**
+ * True when the row says the product manages stock.
+ *
+ * @param mixed $value Raw flag.
+ * @return bool
+ */
+function skyphusion_ai_assistant_cite_managing( $value ) {
+	return true === $value || 1 === $value || '1' === $value;
+}
+
+/**
+ * Managed count from an indexed row. Missing and negative stay hidden.
+ *
+ * @param array<string, mixed> $row Indexed page.
+ * @return int|null
+ */
+function skyphusion_ai_assistant_cite_managed_count( $row ) {
+	if ( array_key_exists( 'count', $row ) ) {
+		return skyphusion_ai_assistant_cite_count( $row['count'] );
+	}
+	if ( ! array_key_exists( 'quantity', $row ) ) {
+		return null;
+	}
+	if ( array_key_exists( 'managing_stock', $row ) && ! skyphusion_ai_assistant_cite_managing( $row['managing_stock'] ) ) {
+		return null;
+	}
+	return skyphusion_ai_assistant_cite_count( $row['quantity'] );
+}
+
+/**
+ * SKU text from the indexed page. Tags stay in the text so the page can escape them.
+ *
+ * @param mixed $value Raw SKU.
+ * @return string
+ */
+function skyphusion_ai_assistant_cite_sku( $value ) {
+	$sku = trim( (string) $value );
+	$sku = str_replace( array( "\r", "\n" ), '', $sku );
+	if ( strlen( $sku ) > 80 ) {
+		$sku = substr( $sku, 0, 80 );
+	}
+	return $sku;
+}
+
+/**
+ * Stock status the page already prints, or an empty string.
+ *
+ * @param mixed $status Raw status.
+ * @return string
+ */
+function skyphusion_ai_assistant_cite_status( $status ) {
+	$status = (string) $status;
+	if ( 'instock' === $status || 'outofstock' === $status || 'onbackorder' === $status ) {
+		return $status;
+	}
+	return '';
+}
+
+/**
+ * True when this indexed page is a product.
+ *
+ * @param array<string, mixed> $row Indexed page.
+ * @return bool
+ */
+function skyphusion_ai_assistant_cite_is_product( $row ) {
+	$type = isset( $row['post_type'] ) ? (string) $row['post_type'] : '';
+	if ( 'product' === $type ) {
+		return true;
+	}
+	if ( '' !== skyphusion_ai_assistant_cite_sku( isset( $row['sku'] ) ? $row['sku'] : '' ) ) {
+		return true;
+	}
+	if ( '' !== skyphusion_ai_assistant_cite_status( isset( $row['stock_status'] ) ? $row['stock_status'] : '' ) ) {
+		return true;
+	}
+	if ( array_key_exists( 'count', $row ) || array_key_exists( 'quantity', $row ) ) {
+		return true;
+	}
+	return false;
+}
+
+/**
+ * Product facts already stored on the page. Empty when this post is not a product.
+ *
+ * The image is the page image. This does not add a field for it.
+ *
+ * @param int $post_id Post id.
+ * @return array<string, string|int>
+ */
+function skyphusion_ai_assistant_product_meta( $post_id ) {
+	$post_id = (int) $post_id;
+	if ( 1 > $post_id || ! function_exists( 'wc_get_product' ) || ! function_exists( 'skyphusion_ai_stock_row_from_product' ) ) {
+		return array();
+	}
+	$product = wc_get_product( $post_id );
+	if ( ! is_object( $product ) ) {
+		return array();
+	}
+	$row = skyphusion_ai_stock_row_from_product( $product, false );
+	if ( ! is_array( $row ) ) {
+		return array();
+	}
+	$stored = array();
+	$image  = '';
+	if ( method_exists( $product, 'get_image_id' ) && function_exists( 'wp_get_attachment_url' ) ) {
+		$image_id = (int) $product->get_image_id();
+		if ( 0 < $image_id ) {
+			$image = skyphusion_ai_assistant_cite_image( (string) wp_get_attachment_url( $image_id ) );
+		}
+	}
+	if ( '' !== $image ) {
+		$stored['image'] = $image;
+	}
+	$sku = skyphusion_ai_assistant_cite_sku( isset( $row['sku'] ) ? $row['sku'] : '' );
+	if ( '' !== $sku ) {
+		$stored['sku'] = $sku;
+	}
+	$status = skyphusion_ai_assistant_cite_status( isset( $row['stock_status'] ) ? $row['stock_status'] : '' );
+	if ( '' !== $status ) {
+		$stored['stock_status'] = $status;
+	}
+	$count = null;
+	if ( ! empty( $row['managing_stock'] ) ) {
+		$count = skyphusion_ai_assistant_cite_count( isset( $row['quantity'] ) ? $row['quantity'] : null );
+	}
+	if ( null !== $count ) {
+		$stored['count'] = $count;
+	}
+	return $stored;
+}
+
+/**
+ * Copy a missing product fact from the product. A stored fact wins.
+ *
+ * @param array<string, mixed> $row Indexed page.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_assistant_cite_fill( $row ) {
+	$type    = isset( $row['post_type'] ) ? (string) $row['post_type'] : '';
+	$post_id = isset( $row['post_id'] ) ? (int) $row['post_id'] : 0;
+	if ( 'product' !== $type || 1 > $post_id ) {
+		return $row;
+	}
+	$live = skyphusion_ai_assistant_product_meta( $post_id );
+	if ( array() === $live ) {
+		return $row;
+	}
+	foreach ( array( 'image', 'sku', 'stock_status' ) as $key ) {
+		$current = isset( $row[ $key ] ) ? trim( (string) $row[ $key ] ) : '';
+		if ( '' === $current && isset( $live[ $key ] ) && '' !== (string) $live[ $key ] ) {
+			$row[ $key ] = $live[ $key ];
+		}
+	}
+	if ( ! array_key_exists( 'count', $row ) && ! array_key_exists( 'quantity', $row ) && isset( $live['count'] ) ) {
+		$row['count'] = $live['count'];
+	}
+	return $row;
+}
+
+/**
+ * Sentences for one product cite. A non-product returns none.
+ *
+ * @param array<string, mixed> $row Indexed page.
+ * @return array<int, string>
+ */
+function skyphusion_ai_assistant_cite_lines( $row ) {
+	if ( ! skyphusion_ai_assistant_cite_is_product( $row ) ) {
+		return array();
+	}
+	$labels = array(
+		'sku'         => 'SKU %s.',
+		'instock'     => 'In stock.',
+		'outofstock'  => 'Out of stock.',
+		'onbackorder' => 'On backorder.',
+	);
+	if ( function_exists( 'skyphusion_ai_stock_labels' ) ) {
+		$loaded = skyphusion_ai_stock_labels();
+		if ( is_array( $loaded ) ) {
+			$labels = $loaded;
+		}
+	}
+	$lines = array();
+	$sku   = skyphusion_ai_assistant_cite_sku( isset( $row['sku'] ) ? $row['sku'] : '' );
+	if ( '' !== $sku && isset( $labels['sku'] ) ) {
+		$lines[] = sprintf( (string) $labels['sku'], $sku );
+	}
+	$status = skyphusion_ai_assistant_cite_status( isset( $row['stock_status'] ) ? $row['stock_status'] : '' );
+	if ( '' !== $status && isset( $labels[ $status ] ) ) {
+		$lines[] = (string) $labels[ $status ];
+	}
+	$count = skyphusion_ai_assistant_cite_managed_count( $row );
+	if ( null !== $count ) {
+		if ( function_exists( '_n' ) ) {
+			/* translators: %d is the number of units in stock. */
+			$format = _n( '%d available.', '%d available.', $count, 'skyphusion-ai' );
+		} else {
+			$format = '%d available.';
+		}
+		$lines[] = sprintf( (string) $format, $count );
+	}
+	return $lines;
+}
+
+/**
+ * One citation the page can print.
+ *
+ * A second pass keeps lines it already built.
+ *
+ * @param mixed $row Search row or citation.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_assistant_cite_clean( $row ) {
+	if ( ! is_array( $row ) ) {
+		return array();
+	}
+	if ( isset( $row['lines'] ) && is_array( $row['lines'] ) ) {
+		$lines = array();
+		foreach ( $row['lines'] as $line ) {
+			$line = trim( str_replace( array( "\r", "\n" ), ' ', (string) $line ) );
+			if ( '' !== $line ) {
+				$lines[] = $line;
+			}
+		}
+		$title = isset( $row['title'] ) ? (string) $row['title'] : '';
+		$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
+		$image = isset( $row['image'] ) ? skyphusion_ai_assistant_cite_image( $row['image'] ) : '';
+		if ( '' === $title && '' === $url && '' === $image && array() === $lines ) {
+			return array();
+		}
+		$clean = array(
+			'title' => $title,
+			'url'   => $url,
+			'lines' => $lines,
+		);
+		if ( '' !== $image ) {
+			$clean['image'] = $image;
+		}
+		return $clean;
+	}
+	$row   = skyphusion_ai_assistant_cite_fill( $row );
+	$title = isset( $row['title'] ) ? (string) $row['title'] : '';
+	$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
+	$lines = skyphusion_ai_assistant_cite_lines( $row );
+	$image = '';
+	if ( skyphusion_ai_assistant_cite_is_product( $row ) ) {
+		$image = isset( $row['image'] ) ? skyphusion_ai_assistant_cite_image( $row['image'] ) : '';
+	}
+	if ( '' === $title && '' === $url && '' === $image && array() === $lines ) {
+		return array();
+	}
+	$clean = array(
+		'title' => $title,
+		'url'   => $url,
+		'lines' => $lines,
+	);
+	if ( '' !== $image ) {
+		$clean['image'] = $image;
+	}
+	return $clean;
+}
+
+/**
  * One result array.
  *
  * @param string            $state     Result name.
  * @param string            $answer    Sentence to show.
  * @param array<int, mixed> $citations Pages used.
- * @return array{state: string, answer: string, citations: array<int, array{title: string, url: string}>}
+ * @return array{state: string, answer: string, citations: array<int, array<string, mixed>>}
  */
 function skyphusion_ai_assistant_result( $state, $answer, $citations ) {
 	$clean = array();
 	foreach ( $citations as $row ) {
-		if ( ! is_array( $row ) ) {
+		$item = skyphusion_ai_assistant_cite_clean( $row );
+		if ( array() === $item ) {
 			continue;
 		}
-		$clean[] = array(
-			'title' => isset( $row['title'] ) ? (string) $row['title'] : '',
-			'url'   => isset( $row['url'] ) ? (string) $row['url'] : '',
-		);
+		$clean[] = $item;
 		if ( count( $clean ) >= 5 ) {
 			break;
 		}
@@ -262,18 +555,11 @@ function skyphusion_ai_assistant_citations( $found ) {
 	}
 	$rows = array();
 	foreach ( $found as $row ) {
-		if ( ! is_array( $row ) ) {
+		$item = skyphusion_ai_assistant_cite_clean( $row );
+		if ( array() === $item ) {
 			continue;
 		}
-		$title = isset( $row['title'] ) ? (string) $row['title'] : '';
-		$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
-		if ( '' === $title && '' === $url ) {
-			continue;
-		}
-		$rows[] = array(
-			'title' => $title,
-			'url'   => $url,
-		);
+		$rows[] = $item;
 	}
 	return $rows;
 }
@@ -1013,11 +1299,26 @@ function skyphusion_ai_assistant_html( $result ) {
 			}
 			$title = isset( $row['title'] ) ? (string) $row['title'] : '';
 			$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
+			$image = isset( $row['image'] ) ? skyphusion_ai_assistant_cite_image( $row['image'] ) : '';
+			$lines = array();
+			if ( isset( $row['lines'] ) && is_array( $row['lines'] ) ) {
+				$lines = $row['lines'];
+			}
 			$html .= '<li>';
+			if ( '' !== $image ) {
+				$html .= '<img src="' . esc_url( $image ) . '" alt="' . esc_attr( $title ) . '" />';
+			}
 			if ( '' !== $url ) {
 				$html .= '<a href="' . esc_url( $url ) . '">' . esc_html( $title ) . '</a>';
 			} else {
 				$html .= esc_html( $title );
+			}
+			foreach ( $lines as $line ) {
+				$line = trim( (string) $line );
+				if ( '' === $line ) {
+					continue;
+				}
+				$html .= '<p>' . esc_html( $line ) . '</p>';
 			}
 			$html .= '</li>';
 		}
@@ -1589,18 +1890,11 @@ function skyphusion_ai_assistant_stream_citations( $rows ) {
 	}
 	$clean = array();
 	foreach ( $rows as $row ) {
-		if ( ! is_array( $row ) ) {
+		$item = skyphusion_ai_assistant_cite_clean( $row );
+		if ( array() === $item ) {
 			continue;
 		}
-		$title = isset( $row['title'] ) ? (string) $row['title'] : '';
-		$url   = isset( $row['url'] ) ? (string) $row['url'] : '';
-		if ( '' === $title && '' === $url ) {
-			continue;
-		}
-		$clean[] = array(
-			'title' => $title,
-			'url'   => $url,
-		);
+		$clean[] = $item;
 	}
 	if ( array() === $clean ) {
 		return;
@@ -1686,7 +1980,7 @@ function skyphusion_ai_assistant_posted_history() {
  * @return string
  */
 function skyphusion_ai_assistant_stream_script() {
-	$script = '(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-php");forms.forEach(function(form){form._turns=[];var nodes=form.getElementsByTagName("input");var questions=[];var answers=[];for(var i=0;i<nodes.length;i++){if(nodes[i].name==="skyphusion_ai_assistant_turn_question[]"){questions.push(nodes[i].value);}if(nodes[i].name==="skyphusion_ai_assistant_turn_answer[]"){answers.push(nodes[i].value);}}var count=questions.length;if(answers.length<count){count=answers.length;}for(var n=0;n<count;n++){form._turns.push({question:questions[n],answer:answers[n]});}form.addEventListener("submit",function(event){event.preventDefault();var input=form.querySelector("input[type=text]");var asked=input.value;var out=form.querySelector(".skyphusion-ai-assistant-stream");var transcript=form.querySelector(".skyphusion-ai-assistant-transcript");var askedLine=document.createElement("p");askedLine.textContent=asked;transcript.appendChild(askedLine);out.textContent="";var body=new FormData();body.append("action","skyphusion_ai_assistant_stream");body.append("_wpnonce",form.getAttribute("data-nonce")||"");body.append("skyphusion_ai_assistant_question",asked);var consent=form.querySelector("input[type=checkbox]");if(consent&&consent.checked){body.append("skyphusion_ai_assistant_consent","1");}form._turns.forEach(function(turn){body.append("skyphusion_ai_assistant_turn_question[]",turn.question);body.append("skyphusion_ai_assistant_turn_answer[]",turn.answer);});fetch(form.getAttribute("data-stream"),{method:"POST",body:body,credentials:"same-origin"}).then(function(response){if(!response.body||!response.body.getReader){return;}var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){var reply=document.createElement("p");reply.textContent=out.textContent;transcript.appendChild(reply);form._turns.push({question:asked,answer:out.textContent});out.textContent="";input.value="";return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}if(parsed.citations&&parsed.citations.length){var list=document.createElement("ul");parsed.citations.forEach(function(row){if(!row||!row.title){return;}var item=document.createElement("li");var url=row.url||"";if(url.indexOf("https://")===0||url.indexOf("http://")===0){var link=document.createElement("a");link.href=url;link.textContent=row.title;item.appendChild(link);}else{item.textContent=row.title;}list.appendChild(item);});transcript.appendChild(list);}}catch(error){}});return pump();});}return pump();});});});})();';
+	$script = '(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-php");forms.forEach(function(form){form._turns=[];var nodes=form.getElementsByTagName("input");var questions=[];var answers=[];for(var i=0;i<nodes.length;i++){if(nodes[i].name==="skyphusion_ai_assistant_turn_question[]"){questions.push(nodes[i].value);}if(nodes[i].name==="skyphusion_ai_assistant_turn_answer[]"){answers.push(nodes[i].value);}}var count=questions.length;if(answers.length<count){count=answers.length;}for(var n=0;n<count;n++){form._turns.push({question:questions[n],answer:answers[n]});}form.addEventListener("submit",function(event){event.preventDefault();var input=form.querySelector("input[type=text]");var asked=input.value;var out=form.querySelector(".skyphusion-ai-assistant-stream");var transcript=form.querySelector(".skyphusion-ai-assistant-transcript");var askedLine=document.createElement("p");askedLine.textContent=asked;transcript.appendChild(askedLine);out.textContent="";var body=new FormData();body.append("action","skyphusion_ai_assistant_stream");body.append("_wpnonce",form.getAttribute("data-nonce")||"");body.append("skyphusion_ai_assistant_question",asked);var consent=form.querySelector("input[type=checkbox]");if(consent&&consent.checked){body.append("skyphusion_ai_assistant_consent","1");}form._turns.forEach(function(turn){body.append("skyphusion_ai_assistant_turn_question[]",turn.question);body.append("skyphusion_ai_assistant_turn_answer[]",turn.answer);});fetch(form.getAttribute("data-stream"),{method:"POST",body:body,credentials:"same-origin"}).then(function(response){if(!response.body||!response.body.getReader){return;}var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){var reply=document.createElement("p");reply.textContent=out.textContent;transcript.appendChild(reply);form._turns.push({question:asked,answer:out.textContent});out.textContent="";input.value="";return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}if(parsed.citations&&parsed.citations.length){var list=document.createElement("ul");parsed.citations.forEach(function(row){if(!row){return;}var title=row.title||"";var url=row.url||"";if(!title&&!url){return;}var item=document.createElement("li");var image=row.image||"";if(image.indexOf("https://")===0||image.indexOf("http://")===0){var pic=document.createElement("img");pic.src=image;pic.alt=title;item.appendChild(pic);}if(url.indexOf("https://")===0||url.indexOf("http://")===0){var link=document.createElement("a");link.href=url;link.textContent=title;item.appendChild(link);}else if(title){item.appendChild(document.createTextNode(title));}var lines=row.lines||[];for(var p=0;p<lines.length;p++){if(!lines[p]){continue;}var fact=document.createElement("p");fact.textContent=lines[p];item.appendChild(fact);}list.appendChild(item);});transcript.appendChild(list);}}catch(error){}});return pump();});}return pump();});});});})();';
 	return $script;
 }
 

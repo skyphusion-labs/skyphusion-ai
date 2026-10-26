@@ -314,6 +314,240 @@ skyphusion_ai_assistant_render();
 $assistant_open = (string) ob_get_clean();
 expect('a zero limit has no amber marker', strpos($assistant_open, 'usage-amber') === false, true);
 expect('a zero limit has no red marker', strpos($assistant_open, 'usage-red') === false, true);
+
+$cite_strings = $GLOBALS['cfai_stock_test_strings'];
+$cite_plural = $GLOBALS['cfai_stock_test_plural'];
+$GLOBALS['cfai_stock_test_strings'] = array();
+$GLOBALS['cfai_stock_test_plural'] = '%d available.';
+embed_ready();
+$GLOBALS['cfais_user_id'] = 4;
+$GLOBALS['cfais_can']['read'] = true;
+skyphusion_ai_assistant_apply(array(
+    'enabled' => '1',
+    'audience' => 'roles',
+    'safety' => '',
+    'limit' => 0,
+));
+
+function assistant_product_cite_ask($metadata, $question)
+{
+    assistant_clear();
+    $match = array(
+        'id' => 'p6',
+        'score' => 0.5,
+        'metadata' => $metadata,
+    );
+    $query = json_encode(array(
+        'success' => true,
+        'result' => array('matches' => array($match)),
+    ));
+    $GLOBALS['cfais_bodies'] = array(
+        $GLOBALS['assistant_embed_body'],
+        $GLOBALS['assistant_embed_body'],
+        $query,
+        $GLOBALS['assistant_text_body'],
+    );
+    $result = skyphusion_ai_assistant_ask($question, false);
+    return array($result, skyphusion_ai_assistant_html($result), $GLOBALS['cfais_calls']);
+}
+
+$GLOBALS['assistant_embed_body'] = $assistant_embed;
+$GLOBALS['assistant_text_body'] = $assistant_text;
+
+function assistant_product_page_shows_indexed_facts()
+{
+    list($result, $html, $calls) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'image' => 'https://shop.example/linen.jpg',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+        'count' => 4,
+        'description' => 'SKU SHIRT-1. In stock. 4 available.',
+    ), 'cite-product-shirt');
+    expect('a product cite is still an answer', $result['state'], 'answered');
+    expect('a product cite still makes three requests', $calls, 3);
+    expect('a product cite links to the product', strpos($html, 'href="https://shop.example/linen"') !== false, true);
+    expect('a product cite names the product', strpos($html, 'Linen shirt') !== false, true);
+    expect('a product cite shows the page image', strpos($html, 'src="https://shop.example/linen.jpg"') !== false, true);
+    expect('a product cite shows the sku', strpos($html, 'SKU SHIRT-1.') !== false, true);
+    expect('a product cite shows the stock status', strpos($html, 'In stock.') !== false, true);
+    expect('a product cite shows the managed count', strpos($html, '4 available.') !== false, true);
+    ob_start();
+    skyphusion_ai_assistant_stream_citations($result['citations']);
+    $event = (string) ob_get_clean();
+    expect('the stream cites the sku', strpos($event, 'SKU SHIRT-1.') !== false, true);
+    expect('the stream cites the image', strpos($event, 'linen.jpg') !== false, true);
+
+    list($script_result, $script_html, $script_calls) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => '<script>',
+        'stock_status' => 'instock',
+        'count' => 4,
+    ), 'cite-hostile-sku');
+    expect('a hostile sku is still an answer', $script_result['state'], 'answered');
+    expect('a hostile sku still makes three requests', $script_calls, 3);
+    expect('a hostile sku is escaped', strpos($script_html, 'SKU &lt;script&gt;.') !== false, true);
+    expect('a hostile sku cannot open a tag', strpos($script_html, '<script') === false, true);
+}
+assistant_product_page_shows_indexed_facts();
+
+function assistant_non_product_page_hides_product_facts()
+{
+    list(, $html, $calls) = assistant_product_cite_ask(array(
+        'title' => 'Care notes',
+        'post_id' => '6',
+        'post_type' => 'post',
+        'url' => 'https://shop.example/care',
+        'description' => 'How to wash linen.',
+    ), 'cite-care-notes');
+    expect('a page cite still makes three requests', $calls, 3);
+    expect('a page cite links the title', strpos($html, 'href="https://shop.example/care"') !== false, true);
+    expect('a page cite names the page', strpos($html, 'Care notes') !== false, true);
+    expect('a page cite does not show a sku', strpos($html, 'SKU') === false, true);
+    expect('a page cite does not show in stock', strpos($html, 'In stock.') === false, true);
+    expect('a page cite does not show out of stock', strpos($html, 'Out of stock.') === false, true);
+    expect('a page cite does not show backorder', strpos($html, 'On backorder.') === false, true);
+    expect('a page cite does not show a count', strpos($html, 'available.') === false, true);
+    expect('a page cite does not show an image', strpos($html, '<img') === false, true);
+    expect('a page cite does not dump the description', strpos($html, 'How to wash linen.') === false, true);
+}
+assistant_non_product_page_hides_product_facts();
+
+function assistant_missing_product_facts_are_not_invented()
+{
+    list(, $no_image,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+        'count' => 4,
+    ), 'cite-missing-image');
+    expect('a missing image is not invented', strpos($no_image, '<img') === false, true);
+    expect('a missing image keeps the sku', strpos($no_image, 'SKU SHIRT-1.') !== false, true);
+
+    list(, $no_sku,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'image' => 'https://shop.example/linen.jpg',
+        'stock_status' => 'instock',
+        'count' => 4,
+    ), 'cite-missing-sku');
+    expect('a missing sku is not invented', strpos($no_sku, 'SKU') === false, true);
+    expect('a missing sku keeps the status', strpos($no_sku, 'In stock.') !== false, true);
+
+    list(, $no_status,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => 'SHIRT-1',
+        'count' => 4,
+    ), 'cite-missing-status');
+    expect('a missing status does not say in stock', strpos($no_status, 'In stock.') === false, true);
+    expect('a missing status does not say out of stock', strpos($no_status, 'Out of stock.') === false, true);
+    expect('a missing status does not say backorder', strpos($no_status, 'On backorder.') === false, true);
+    expect('a missing status keeps the sku', strpos($no_status, 'SKU SHIRT-1.') !== false, true);
+
+    list(, $unmanaged,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+    ), 'cite-unmanaged-stock');
+    expect('an unmanaged product shows the sku', strpos($unmanaged, 'SKU SHIRT-1.') !== false, true);
+    expect('an unmanaged product shows the status', strpos($unmanaged, 'In stock.') !== false, true);
+    expect('an unmanaged product does not invent a count', strpos($unmanaged, 'available') === false, true);
+
+    list(, $negative,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'onbackorder',
+        'count' => -8,
+    ), 'cite-negative-count');
+    expect('a negative count is not printed', strpos($negative, '8') === false, true);
+    expect('a negative count does not invent a count', strpos($negative, 'available') === false, true);
+    expect('a negative count keeps the sku', strpos($negative, 'SKU SHIRT-1.') !== false, true);
+
+    list(, $zero,) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+        'count' => 0,
+    ), 'cite-zero-count');
+    expect('zero available is shown', strpos($zero, '0 available.') !== false, true);
+    expect('an empty image string is not a placeholder', strpos(skyphusion_ai_assistant_html(skyphusion_ai_assistant_result('answered', 'The shirt is linen.', array(array(
+        'title' => 'Linen shirt',
+        'url' => 'https://shop.example/linen',
+        'post_type' => 'product',
+        'image' => '',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+    )))), 'src=""') === false, true);
+}
+assistant_missing_product_facts_are_not_invented();
+
+function assistant_answer_html_has_no_cart_or_order()
+{
+    list($result, $html, $calls) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'image' => 'https://shop.example/linen.jpg',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+        'count' => 4,
+    ), 'cite-no-cart');
+    expect('the product answer has no add-to-cart control', strpos($html, 'add-to-cart') === false, true);
+    expect('the product answer has no add_to_cart control', strpos($html, 'add_to_cart') === false, true);
+    expect('the product answer has no cart button class', strpos($html, 'single_add_to_cart_button') === false, true);
+    expect('the product answer does not look up an order', strpos($html, 'wc_get_order') === false, true);
+    expect('the product answer is still three requests', $calls, 3);
+    $GLOBALS['cfais_user_id'] = 0;
+    skyphusion_ai_assistant_apply(array('audience' => 'public'));
+    list($public_result, $public_html, $public_calls) = assistant_product_cite_ask(array(
+        'title' => 'Linen shirt',
+        'post_id' => '6',
+        'post_type' => 'product',
+        'url' => 'https://shop.example/linen',
+        'image' => 'https://shop.example/linen.jpg',
+        'sku' => 'SHIRT-1',
+        'stock_status' => 'instock',
+        'count' => 4,
+    ), 'cite-public-visitor');
+    expect('a logged-out visitor is still answered', $public_result['state'], 'answered');
+    expect('a logged-out visitor still makes three requests', $public_calls, 3);
+    expect('a logged-out visitor still sees the product', strpos($public_html, 'SKU SHIRT-1.') !== false, true);
+    expect('a logged-out visitor has no add-to-cart control', strpos($public_html, 'add-to-cart') === false, true);
+    expect('a logged-out visitor has no add_to_cart control', strpos($public_html, 'add_to_cart') === false, true);
+    expect('a logged-out visitor does not look up an order', strpos($public_html, 'wc_get_order') === false, true);
+    $GLOBALS['cfais_user_id'] = 4;
+    skyphusion_ai_assistant_apply(array('audience' => 'roles'));
+}
+assistant_answer_html_has_no_cart_or_order();
+
+$GLOBALS['cfai_stock_test_strings'] = $cite_strings;
+$GLOBALS['cfai_stock_test_plural'] = $cite_plural;
+unset($GLOBALS['assistant_embed_body']);
+unset($GLOBALS['assistant_text_body']);
 $assistant_pin = (string) file_get_contents(dirname(__DIR__) . '/includes/endpoint.php');
 expect('the snippet pin stays', strpos($assistant_pin, "define('SKYPHUSION_AI_SNIPPET', '0.0.25')") !== false, true);
 unset($GLOBALS['cfais_user_id']);
