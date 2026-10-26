@@ -12,6 +12,7 @@ The info call is documented at https://developers.cloudflare.com/api/resources/v
 
 `wp skyphusion-ai embed estimate` prints passages, neurons, days, and stored dimensions.
 It does not call the model.
+A post is split into passages of about 500 characters with a short overlap before Vectorize stores it.
 
 `wp skyphusion-ai embed run` stores the posts that changed.
 `wp skyphusion-ai embed reconcile` deletes vectors for posts that no longer belong.
