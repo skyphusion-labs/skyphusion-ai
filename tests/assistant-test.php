@@ -220,6 +220,58 @@ expect('rules are sent with the question', strpos((string) $GLOBALS['cfais_last_
 expect('one earlier turn is sent', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'newer-turn-phrase') !== false, true);
 expect('an older turn is left out', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'older-turn-phrase') === false, true);
 expect('a consented row is not copied into the prompt', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'consented-archive-phrase') === false, true);
+
+skyphusion_ai_assistant_apply(array('turns' => 10, 'rules' => '', 'blocked' => array()));
+$assistant_window = array(
+    array('question' => 'compact-oldest-phrase', 'answer' => 'old'),
+);
+for ($assistant_fill = 2; $assistant_fill <= 9; $assistant_fill++) {
+    $assistant_window[] = array('question' => 'compact-fill-' . $assistant_fill, 'answer' => 'fill');
+}
+$assistant_window[] = array('question' => 'compact-newest-phrase', 'answer' => 'new');
+assistant_clear();
+$GLOBALS['cfais_bodies'] = array($assistant_embed, $assistant_embed, $assistant_query, $assistant_text);
+$assistant_ten = skyphusion_ai_assistant_ask('linen', false, $assistant_window);
+expect('ten turns do not add a summary call', $GLOBALS['cfais_calls'], 3);
+expect('ten turns still send the oldest phrase', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'compact-oldest-phrase') !== false, true);
+expect('ten turns send the newest phrase', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'compact-newest-phrase') !== false, true);
+expect('ten turns do not send the summary label', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], 'Earlier talk:') === false, true);
+expect('ten turns still answer', $assistant_ten['state'], 'answered');
+
+$assistant_long = $assistant_window;
+$assistant_long[] = array('question' => 'compact-eleventh-phrase', 'answer' => 'eleven', 'ip' => '203.0.113.9');
+$assistant_saved_before = get_option('skyphusion_ai_assistant_chats', array());
+$assistant_text_before = (int) skyphusion_ai_neuron_state()['features']['text'];
+assistant_clear();
+$GLOBALS['cfais_bodies'] = array(
+    $assistant_embed,
+    $assistant_embed,
+    $assistant_query,
+    '{"choices":[{"message":{"content":"A short earlier block."}}]}',
+    $assistant_text,
+);
+$assistant_eleven = skyphusion_ai_assistant_ask('linen', false, $assistant_long);
+$assistant_eleven_body = (string) $GLOBALS['cfais_last_post']['args']['body'];
+expect('eleven turns make the summary call and the answer call', $GLOBALS['cfais_calls'], 4);
+expect('the summary is one extra text call', skyphusion_ai_neuron_state()['features']['text'], $assistant_text_before + 2);
+expect('the answer sends the summary block', strpos($assistant_eleven_body, 'A short earlier block.') !== false, true);
+expect('the answer sends the summary label', strpos($assistant_eleven_body, 'Earlier talk:') !== false, true);
+expect('the answer sends the latest turn', strpos($assistant_eleven_body, 'compact-eleventh-phrase') !== false, true);
+expect('the answer sends a turn inside the latest ten', strpos($assistant_eleven_body, 'compact-newest-phrase') !== false, true);
+expect('the answer leaves out the oldest turn', strpos($assistant_eleven_body, 'compact-oldest-phrase') === false, true);
+expect('the answer does not send an address', strpos($assistant_eleven_body, '203.0.113.9') === false, true);
+expect('an unsaved long chat is not stored', get_option('skyphusion_ai_assistant_chats', array()), $assistant_saved_before);
+expect('the transcript still shows the oldest turn', strpos(skyphusion_ai_assistant_html($assistant_eleven), 'compact-oldest-phrase') !== false, true);
+expect('the transcript still shows the answer', strpos(skyphusion_ai_assistant_html($assistant_eleven), 'The shirt is linen.') !== false, true);
+expect('the transcript does not keep an address', isset($assistant_eleven['transcript'][0]['ip']), false);
+$assistant_fields = skyphusion_ai_assistant_turn_fields($assistant_long);
+expect('the form repeats the oldest turn', strpos($assistant_fields, 'compact-oldest-phrase') !== false, true);
+expect('the form does not add an address field', strpos($assistant_fields, 'name="ip"') === false, true);
+expect('the form does not print the address', strpos($assistant_fields, '203.0.113.9') === false, true);
+$assistant_screen_src = (string) file_get_contents(dirname(__DIR__) . '/includes/assistant.php');
+expect('the screen names the short summary', strpos($assistant_screen_src, 'one short summary of the older turns') !== false, true);
+expect('the assistant still does not read a remote address', strpos($assistant_screen_src, 'REMOTE_ADDR') === false, true);
+
 skyphusion_ai_assistant_apply(array('safety' => '1', 'rules' => '', 'blocked' => array(), 'turns' => 10));
 assistant_clear();
 $GLOBALS['cfais_bodies'] = array('{"choices":[{"message":{"content":"unsafe"}}]}');

@@ -663,14 +663,42 @@ function skyphusion_ai_worker_handle_deploy() {
  * @return string
  */
 function skyphusion_ai_worker_edge_html( $url, $model ) {
-	$html  = '<form class="skyphusion-ai-assistant-edge" data-worker="' . esc_url( $url ) . '" data-model="' . esc_attr( $model ) . '">';
+	$keep = 10;
+	if ( function_exists( 'skyphusion_ai_assistant_config' ) ) {
+		$config = skyphusion_ai_assistant_config();
+		if ( isset( $config['turns'] ) ) {
+			$keep = (int) $config['turns'];
+		}
+	}
+	if ( 0 > $keep ) {
+		$keep = 0;
+	}
+	if ( 10 < $keep ) {
+		$keep = 10;
+	}
+	$html  = '<form class="skyphusion-ai-assistant-edge" data-worker="' . esc_url( $url ) . '" data-model="' . esc_attr( $model ) . '" data-keep="' . esc_attr( (string) $keep ) . '">';
+	$html .= '<div class="skyphusion-ai-assistant-transcript"></div>';
 	$html .= '<p><label>' . esc_html__( 'Ask this site', 'skyphusion-ai' ) . ' ';
 	$html .= '<input type="text" name="skyphusion_ai_assistant_question" value="" /></label></p>';
 	$html .= '<button type="submit">' . esc_html__( 'Ask', 'skyphusion-ai' ) . '</button>';
 	$html .= '<pre class="skyphusion-ai-assistant-stream"></pre>';
 	$html .= '</form>';
-	$html .= '<script>(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-edge");forms.forEach(function(form){form.addEventListener("submit",function(event){event.preventDefault();var out=form.querySelector(".skyphusion-ai-assistant-stream");var input=form.querySelector("input");out.textContent="";fetch(form.getAttribute("data-worker"),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({question:input.value,model:form.getAttribute("data-model")})}).then(function(response){var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}}catch(error){}});return pump();});}return pump();});});});})();</script>';
+	$html .= '<script>' . skyphusion_ai_worker_edge_script() . '</script>';
 	return $html;
+}
+
+/**
+ * Browser script for the edge form.
+ *
+ * The transcript stays on the page. The request sends the turns to the
+ * Worker. The Worker summarizes a chat longer than ten turns. This script
+ * does not store the chat and does not read an IP address.
+ *
+ * @return string
+ */
+function skyphusion_ai_worker_edge_script() {
+	$script = '(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-edge");forms.forEach(function(form){form._turns=[];form.addEventListener("submit",function(event){event.preventDefault();var input=form.querySelector("input");var asked=input.value;var out=form.querySelector(".skyphusion-ai-assistant-stream");var transcript=form.querySelector(".skyphusion-ai-assistant-transcript");var askedLine=document.createElement("p");askedLine.textContent=asked;transcript.appendChild(askedLine);out.textContent="";var keep=parseInt(form.getAttribute("data-keep"),10);if(isNaN(keep)||keep<0){keep=10;}if(keep>10){keep=10;}fetch(form.getAttribute("data-worker"),{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({question:asked,model:form.getAttribute("data-model"),turns:form._turns,keep:keep})}).then(function(response){var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){var reply=document.createElement("p");reply.textContent=out.textContent;transcript.appendChild(reply);form._turns.push({question:asked,answer:out.textContent});out.textContent="";return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}}catch(error){}});return pump();});}return pump();});});});})();';
+	return $script;
 }
 
 if ( defined( 'WP_CLI' ) && WP_CLI && class_exists( 'WP_CLI' ) ) {
