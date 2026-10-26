@@ -640,6 +640,9 @@ function skyphusion_ai_insight_write_next() {
 		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
 			skyphusion_ai_gateway_note( $url, 'text', $response );
 		}
+		if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+			skyphusion_ai_neuron_record( 'text', $model, $response, 'text' );
+		}
 		skyphusion_ai_insight_remember( '', $failed );
 		return new WP_Error( 'skyphusion_ai_insight_http', $failed );
 	}

@@ -423,6 +423,9 @@ function skyphusion_ai_prompt_test( $key ) {
 		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
 			skyphusion_ai_gateway_note( $url, 'text', $response );
 		}
+		if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+			skyphusion_ai_neuron_record( 'text', $model, $response );
+		}
 		return skyphusion_ai_prompt_remember( $key, 0, '', $failed );
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );

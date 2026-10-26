@@ -877,6 +877,9 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 		if ( function_exists( 'skyphusion_ai_gateway_note' ) ) {
 			skyphusion_ai_gateway_note( $url, $feature, $response );
 		}
+		if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+			skyphusion_ai_neuron_record( $feature, $model, $response, 'backfill' );
+		}
 		return new WP_Error( 'skyphusion_ai_backfill', __( 'The text could not be written.', 'skyphusion-ai' ) );
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
