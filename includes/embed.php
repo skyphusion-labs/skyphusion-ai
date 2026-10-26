@@ -77,6 +77,24 @@ function skyphusion_ai_embed_config() {
 	if ( ! empty( $stored['related'] ) ) {
 		$related = 1;
 	}
+	$related_place = 'after';
+	if ( isset( $stored['related_place'] ) && in_array( (string) $stored['related_place'], array( 'after', 'before', 'paragraph' ), true ) ) {
+		$related_place = (string) $stored['related_place'];
+	}
+	$related_paragraph = 1;
+	if ( isset( $stored['related_paragraph'] ) && is_numeric( $stored['related_paragraph'] ) ) {
+		$related_paragraph = (int) $stored['related_paragraph'];
+		if ( 1 > $related_paragraph ) {
+			$related_paragraph = 1;
+		}
+		if ( 20 < $related_paragraph ) {
+			$related_paragraph = 20;
+		}
+	}
+	$related_why = 1;
+	if ( array_key_exists( 'related_why', $stored ) ) {
+		$related_why = empty( $stored['related_why'] ) ? 0 : 1;
+	}
 	$statuses = array( 'publish' );
 	if ( isset( $stored['statuses'] ) && is_array( $stored['statuses'] ) ) {
 		$statuses = array();
@@ -112,21 +130,24 @@ function skyphusion_ai_embed_config() {
 	}
 	$neurons = isset( $stored['neurons'] ) ? max( 0, (int) $stored['neurons'] ) : 0;
 	return array(
-		'index'      => $index,
-		'post_types' => $types,
-		'fields'     => $fields,
-		'model'      => $model,
-		'created'    => $created,
-		'enabled'    => $enabled,
-		'related'    => $related,
-		'statuses'   => $statuses,
-		'images'     => empty( $stored['images'] ) ? 0 : 1,
-		'after'      => $after,
-		'tax_mode'   => $tax_mode,
-		'terms'      => $terms,
-		'limit'      => $limit,
-		'day'        => $day,
-		'neurons'    => $neurons,
+		'index'             => $index,
+		'post_types'        => $types,
+		'fields'            => $fields,
+		'model'             => $model,
+		'created'           => $created,
+		'enabled'           => $enabled,
+		'related'           => $related,
+		'related_place'     => $related_place,
+		'related_paragraph' => $related_paragraph,
+		'related_why'       => $related_why,
+		'statuses'          => $statuses,
+		'images'            => empty( $stored['images'] ) ? 0 : 1,
+		'after'             => $after,
+		'tax_mode'          => $tax_mode,
+		'terms'             => $terms,
+		'limit'             => $limit,
+		'day'               => $day,
+		'neurons'           => $neurons,
 	);
 }
 
@@ -704,7 +725,57 @@ function skyphusion_ai_embed_metadata( $post ) {
 	if ( '' !== $url ) {
 		$metadata['url'] = $url;
 	}
+	$term_line = skyphusion_ai_embed_term_line( $post );
+	if ( '' !== $term_line ) {
+		$metadata['terms'] = $term_line;
+	}
 	return $metadata;
+}
+
+/**
+ * Categories and tags stored beside the vector.
+ *
+ * The line is empty when the post has none. A page view does not call this.
+ *
+ * @param array<string, mixed> $post One post.
+ * @return string
+ */
+function skyphusion_ai_embed_term_line( $post ) {
+	$names = array();
+	foreach ( array( 'categories', 'tags' ) as $bucket ) {
+		if ( ! isset( $post[ $bucket ] ) || ! is_array( $post[ $bucket ] ) ) {
+			continue;
+		}
+		foreach ( $post[ $bucket ] as $name ) {
+			$name = trim( (string) $name );
+			if ( '' === $name || 40 < strlen( $name ) || in_array( $name, $names, true ) ) {
+				continue;
+			}
+			$names[] = $name;
+			if ( 8 <= count( $names ) ) {
+				return implode( ', ', $names );
+			}
+		}
+	}
+	if ( array() !== $names || ! function_exists( 'wp_get_post_terms' ) ) {
+		return implode( ', ', $names );
+	}
+	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+	$found   = wp_get_post_terms( $post_id, array( 'category', 'post_tag' ), array( 'fields' => 'names' ) );
+	if ( ! is_array( $found ) ) {
+		return '';
+	}
+	foreach ( $found as $name ) {
+		$name = trim( (string) $name );
+		if ( '' === $name || 40 < strlen( $name ) || in_array( $name, $names, true ) ) {
+			continue;
+		}
+		$names[] = $name;
+		if ( 8 <= count( $names ) ) {
+			break;
+		}
+	}
+	return implode( ', ', $names );
 }
 
 /**
@@ -1078,6 +1149,23 @@ function skyphusion_ai_embed_apply( $posted ) {
 	if ( isset( $posted['related'] ) ) {
 		$config['related'] = empty( $posted['related'] ) ? 0 : 1;
 	}
+	if ( isset( $posted['related_place'] ) ) {
+		$place                   = (string) $posted['related_place'];
+		$config['related_place'] = in_array( $place, array( 'after', 'before', 'paragraph' ), true ) ? $place : 'after';
+	}
+	if ( isset( $posted['related_paragraph'] ) && is_numeric( $posted['related_paragraph'] ) ) {
+		$paragraph = (int) $posted['related_paragraph'];
+		if ( 1 > $paragraph ) {
+			$paragraph = 1;
+		}
+		if ( 20 < $paragraph ) {
+			$paragraph = 20;
+		}
+		$config['related_paragraph'] = $paragraph;
+	}
+	if ( isset( $posted['related_why'] ) ) {
+		$config['related_why'] = empty( $posted['related_why'] ) ? 0 : 1;
+	}
 	if ( isset( $posted['private'] ) ) {
 		$statuses = array( 'publish' );
 		if ( ! empty( $posted['private'] ) ) {
@@ -1225,6 +1313,28 @@ function skyphusion_ai_embed_render() {
 		echo ' checked="checked"';
 	}
 	echo ' /> ' . esc_html__( 'Show related posts on a single post or product.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p><label>' . esc_html__( 'Where the list goes.', 'skyphusion-ai' ) . ' ';
+	echo '<select name="skyphusion_ai_related_place">';
+	$related_places = array(
+		'after'     => __( 'After the content.', 'skyphusion-ai' ),
+		'before'    => __( 'Before the content.', 'skyphusion-ai' ),
+		'paragraph' => __( 'After a paragraph.', 'skyphusion-ai' ),
+	);
+	foreach ( $related_places as $related_mode => $related_label ) {
+		echo '<option value="' . esc_attr( $related_mode ) . '"';
+		if ( (string) $config['related_place'] === $related_mode ) {
+			echo ' selected="selected"';
+		}
+		echo '>' . esc_html( $related_label ) . '</option>';
+	}
+	echo '</select></label></p>';
+	echo '<p><label>' . esc_html__( 'Paragraph number.', 'skyphusion-ai' ) . ' ';
+	echo '<input type="number" name="skyphusion_ai_related_paragraph" value="' . esc_attr( (string) $config['related_paragraph'] ) . '" min="1" max="20" step="1" /></label></p>';
+	echo '<p><label><input type="checkbox" name="skyphusion_ai_related_why" value="1"';
+	if ( ! empty( $config['related_why'] ) ) {
+		echo ' checked="checked"';
+	}
+	echo ' /> ' . esc_html__( 'Say why each page matches.', 'skyphusion-ai' ) . '</label></p>';
 	echo '<p><label><input type="checkbox" name="skyphusion_ai_embed_private" value="1"';
 	if ( in_array( 'private', $config['statuses'], true ) ) {
 		echo ' checked="checked"';
@@ -1286,6 +1396,18 @@ function skyphusion_ai_embed_handle_save() {
 	if ( isset( $_POST['skyphusion_ai_related'] ) ) {
 		$related = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related'] ) );
 	}
+	$related_place = '';
+	if ( isset( $_POST['skyphusion_ai_related_place'] ) ) {
+		$related_place = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related_place'] ) );
+	}
+	$related_paragraph = '';
+	if ( isset( $_POST['skyphusion_ai_related_paragraph'] ) ) {
+		$related_paragraph = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related_paragraph'] ) );
+	}
+	$related_why = '';
+	if ( isset( $_POST['skyphusion_ai_related_why'] ) ) {
+		$related_why = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_related_why'] ) );
+	}
 	$private = '';
 	if ( isset( $_POST['skyphusion_ai_embed_private'] ) ) {
 		$private = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_embed_private'] ) );
@@ -1313,14 +1435,17 @@ function skyphusion_ai_embed_handle_save() {
 	}
 	skyphusion_ai_embed_apply(
 		array(
-			'index'    => $index,
-			'related'  => $related,
-			'private'  => $private,
-			'images'   => $images,
-			'after'    => $after,
-			'tax_mode' => $tax,
-			'terms'    => $terms,
-			'limit'    => $limit,
+			'index'             => $index,
+			'related'           => $related,
+			'related_place'     => $related_place,
+			'related_paragraph' => $related_paragraph,
+			'related_why'       => $related_why,
+			'private'           => $private,
+			'images'            => $images,
+			'after'             => $after,
+			'tax_mode'          => $tax,
+			'terms'             => $terms,
+			'limit'             => $limit,
 		)
 	);
 	skyphusion_ai_embed_redirect();
