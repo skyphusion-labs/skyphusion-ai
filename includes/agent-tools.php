@@ -86,6 +86,7 @@ function skyphusion_ai_agent_tools_cloudflare_api() {
 		'id'               => 'cloudflare_api_mcp',
 		'name'             => 'Cloudflare API MCP',
 		'vendor'           => 'cloudflare',
+		// phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- recorded host, not a remote asset.
 		'host'             => 'mcp.cloudflare.com',
 		'path'             => '/mcp',
 		'docs_updated'     => '2026-10-22',
@@ -255,6 +256,7 @@ function skyphusion_ai_agent_tools_gateway() {
 		'max_entries'      => 5,
 		'reserved_prefix'  => 'cf.',
 		'sends_prompt'     => false,
+		// phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- AI Gateway API host, not a remote asset.
 		'host'             => 'gateway.ai.cloudflare.com',
 		'direct_host'      => 'api.cloudflare.com',
 		'header_on_direct' => false,
