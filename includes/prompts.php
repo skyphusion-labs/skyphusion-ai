@@ -3,9 +3,9 @@
  * Prompts this plugin sends, with a reset and a one-call cost test.
  *
  * The empty text job, the site assistant, the link chat, and the search
- * list use the saved text. The translation helper does not send its row.
- * The test does.
- * A spent neuron budget does not leave the site.
+ * list use the saved text. A prompt no job sends is not listed. The
+ * translation helper does not send a prompt row. The test sends one
+ * writing call. A spent neuron budget does not leave the site.
  *
  * @package skyphusion-ai
  */
@@ -44,6 +44,8 @@ function skyphusion_ai_prompt_cap() {
 /**
  * Owned prompts. The default is what the plugin sends before an edit.
  *
+ * Each row is a prompt a job sends. The translation helper is not here.
+ *
  * @return array<string, array{label: string, note: string, default: string}>
  */
 function skyphusion_ai_prompt_definitions() {
@@ -68,11 +70,6 @@ function skyphusion_ai_prompt_definitions() {
 			'note'    => __( 'The link chat sends this prompt. {suggestions} is the suggestion list. {question} is the editor question.', 'skyphusion-ai' ),
 			'default' => "Answer only from these suggestions. Do not change the post.\n{suggestions}\nQuestion: {question}",
 		),
-		'translate'            => array(
-			'label'   => __( 'Translation', 'skyphusion-ai' ),
-			'note'    => __( 'The translation helper does not send this instruction. The test does. {text} is a sample sentence.', 'skyphusion-ai' ),
-			'default' => 'Translate the text. Keep the meaning. Text: {text}',
-		),
 		'write_next'           => array(
 			'label'   => __( 'Topics to write', 'skyphusion-ai' ),
 			'note'    => __( 'The search list sends this prompt when an admin asks. {gaps} is the empty searches.', 'skyphusion-ai' ),
@@ -93,7 +90,6 @@ function skyphusion_ai_prompt_samples() {
 		'question'    => 'Is this linen?',
 		'phrase'      => 'linen shirt',
 		'suggestions' => '- Linen shirt',
-		'text'        => 'Linen shirt',
 		'gaps'        => 'linen shirt',
 	);
 }

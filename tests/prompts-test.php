@@ -85,13 +85,13 @@ skyphusion_ai_prompt_reset('backfill_alt');
 expect('reset restores the alt prompt', skyphusion_ai_backfill_prompt('alt', 'Linen shirt'), 'Write one alt sentence for this image. Title: Linen shirt');
 
 $GLOBALS['cfais_can']['manage_options'] = true;
-$_POST['skyphusion_ai_prompt'] = array('translate' => 'Custom translation. Text: {text}');
+$_POST['skyphusion_ai_prompt'] = array('write_next' => "Custom topics.\n{gaps}");
 skyphusion_ai_prompt_handle_save();
-expect('the save form stores an edit', skyphusion_ai_prompt_raw('translate'), 'Custom translation. Text: {text}');
+expect('the save form stores an edit', skyphusion_ai_prompt_raw('write_next'), "Custom topics.\n{gaps}");
 unset($_POST['skyphusion_ai_prompt']);
-$_POST['skyphusion_ai_prompt_key'] = 'translate';
+$_POST['skyphusion_ai_prompt_key'] = 'write_next';
 skyphusion_ai_prompt_handle_reset();
-expect('the reset form restores the translation prompt', skyphusion_ai_prompt_raw('translate'), 'Translate the text. Keep the meaning. Text: {text}');
+expect('the reset form restores the topic prompt', skyphusion_ai_prompt_raw('write_next'), "Group these empty searches into topics. Suggest one article to write or one post to extend.\n{gaps}");
 unset($_POST['skyphusion_ai_prompt_key']);
 
 prompt_clear();
@@ -153,7 +153,7 @@ update_option('skyphusion_ai_neurons', array(
     'mailed_100' => 1,
 ), false);
 prompt_clear();
-$prompt_capped = skyphusion_ai_prompt_test('translate');
+$prompt_capped = skyphusion_ai_prompt_test('links');
 expect('a spent budget is an error', strpos($prompt_capped['error'], 'paused') !== false, true);
 expect('a spent budget makes no request', $GLOBALS['cfais_calls'], 0);
 expect('a spent budget does not include the token', strpos($prompt_capped['error'], $prompt_token) === false, true);
@@ -167,7 +167,21 @@ expect('the screen names the prompts', strpos($prompt_screen, 'Prompts') !== fal
 expect('the screen shows the alt prompt', strpos($prompt_screen, 'Write one alt sentence for this image.') !== false, true);
 expect('the screen says no test has run', strpos($prompt_screen, 'No test has run.') !== false, true);
 expect('the screen says the link chat sends this prompt', strpos($prompt_screen, 'The link chat sends this prompt.') !== false, true);
-expect('the screen says the helper does not send the instruction', strpos($prompt_screen, 'The translation helper does not send this instruction.') !== false, true);
+expect('the screen says the search list sends this prompt', strpos($prompt_screen, 'The search list sends this prompt when an admin asks.') !== false, true);
+expect('prompts-sent hides the translation row', strpos($prompt_screen, 'Translate the text. Keep the meaning.') === false, true);
+expect('prompts-sent hides the translation field', strpos($prompt_screen, 'skyphusion_ai_prompt[translate]') === false, true);
+$prompt_job_src = '';
+foreach (array('backfill.php', 'assistant.php', 'links.php', 'insights.php') as $prompt_job_file) {
+    $prompt_job_src .= (string) file_get_contents(dirname(__DIR__) . '/includes/' . $prompt_job_file);
+}
+$prompt_unsent = array();
+foreach (array_keys(skyphusion_ai_prompt_definitions()) as $prompt_key) {
+    if (strpos($prompt_job_src, "'" . $prompt_key . "'") === false) {
+        $prompt_unsent[] = $prompt_key;
+    }
+}
+expect('prompts-sent rows are sent by a job', $prompt_unsent, array());
+expect('the translation row is not stored', isset(skyphusion_ai_prompt_definitions()['translate']), false);
 expect('the screen offers a save', strpos($prompt_screen, 'Save the prompts') !== false, true);
 expect('the screen offers a reset', strpos($prompt_screen, 'Reset Alt text') !== false, true);
 expect('the screen offers a test', strpos($prompt_screen, 'Test Alt text') !== false, true);
