@@ -88,6 +88,9 @@ expect('the edge page sends the turn window', strpos($worker_edge, 'data-keep="1
 expect('the worker summarizes older turns', strpos($worker_script, 'Summarize these earlier turns in one short block.') !== false, true);
 expect('the worker labels the summary', strpos($worker_script, 'Earlier talk:') !== false, true);
 expect('the worker does not read an address', strpos($worker_script, 'cf-connecting-ip') === false, true);
+expect('the worker cites a product sku', strpos($worker_script, 'SKU ') !== false, true);
+expect('the worker cites a managed count', strpos($worker_script, ' available.') !== false, true);
+expect('the edge page draws a product cite', strpos($worker_src, 'parsed.citations') !== false, true);
 
 $worker_before = skyphusion_ai_neuron_state();
 $GLOBALS['cfais_calls'] = 0;

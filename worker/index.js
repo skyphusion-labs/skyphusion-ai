@@ -48,7 +48,7 @@ export default {
 		});
 		headers.set('content-type', 'text/event-stream; charset=utf-8');
 		headers.set('cache-control', 'no-cache');
-		return new Response(skyphusionAiEvents(aiStream), { headers: headers });
+		return new Response(skyphusionAiEvents(aiStream, pages), { headers: headers });
 	},
 	async scheduled(event, env) {
 		await skyphusionAiBackfill(env);
@@ -84,15 +84,113 @@ async function skyphusionAiPages(env, question) {
 		if (key) {
 			seen[key] = true;
 		}
-		pages.push({
-			title: String(meta.title || ''),
-			url: String(meta.url || ''),
-		});
+		pages.push(skyphusionAiCite(meta));
 		if (pages.length >= 5) {
 			break;
 		}
 	}
 	return pages;
+}
+
+function skyphusionAiHttp(url) {
+	const value = String(url || '').trim();
+	if (!value || /\s/.test(value) || value.length > 500) {
+		return '';
+	}
+	if (value.indexOf('https://') !== 0 && value.indexOf('http://') !== 0) {
+		return '';
+	}
+	if (value.indexOf('@') !== -1) {
+		return '';
+	}
+	return value;
+}
+
+function skyphusionAiWhole(value) {
+	if (typeof value === 'number' && Number.isInteger(value)) {
+		return value;
+	}
+	if (typeof value === 'string' && /^-?\d+$/.test(value)) {
+		return Number(value);
+	}
+	return null;
+}
+
+function skyphusionAiCount(meta) {
+	if (Object.prototype.hasOwnProperty.call(meta, 'count')) {
+		const count = skyphusionAiWhole(meta.count);
+		if (count === null || count < 0) {
+			return null;
+		}
+		return count;
+	}
+	if (!Object.prototype.hasOwnProperty.call(meta, 'quantity')) {
+		return null;
+	}
+	if (Object.prototype.hasOwnProperty.call(meta, 'managing_stock')) {
+		const managing = meta.managing_stock === true || meta.managing_stock === 1 || meta.managing_stock === '1';
+		if (!managing) {
+			return null;
+		}
+	}
+	const quantity = skyphusionAiWhole(meta.quantity);
+	if (quantity === null || quantity < 0) {
+		return null;
+	}
+	return quantity;
+}
+
+function skyphusionAiProduct(meta) {
+	if (String(meta.post_type || '') === 'product') {
+		return true;
+	}
+	if (String(meta.sku || '').trim() !== '') {
+		return true;
+	}
+	const status = String(meta.stock_status || '');
+	if (status === 'instock' || status === 'outofstock' || status === 'onbackorder') {
+		return true;
+	}
+	if (Object.prototype.hasOwnProperty.call(meta, 'count') || Object.prototype.hasOwnProperty.call(meta, 'quantity')) {
+		return true;
+	}
+	return false;
+}
+
+function skyphusionAiCite(meta) {
+	const source = meta && typeof meta === 'object' ? meta : {};
+	const page = {
+		title: String(source.title || ''),
+		url: String(source.url || ''),
+	};
+	if (!skyphusionAiProduct(source)) {
+		return page;
+	}
+	const image = skyphusionAiHttp(source.image);
+	if (image) {
+		page.image = image;
+	}
+	const sku = String(source.sku || '').replace(/[\r\n]/g, '').trim();
+	const status = String(source.stock_status || '');
+	const count = skyphusionAiCount(source);
+	const lines = [];
+	if (sku) {
+		lines.push('SKU ' + sku + '.');
+	}
+	if (status === 'instock') {
+		lines.push('In stock.');
+	} else if (status === 'outofstock') {
+		lines.push('Out of stock.');
+	} else if (status === 'onbackorder') {
+		lines.push('On backorder.');
+	}
+	if (count !== null) {
+		lines.push(String(count) + ' available.');
+	}
+	if (lines.length) {
+		page.lines = lines;
+	}
+	return page;
 }
 
 function skyphusionAiKeep(value) {
@@ -224,11 +322,17 @@ function skyphusionAiCors(env) {
 	return headers;
 }
 
-function skyphusionAiEvents(aiStream) {
+function skyphusionAiEvents(aiStream, pages) {
 	const encoder = new TextEncoder();
 	const decoder = new TextDecoder();
 	return new ReadableStream({
 		async start(controller) {
+			const citations = Array.isArray(pages) ? pages.filter(function (page) {
+				return page && (page.title || page.url);
+			}) : [];
+			if (citations.length) {
+				controller.enqueue(encoder.encode('data: ' + JSON.stringify({ citations: citations }) + '\n\n'));
+			}
 			const reader = aiStream.getReader();
 			let buffer = '';
 			while (true) {
