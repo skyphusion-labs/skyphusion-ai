@@ -125,6 +125,7 @@ require __DIR__ . '/health-test.php';
 require __DIR__ . '/defaults-test.php';
 require __DIR__ . '/reset-test.php';
 require __DIR__ . '/activity-test.php';
+require __DIR__ . '/nopaid-test.php';
 // LAST on purpose. cold-path-test.php sets CLOUDFLARE_API_KEY and restores
 // it; running it last means no earlier file can read the value it sets.
 require __DIR__ . '/cold-path-test.php';
