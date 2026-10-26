@@ -118,6 +118,7 @@ require __DIR__ . '/insights-test.php';
 require __DIR__ . '/assistant-test.php';
 require __DIR__ . '/member-test.php';
 require __DIR__ . '/worker-test.php';
+require __DIR__ . '/assistant-stream-test.php';
 require __DIR__ . '/backfill-test.php';
 require __DIR__ . '/translate-test.php';
 require __DIR__ . '/links-test.php';

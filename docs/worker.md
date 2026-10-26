@@ -8,6 +8,7 @@ Both actions call the same function.
 A successful deploy saves a `workers.dev` address.
 A failed deploy does not save an address.
 A blank address keeps the call on your site.
+That call streams the answer as it is written.
 The page does not show the API token.
 
 The Worker finds matching pages in one step.
