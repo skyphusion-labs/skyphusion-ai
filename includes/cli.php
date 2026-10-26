@@ -270,6 +270,22 @@ class Skyphusion_AI_CLI
 		}
 		skyphusion_ai_embed_cli( $args, $assoc_args );
 	}
+
+	/**
+	 * List or export the activity log.
+	 *
+	 * List and export use the same rows as the screen.
+	 *
+	 * @param array<int, string>    $args       Positional arguments.
+	 * @param array<string, string> $assoc_args Flags.
+	 * @return void
+	 */
+	public function activity( $args, $assoc_args ) {
+		if ( ! function_exists( 'skyphusion_ai_activity_cli' ) ) {
+			require_once __DIR__ . '/activity.php';
+		}
+		skyphusion_ai_activity_cli( $args, $assoc_args );
+	}
 }
 
 if (defined('WP_CLI') && WP_CLI) {
