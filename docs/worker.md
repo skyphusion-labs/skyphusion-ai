@@ -16,6 +16,12 @@ It reads the Vectorize index on your account.
 It does not call your site between those two steps.
 
 The assistant streams the answer from those pages.
+A chat of more than ten turns does not send every earlier turn to the model.
+The Worker summarizes the older turns in one short block.
+That summary is one text call.
+The page still shows every turn.
+The Worker does not store the chat.
+The Worker does not store an IP address.
 Member search asks for the page list only.
 It does not ask for a generated answer.
 A logged-out visitor does not call the Worker.

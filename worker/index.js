@@ -2,6 +2,9 @@
  * Site assistant stream. Runs on the merchant account.
  * The AI binding is named AI. This file has no API token.
  * It does not call Skyphusion.
+ * A chat of more than ten turns sends one short summary of the older turns.
+ * The summary is one text call. The page still shows every turn.
+ * This file does not store the chat and does not read an IP address.
  */
 const EMBED_MODEL = '@cf/baai/bge-large-en-v1.5';
 
@@ -34,7 +37,11 @@ export default {
 			return new Response(JSON.stringify({ pages: pages }), { headers: headers });
 		}
 		const model = String(payload.model || env.MODEL || '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
-		const prompt = skyphusionAiPrompt(question, pages);
+		const earlier = await skyphusionAiEarlier(env, model, payload.turns, payload.keep);
+		let prompt = skyphusionAiPrompt(question, pages);
+		if (earlier) {
+			prompt += '\n' + earlier;
+		}
 		const aiStream = await env.AI.run(model, {
 			messages: [{ role: 'user', content: prompt }],
 			stream: true,
@@ -86,6 +93,79 @@ async function skyphusionAiPages(env, question) {
 		}
 	}
 	return pages;
+}
+
+function skyphusionAiKeep(value) {
+	let keep = Number(value);
+	if (!Number.isFinite(keep)) {
+		keep = 10;
+	}
+	keep = Math.floor(keep);
+	if (keep < 0) {
+		keep = 0;
+	}
+	if (keep > 10) {
+		keep = 10;
+	}
+	return keep;
+}
+
+function skyphusionAiPairs(turns) {
+	const pairs = [];
+	const rows = Array.isArray(turns) ? turns : [];
+	for (const row of rows) {
+		if (!row || typeof row !== 'object') {
+			continue;
+		}
+		const asked = String(row.question || '').trim();
+		const reply = String(row.answer || '').trim();
+		if (!asked && !reply) {
+			continue;
+		}
+		pairs.push('Visitor: ' + asked + '\nAssistant: ' + reply);
+	}
+	return pairs;
+}
+
+function skyphusionAiReplyText(result) {
+	if (!result) {
+		return '';
+	}
+	if (typeof result.response === 'string') {
+		return result.response.trim();
+	}
+	if (result.choices && result.choices[0] && result.choices[0].message && typeof result.choices[0].message.content === 'string') {
+		return result.choices[0].message.content.trim();
+	}
+	return '';
+}
+
+async function skyphusionAiEarlier(env, model, turns, keepValue) {
+	const keep = skyphusionAiKeep(keepValue);
+	if (keep < 1) {
+		return '';
+	}
+	const pairs = skyphusionAiPairs(turns);
+	if (pairs.length <= 10) {
+		return pairs.slice(-keep).join('\n');
+	}
+	const older = pairs.slice(0, pairs.length - keep);
+	const latest = pairs.slice(-keep);
+	let block = '';
+	if (env.AI && older.length) {
+		const summary = await env.AI.run(model, {
+			messages: [{
+				role: 'user',
+				content: 'Summarize these earlier turns in one short block.\n' + older.join('\n'),
+			}],
+		});
+		block = skyphusionAiReplyText(summary);
+	}
+	const tail = latest.join('\n');
+	if (!block) {
+		return tail;
+	}
+	return 'Earlier talk:\n' + block + '\n' + tail;
 }
 
 function skyphusionAiPrompt(question, pages) {

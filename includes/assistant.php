@@ -4,7 +4,9 @@
  *
  * The control is off until an admin turns it on. The chat button is a
  * separate snippet and stays as it is. A saved chat needs consent.
- * An IP address is not stored.
+ * An IP address is not stored. A chat longer than ten turns sends one
+ * short summary of the older turns. The page still shows every turn.
+ * A chat that was not saved is not stored to make that summary.
  *
  * @package skyphusion-ai
  */
@@ -572,6 +574,59 @@ function skyphusion_ai_assistant_topic_blocked( $question, $config ) {
 }
 
 /**
+ * How many turns a chat can send before the older ones are summarized.
+ *
+ * @return int
+ */
+function skyphusion_ai_assistant_compact_limit() {
+	return 10;
+}
+
+/**
+ * Question and answer pairs. An address is not copied.
+ *
+ * The saved consent log is not this list.
+ *
+ * @param mixed $history Earlier pairs.
+ * @return array<int, array{question: string, answer: string}>
+ */
+function skyphusion_ai_assistant_history_rows( $history ) {
+	$rows = array();
+	if ( ! is_array( $history ) ) {
+		return $rows;
+	}
+	foreach ( $history as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+		$asked = isset( $row['question'] ) ? trim( (string) $row['question'] ) : '';
+		$reply = isset( $row['answer'] ) ? trim( (string) $row['answer'] ) : '';
+		if ( '' === $asked && '' === $reply ) {
+			continue;
+		}
+		$rows[] = array(
+			'question' => $asked,
+			'answer'   => $reply,
+		);
+	}
+	return $rows;
+}
+
+/**
+ * Lines for one pair.
+ *
+ * @param mixed $history Earlier pairs.
+ * @return string[]
+ */
+function skyphusion_ai_assistant_history_pairs( $history ) {
+	$pairs = array();
+	foreach ( skyphusion_ai_assistant_history_rows( $history ) as $row ) {
+		$pairs[] = 'Visitor: ' . $row['question'] . "\n" . 'Assistant: ' . $row['answer'];
+	}
+	return $pairs;
+}
+
+/**
  * Earlier pairs that fit in the turn window.
  *
  * The saved consent log is not this list.
@@ -582,25 +637,85 @@ function skyphusion_ai_assistant_topic_blocked( $question, $config ) {
  */
 function skyphusion_ai_assistant_history_text( $history, $turns ) {
 	$turns = (int) $turns;
-	if ( 1 > $turns || ! is_array( $history ) ) {
+	if ( 1 > $turns ) {
 		return '';
 	}
-	$pairs = array();
-	foreach ( $history as $row ) {
-		if ( ! is_array( $row ) ) {
-			continue;
-		}
-		$asked = isset( $row['question'] ) ? trim( (string) $row['question'] ) : '';
-		$reply = isset( $row['answer'] ) ? trim( (string) $row['answer'] ) : '';
-		if ( '' === $asked && '' === $reply ) {
-			continue;
-		}
-		$pairs[] = 'Visitor: ' . $asked . "\n" . 'Assistant: ' . $reply;
-	}
+	$pairs = skyphusion_ai_assistant_history_pairs( $history );
 	if ( count( $pairs ) > $turns ) {
 		$pairs = array_slice( $pairs, -1 * $turns );
 	}
 	return implode( "\n", $pairs );
+}
+
+/**
+ * One short block for the turns that are older than the window.
+ *
+ * This is one text call. It does not store the chat.
+ *
+ * @param string[] $older Older pair lines.
+ * @return string
+ */
+function skyphusion_ai_assistant_summary( $older ) {
+	if ( ! is_array( $older ) || array() === $older ) {
+		return '';
+	}
+	$prompt = __( 'Summarize these earlier turns in one short block.', 'skyphusion-ai' ) . "\n" . implode( "\n", $older );
+	$text   = skyphusion_ai_assistant_text( $prompt );
+	if ( is_wp_error( $text ) ) {
+		return '';
+	}
+	return skyphusion_ai_assistant_plain( $text, 400 );
+}
+
+/**
+ * Text to send for earlier turns.
+ *
+ * Ten turns or fewer use the window. More than ten turns send one summary
+ * of the older turns plus the latest turns. The page transcript is separate.
+ *
+ * @param mixed $history Earlier pairs.
+ * @param int   $turns   How many latest pairs to send in full.
+ * @return string
+ */
+function skyphusion_ai_assistant_compact_history( $history, $turns ) {
+	$turns = (int) $turns;
+	if ( 1 > $turns ) {
+		return '';
+	}
+	$limit = skyphusion_ai_assistant_compact_limit();
+	if ( $turns > $limit ) {
+		$turns = $limit;
+	}
+	$pairs = skyphusion_ai_assistant_history_pairs( $history );
+	if ( count( $pairs ) <= $limit ) {
+		return skyphusion_ai_assistant_history_text( $history, $turns );
+	}
+	$older   = array_slice( $pairs, 0, count( $pairs ) - $turns );
+	$latest  = array_slice( $pairs, -1 * $turns );
+	$summary = skyphusion_ai_assistant_summary( $older );
+	$tail    = implode( "\n", $latest );
+	if ( '' === $summary ) {
+		return $tail;
+	}
+	return __( 'Earlier talk:', 'skyphusion-ai' ) . "\n" . $summary . "\n" . $tail;
+}
+
+/**
+ * Hidden fields that repeat the transcript. They do not store an address.
+ *
+ * @param mixed $rows Transcript rows.
+ * @return string
+ */
+function skyphusion_ai_assistant_turn_fields( $rows ) {
+	if ( ! is_array( $rows ) || ! function_exists( 'esc_attr' ) ) {
+		return '';
+	}
+	$html = '';
+	foreach ( skyphusion_ai_assistant_history_rows( $rows ) as $row ) {
+		$html .= '<input type="hidden" name="skyphusion_ai_assistant_turn_question[]" value="' . esc_attr( $row['question'] ) . '" />';
+		$html .= '<input type="hidden" name="skyphusion_ai_assistant_turn_answer[]" value="' . esc_attr( $row['answer'] ) . '" />';
+	}
+	return $html;
 }
 
 /**
@@ -830,13 +945,13 @@ function skyphusion_ai_assistant_ask( $question, $consent, $history = array() ) 
 	if ( '' !== $rules ) {
 		$prompt .= "\n" . $rules;
 	}
-	$earlier = skyphusion_ai_assistant_history_text( $history, isset( $config['turns'] ) ? (int) $config['turns'] : 10 );
-	if ( '' !== $earlier ) {
-		$prompt .= "\n" . $earlier;
-	}
 	$before = 0;
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
 		$before = (int) skyphusion_ai_neuron_state()['neurons'];
+	}
+	$earlier = skyphusion_ai_assistant_compact_history( $history, isset( $config['turns'] ) ? (int) $config['turns'] : 10 );
+	if ( '' !== $earlier ) {
+		$prompt .= "\n" . $earlier;
 	}
 	$text  = skyphusion_ai_assistant_text( $prompt );
 	$after = $before;
@@ -851,7 +966,14 @@ function skyphusion_ai_assistant_ask( $question, $consent, $history = array() ) 
 		return skyphusion_ai_assistant_result( 'empty', skyphusion_ai_assistant_miss_text(), $citations );
 	}
 	skyphusion_ai_assistant_remember( $question, $text, (bool) $consent );
-	return skyphusion_ai_assistant_result( 'answered', $text, $citations );
+	$result               = skyphusion_ai_assistant_result( 'answered', $text, $citations );
+	$transcript           = skyphusion_ai_assistant_history_rows( $history );
+	$transcript[]         = array(
+		'question' => $question,
+		'answer'   => $text,
+	);
+	$result['transcript'] = $transcript;
+	return $result;
 }
 
 /**
@@ -869,11 +991,26 @@ function skyphusion_ai_assistant_html( $result ) {
 	if ( isset( $result['citations'] ) && is_array( $result['citations'] ) ) {
 		$rows = $result['citations'];
 	}
-	if ( '' === $answer && array() === $rows ) {
+	$turns = array();
+	if ( isset( $result['transcript'] ) && is_array( $result['transcript'] ) ) {
+		$turns = skyphusion_ai_assistant_history_rows( $result['transcript'] );
+	}
+	if ( '' === $answer && array() === $rows && array() === $turns ) {
 		return '';
 	}
 	$html = '<section class="skyphusion-ai-assistant">';
-	if ( '' !== $answer ) {
+	if ( array() !== $turns ) {
+		$html .= '<div class="skyphusion-ai-assistant-transcript">';
+		foreach ( $turns as $turn ) {
+			if ( '' !== $turn['question'] ) {
+				$html .= '<p>' . esc_html( $turn['question'] ) . '</p>';
+			}
+			if ( '' !== $turn['answer'] ) {
+				$html .= '<p>' . esc_html( $turn['answer'] ) . '</p>';
+			}
+		}
+		$html .= '</div>';
+	} elseif ( '' !== $answer ) {
 		$html .= '<p>' . esc_html( $answer ) . '</p>';
 	}
 	if ( array() !== $rows ) {
@@ -968,6 +1105,8 @@ function skyphusion_ai_assistant_render() {
 	echo '<input type="number" name="skyphusion_ai_assistant_limit" value="' . esc_attr( (string) $config['limit'] ) . '" min="0" step="1" /></label></p>';
 	echo '<p><label>' . esc_html__( 'Earlier turns to send. Zero sends only this question.', 'skyphusion-ai' ) . ' ';
 	echo '<input type="number" name="skyphusion_ai_assistant_turns" value="' . esc_attr( (string) $config['turns'] ) . '" min="0" max="10" step="1" /></label></p>';
+	echo '<p>' . esc_html__( 'A chat longer than ten turns sends one short summary of the older turns.', 'skyphusion-ai' ) . '</p>';
+	echo '<p>' . esc_html__( 'The page still shows every turn.', 'skyphusion-ai' ) . '</p>';
 	$marker = skyphusion_ai_assistant_usage_marker( $config );
 	if ( '' !== $marker ) {
 		echo '<p class="' . esc_attr( $marker ) . '">' . esc_html__( 'Assistant use today.', 'skyphusion-ai' ) . '</p>';
@@ -1047,9 +1186,11 @@ function skyphusion_ai_assistant_shortcode() {
 		}
 	}
 	$html = '';
+	$last = array();
 	if ( function_exists( 'get_transient' ) ) {
-		$last = get_transient( 'skyphusion_ai_assistant_last' );
-		if ( is_array( $last ) ) {
+		$stored = get_transient( 'skyphusion_ai_assistant_last' );
+		if ( is_array( $stored ) ) {
+			$last  = $stored;
 			$html .= skyphusion_ai_assistant_html( $last );
 		}
 	}
@@ -1058,6 +1199,11 @@ function skyphusion_ai_assistant_shortcode() {
 	if ( function_exists( 'wp_nonce_field' ) ) {
 		$html .= wp_nonce_field( 'skyphusion_ai_assistant', '_wpnonce', true, false );
 	}
+	$transcript = array();
+	if ( isset( $last['transcript'] ) && is_array( $last['transcript'] ) ) {
+		$transcript = $last['transcript'];
+	}
+	$html .= skyphusion_ai_assistant_turn_fields( $transcript );
 	$html .= '<p><label>' . esc_html__( 'Ask this site', 'skyphusion-ai' ) . ' ';
 	$html .= '<input type="text" name="skyphusion_ai_assistant_question" value="" /></label></p>';
 	$html .= '<p><label><input type="checkbox" name="skyphusion_ai_assistant_consent" value="1" /> ';
@@ -1080,8 +1226,34 @@ function skyphusion_ai_assistant_handle() {
 	if ( isset( $_POST['skyphusion_ai_assistant_question'] ) ) {
 		$question = sanitize_text_field( wp_unslash( $_POST['skyphusion_ai_assistant_question'] ) );
 	}
-	$consent = isset( $_POST['skyphusion_ai_assistant_consent'] );
-	$result  = skyphusion_ai_assistant_ask( $question, $consent );
+	$consent   = isset( $_POST['skyphusion_ai_assistant_consent'] );
+	$questions = array();
+	$answers   = array();
+	if ( isset( $_POST['skyphusion_ai_assistant_turn_question'] ) && is_array( $_POST['skyphusion_ai_assistant_turn_question'] ) ) {
+		$questions = array_map( 'sanitize_text_field', wp_unslash( $_POST['skyphusion_ai_assistant_turn_question'] ) );
+	}
+	if ( isset( $_POST['skyphusion_ai_assistant_turn_answer'] ) && is_array( $_POST['skyphusion_ai_assistant_turn_answer'] ) ) {
+		$answers = array_map( 'sanitize_text_field', wp_unslash( $_POST['skyphusion_ai_assistant_turn_answer'] ) );
+	}
+	$cap = 30;
+	if ( count( $questions ) > $cap ) {
+		$questions = array_slice( $questions, -1 * $cap );
+	}
+	if ( count( $answers ) > $cap ) {
+		$answers = array_slice( $answers, -1 * $cap );
+	}
+	$count = count( $questions );
+	if ( count( $answers ) < $count ) {
+		$count = count( $answers );
+	}
+	$history = array();
+	for ( $index = 0; $index < $count; $index++ ) {
+		$history[] = array(
+			'question' => $questions[ $index ],
+			'answer'   => $answers[ $index ],
+		);
+	}
+	$result = skyphusion_ai_assistant_ask( $question, $consent, $history );
 	if ( function_exists( 'set_transient' ) ) {
 		set_transient( 'skyphusion_ai_assistant_last', $result, 120 );
 	}

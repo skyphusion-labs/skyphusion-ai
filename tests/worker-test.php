@@ -83,6 +83,11 @@ $worker_edge = skyphusion_ai_assistant_shortcode();
 expect('the page calls the worker', strpos($worker_edge, 'https://skyphusion-ai.example-sub.workers.dev') !== false, true);
 expect('the page does not show the token', strpos($worker_edge, $worker_token) === false, true);
 expect('the page does not post the question to PHP', strpos($worker_edge, 'admin-post.php') === false, true);
+expect('the edge page keeps a transcript', strpos($worker_edge, 'skyphusion-ai-assistant-transcript') !== false, true);
+expect('the edge page sends the turn window', strpos($worker_edge, 'data-keep="10"') !== false, true);
+expect('the worker summarizes older turns', strpos($worker_script, 'Summarize these earlier turns in one short block.') !== false, true);
+expect('the worker labels the summary', strpos($worker_script, 'Earlier talk:') !== false, true);
+expect('the worker does not read an address', strpos($worker_script, 'cf-connecting-ip') === false, true);
 
 $worker_before = skyphusion_ai_neuron_state();
 $GLOBALS['cfais_calls'] = 0;
