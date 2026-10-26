@@ -32,6 +32,7 @@ require_once __DIR__ . '/includes/search-stock.php';
 require_once __DIR__ . '/includes/frontend.php';
 require_once __DIR__ . '/includes/cli.php';
 require_once __DIR__ . '/includes/provider.php';
+require_once __DIR__ . '/includes/nopaid.php';
 require_once __DIR__ . '/includes/health.php';
 require_once __DIR__ . '/includes/insights.php';
 require_once __DIR__ . '/includes/assistant.php';
