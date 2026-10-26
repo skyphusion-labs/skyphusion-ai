@@ -272,10 +272,14 @@ function skyphusion_ai_gateway_metadata_header( $url, $feature, $model ) {
 	if ( ! is_string( $encoded ) || '' === $encoded ) {
 		return array();
 	}
-	return array(
+	$headers = array(
 		'cf-aig-metadata'            => $encoded,
 		'cf-aig-collect-log-payload' => skyphusion_ai_gateway_collect_value( $feature ),
 	);
+	if ( function_exists( 'skyphusion_ai_defaults_cache_header' ) ) {
+		$headers = array_merge( $headers, skyphusion_ai_defaults_cache_header() );
+	}
+	return $headers;
 }
 
 /**
