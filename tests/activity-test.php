@@ -65,6 +65,83 @@ skyphusion_ai_neuron_record('text', $activity_model, new WP_Error('skyphusion_ai
 $activity_failed = skyphusion_ai_activity_rows();
 expect('an error response is a failure', $activity_failed[0]['ok'], 0);
 
+$activity_transport_flag = !empty($GLOBALS['cfais_transport_error']);
+$activity_body_set = array_key_exists('cfais_body', $GLOBALS);
+$activity_body_saved = $activity_body_set ? $GLOBALS['cfais_body'] : null;
+$activity_status_saved = array_key_exists('cfais_status', $GLOBALS) ? $GLOBALS['cfais_status'] : null;
+if (!isset($GLOBALS['cfais_options']['skyphusion_ai_neurons']) || !is_array($GLOBALS['cfais_options']['skyphusion_ai_neurons'])) {
+    skyphusion_ai_neuron_state();
+}
+$GLOBALS['cfais_options']['skyphusion_ai_neurons']['neurons'] = 0;
+if (isset($GLOBALS['cfais_options']['skyphusion_ai_neurons']['tools']) && is_array($GLOBALS['cfais_options']['skyphusion_ai_neurons']['tools'])) {
+    $GLOBALS['cfais_options']['skyphusion_ai_neurons']['tools']['embeddings'] = 0;
+}
+$activity_embed_model = '@cf/baai/bge-large-en-v1.5';
+if (function_exists('cloudflare_ai_provider_embeddings_model')) {
+    $activity_embed_model = cloudflare_ai_provider_embeddings_model();
+}
+$activity_embed_url = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/' . $activity_embed_model;
+$activity_embed_token = 'activity-transport-token-not-stored';
+$activity_before_transport = count(skyphusion_ai_activity_rows());
+$GLOBALS['cfais_transport_error'] = true;
+$activity_transport = skyphusion_ai_neuron_embeddings_post(
+    $activity_embed_url,
+    $activity_embed_token,
+    array('text' => array('activity-transport-text-not-stored'))
+);
+$GLOBALS['cfais_transport_error'] = false;
+expect('a transport failure is an error', is_wp_error($activity_transport), true);
+expect(
+    'a transport failure does not contain the token',
+    strpos((string) $activity_transport->message, $activity_embed_token) === false,
+    true
+);
+$activity_transport_rows = skyphusion_ai_activity_rows();
+expect('a transport failure is logged', count($activity_transport_rows), $activity_before_transport + 1);
+expect('a transport failure is a failure', $activity_transport_rows[0]['ok'], 0);
+expect('a transport failure names embeddings', $activity_transport_rows[0]['feature'], 'embeddings');
+expect('a transport failure stores the model', $activity_transport_rows[0]['model'], $activity_embed_model);
+expect('a transport failure stores no neurons', $activity_transport_rows[0]['neurons'], 0);
+$activity_transport_saved = (string) json_encode($GLOBALS['cfais_options']['skyphusion_ai_activity']);
+expect('a transport failure does not store the token', strpos($activity_transport_saved, $activity_embed_token) === false, true);
+expect('a transport failure does not store the text', strpos($activity_transport_saved, 'activity-transport-text-not-stored') === false, true);
+
+$GLOBALS['cfais_body'] = json_encode(array('usage' => array('neurons' => 3)));
+$GLOBALS['cfais_status'] = 200;
+$activity_embed_ok = skyphusion_ai_neuron_embeddings_post(
+    $activity_embed_url,
+    $activity_embed_token,
+    array('text' => array('activity-transport-text-not-stored'))
+);
+expect('a completed embeddings call is not an error', is_wp_error($activity_embed_ok), false);
+$activity_embed_rows = skyphusion_ai_activity_rows();
+expect('a completed embeddings call is logged', $activity_embed_rows[0]['ok'], 1);
+expect('a completed embeddings call stores the neurons', $activity_embed_rows[0]['neurons'], 3);
+expect('a completed embeddings call names embeddings', $activity_embed_rows[0]['feature'], 'embeddings');
+
+$activity_cap_before = count(skyphusion_ai_activity_rows());
+$GLOBALS['cfais_options']['skyphusion_ai_neurons']['neurons'] = skyphusion_ai_neuron_cap();
+$GLOBALS['cfais_options']['skyphusion_ai_neurons']['mailed_100'] = 1;
+$GLOBALS['cfais_transport_error'] = true;
+$activity_refused = skyphusion_ai_neuron_embeddings_post(
+    $activity_embed_url,
+    $activity_embed_token,
+    array('text' => array('activity-transport-text-not-stored'))
+);
+$GLOBALS['cfais_transport_error'] = false;
+expect('a spent budget returns before the call', is_wp_error($activity_refused), true);
+expect('a spent budget is not logged as a transport failure', count(skyphusion_ai_activity_rows()), $activity_cap_before);
+
+if ($activity_body_set) {
+    $GLOBALS['cfais_body'] = $activity_body_saved;
+} else {
+    unset($GLOBALS['cfais_body']);
+}
+if (null !== $activity_status_saved) {
+    $GLOBALS['cfais_status'] = $activity_status_saved;
+}
+$GLOBALS['cfais_transport_error'] = $activity_transport_flag;
+
 if (!isset($GLOBALS['cfais_can']) || !is_array($GLOBALS['cfais_can'])) {
     $GLOBALS['cfais_can'] = array();
 }

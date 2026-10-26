@@ -1696,6 +1696,14 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 		skyphusion_ai_gateway_note( $url, 'embeddings', $response );
 	}
 	if ( is_wp_error( $response ) || ! function_exists( 'wp_remote_retrieve_body' ) ) {
+		$failed = $response;
+		if ( ! is_wp_error( $failed ) ) {
+			$failed = new WP_Error(
+				'skyphusion_ai_embeddings',
+				__( 'The site could not reach Cloudflare.', 'skyphusion-ai' )
+			);
+		}
+		skyphusion_ai_neuron_record( 'embeddings', $model, $failed );
 		return $response;
 	}
 	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
