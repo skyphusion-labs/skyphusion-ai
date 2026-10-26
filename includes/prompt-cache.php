@@ -48,6 +48,9 @@ function skyphusion_ai_prompt_cache_key( $feature, $model, $prompt, $extra = '' 
  * @return string|null
  */
 function skyphusion_ai_prompt_cache_read( $feature, $model, $prompt, $extra = '', $regenerate = false ) {
+	if ( function_exists( 'skyphusion_ai_defaults_cache_on' ) && ! skyphusion_ai_defaults_cache_on() ) {
+		return null;
+	}
 	if ( $regenerate || ! function_exists( 'get_transient' ) ) {
 		return null;
 	}
@@ -69,6 +72,9 @@ function skyphusion_ai_prompt_cache_read( $feature, $model, $prompt, $extra = ''
  * @return void
  */
 function skyphusion_ai_prompt_cache_write( $feature, $model, $prompt, $extra, $text ) {
+	if ( function_exists( 'skyphusion_ai_defaults_cache_on' ) && ! skyphusion_ai_defaults_cache_on() ) {
+		return;
+	}
 	$text = trim( (string) $text );
 	if ( '' === $text || ! function_exists( 'set_transient' ) ) {
 		return;
