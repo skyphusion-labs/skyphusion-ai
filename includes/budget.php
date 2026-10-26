@@ -1652,6 +1652,9 @@ function skyphusion_ai_neuron_note( $data ) {
 	if ( isset( $call['feature'] ) ) {
 		$model = isset( $call['model'] ) ? (string) $call['model'] : '';
 		skyphusion_ai_neuron_record( (string) $call['feature'], $model, $data );
+		if ( function_exists( 'skyphusion_ai_model_licence_note' ) ) {
+			skyphusion_ai_model_licence_note( $model, $data );
+		}
 	}
 	return $data;
 }

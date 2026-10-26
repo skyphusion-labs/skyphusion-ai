@@ -109,6 +109,7 @@ require __DIR__ . '/i18n-test.php';
 require __DIR__ . '/lead-guard-test.php';
 require __DIR__ . '/neuron-budget-test.php';
 require __DIR__ . '/model-list-test.php';
+require __DIR__ . '/model-labels-test.php';
 require __DIR__ . '/gateway-test.php';
 require __DIR__ . '/sources-test.php';
 require __DIR__ . '/embed-test.php';
