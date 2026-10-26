@@ -142,7 +142,8 @@ function skyphusion_ai_related_stored( $post_id, $config, $credentials ) {
 		'metadata' => array(),
 	);
 	$url   = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'get_by_ids' );
-	$body  = wp_json_encode( array( 'ids' => array( skyphusion_ai_embed_vector_id( $post_id ) ) ) );
+	$count = skyphusion_ai_embed_part_count( $post_id );
+	$body  = wp_json_encode( array( 'ids' => skyphusion_ai_embed_passage_ids( $post_id, $count ) ) );
 	$read  = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $body, 'application/json' );
 	if ( is_wp_error( $read ) ) {
 		return $empty;
@@ -214,7 +215,7 @@ function skyphusion_ai_related_rows( $post ) {
 	$body    = wp_json_encode(
 		array(
 			'vector'         => $vector,
-			'topK'           => 6,
+			'topK'           => 20,
 			'returnMetadata' => 'all',
 		)
 	);
@@ -222,9 +223,9 @@ function skyphusion_ai_related_rows( $post ) {
 	if ( is_wp_error( $decoded ) || ! isset( $decoded['result']['matches'] ) || ! is_array( $decoded['result']['matches'] ) ) {
 		return array();
 	}
-	$own   = skyphusion_ai_embed_vector_id( $post_id );
 	$rows  = array();
 	$terms = skyphusion_ai_related_term_list( isset( $stored['metadata']['terms'] ) ? $stored['metadata']['terms'] : array() );
+	$seen  = array();
 	foreach ( skyphusion_ai_related_post_terms( $post ) as $name ) {
 		if ( ! in_array( $name, $terms, true ) ) {
 			$terms[] = $name;
@@ -235,16 +236,25 @@ function skyphusion_ai_related_rows( $post ) {
 			continue;
 		}
 		$id = isset( $match['id'] ) ? (string) $match['id'] : '';
-		if ( '' === $id || $id === $own ) {
+		if ( '' === $id || skyphusion_ai_embed_same_post( $id, $post_id ) ) {
 			continue;
 		}
 		$metadata = array();
 		if ( isset( $match['metadata'] ) && is_array( $match['metadata'] ) ) {
 			$metadata = $match['metadata'];
 		}
-		$title = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
-		$link  = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
-		$score = null;
+		$neighbour = isset( $metadata['post_id'] ) ? (int) $metadata['post_id'] : 0;
+		if ( 0 < $neighbour && $neighbour === $post_id ) {
+			continue;
+		}
+		$dedupe = 0 < $neighbour ? (string) $neighbour : $id;
+		if ( isset( $seen[ $dedupe ] ) ) {
+			continue;
+		}
+		$seen[ $dedupe ] = true;
+		$title           = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
+		$link            = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
+		$score           = null;
 		if ( isset( $match['score'] ) && is_numeric( $match['score'] ) ) {
 			$score = (float) $match['score'];
 		}

@@ -134,7 +134,7 @@ expect('the header starts with the bearer prefix', strpos($related_header, 'Bear
 expect('the header token is the sentinel length', strlen($related_header), 52);
 $related_body = isset($related_args['body']) ? json_decode((string) $related_args['body'], true) : array();
 expect('the query reuses the stored vector', isset($related_body['vector']) ? $related_body['vector'] : array(), array(0.25, 0.5));
-expect('the query asks for six so the current page can be dropped', isset($related_body['topK']) ? $related_body['topK'] : 0, 6);
+expect('the query asks for twenty so same-post passages can be dropped', isset($related_body['topK']) ? $related_body['topK'] : 0, 20);
 $related_type = isset($related_args['headers']['Content-Type']) ? (string) $related_args['headers']['Content-Type'] : '';
 expect('the query body is json', $related_type, 'application/json');
 
@@ -394,6 +394,17 @@ expect('stored metadata keeps the terms', $related_meta['terms'], 'Linen, Cotton
 expect('stored metadata still omits the body', isset($related_meta['post_content']), false);
 expect('a row with no stored clue says it is close', skyphusion_ai_related_why(array(), null, array()), 'Close in subject.');
 expect('a high paragraph number becomes twenty', skyphusion_ai_embed_apply(array('related_paragraph' => '40'))['related_paragraph'], 20);
+
+related_store(1, 1);
+$GLOBALS['cfais_embed_meta'][6]['skyphusion_ai_embed_parts'] = '2';
+related_clear();
+$GLOBALS['cfais_last_post'] = array('marker' => 1);
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":[{"id":"p6","values":[0.25,0.5]}]}');
+skyphusion_ai_related_vector(6, skyphusion_ai_embed_config(), skyphusion_ai_embed_credentials());
+$related_ids_body = isset($GLOBALS['cfais_last_request']['args']['body']) ? json_decode((string) $GLOBALS['cfais_last_request']['args']['body'], true) : array();
+expect('related posts read every stored passage', isset($related_ids_body['ids']) ? $related_ids_body['ids'] : array(), array('p6', 'p6-1'));
+expect('reading passages does not call the embeddings model', $GLOBALS['cfais_last_post'], array('marker' => 1));
+unset($GLOBALS['cfais_embed_meta'][6]['skyphusion_ai_embed_parts']);
 
 unset($GLOBALS['cfais_settings']);
 unset($GLOBALS['cfais_bodies']);

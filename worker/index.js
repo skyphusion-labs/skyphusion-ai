@@ -64,15 +64,26 @@ async function skyphusionAiPages(env, question) {
 	if (!vector) {
 		return [];
 	}
-	const found = await env.VECTORIZE.query(vector, { topK: 5, returnMetadata: 'all' });
+	const found = await env.VECTORIZE.query(vector, { topK: 20, returnMetadata: 'all' });
 	const rows = found && found.matches ? found.matches : [];
 	const pages = [];
+	const seen = {};
 	for (const row of rows) {
 		const meta = row.metadata || {};
+		const key = String(meta.post_id || meta.url || '');
+		if (key && seen[key]) {
+			continue;
+		}
+		if (key) {
+			seen[key] = true;
+		}
 		pages.push({
 			title: String(meta.title || ''),
 			url: String(meta.url || ''),
 		});
+		if (pages.length >= 5) {
+			break;
+		}
 	}
 	return pages;
 }

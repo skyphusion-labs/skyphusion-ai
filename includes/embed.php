@@ -3,8 +3,9 @@
  * Keep a Cloudflare Vectorize index in step with published posts.
  *
  * The admin sees a neuron estimate before the first run. A later save
- * calls the model only when the chosen text changed. Deleting the plugin
- * removes the saved choice and leaves the index in the Cloudflare account.
+ * calls the model only when the chosen text changed. Title and content
+ * are stored as short passages. Deleting the plugin removes the saved
+ * choice and leaves the index in the Cloudflare account.
  *
  * @package skyphusion-ai
  */
@@ -257,6 +258,213 @@ function skyphusion_ai_embed_vector_id( $post_id ) {
 }
 
 /**
+ * Characters in one stored passage.
+ *
+ * About 500 characters stays under the 512-token input of
+ * `@cf/baai/bge-large-en-v1.5`.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_passage_size() {
+	return 500;
+}
+
+/**
+ * Characters repeated at the start of the next passage.
+ *
+ * The overlap is short so a sentence on the cut is still found.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_passage_overlap() {
+	return 60;
+}
+
+/**
+ * Cut one window on a paragraph, a sentence, or a space.
+ *
+ * The cut stays in the second half. A window with no break is kept whole.
+ *
+ * @param string $window Text that is already at most one passage long.
+ * @return int
+ */
+function skyphusion_ai_embed_passage_cut( $window ) {
+	$size = strlen( $window );
+	$half = intdiv( $size, 2 );
+	if ( 1 > $half ) {
+		return $size;
+	}
+	foreach ( array( "\n\n", "\n", '. ', ' ' ) as $mark ) {
+		$pos = strrpos( $window, $mark );
+		if ( false === $pos || $half > $pos ) {
+			continue;
+		}
+		$cut = $pos + strlen( $mark );
+		if ( $cut > $size || $half >= $cut ) {
+			continue;
+		}
+		return $cut;
+	}
+	return $size;
+}
+
+/**
+ * Split title and content into short passages.
+ *
+ * Marker: chunk-passages. Vectorize does not split text. This does.
+ * A short post stays one passage. The next passage repeats a short tail
+ * of the previous one.
+ *
+ * @param string $text Title and content already joined.
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_passages( $text ) {
+	$text = trim( (string) $text );
+	if ( '' === $text ) {
+		return array();
+	}
+	$size    = skyphusion_ai_embed_passage_size();
+	$overlap = skyphusion_ai_embed_passage_overlap();
+	$length  = strlen( $text );
+	if ( $length <= $size ) {
+		return array( $text );
+	}
+	$passages = array();
+	$start    = 0;
+	$guard    = 0;
+	while ( $length > $start && 10000 > $guard ) {
+		++$guard;
+		$remaining = $length - $start;
+		if ( $remaining <= $size ) {
+			$tail = trim( substr( $text, $start ) );
+			if ( '' !== $tail ) {
+				$passages[] = $tail;
+			}
+			break;
+		}
+		$window = substr( $text, $start, $size );
+		$cut    = skyphusion_ai_embed_passage_cut( $window );
+		if ( 1 > $cut ) {
+			$cut = $size;
+		}
+		$piece = trim( substr( $text, $start, $cut ) );
+		if ( '' !== $piece ) {
+			$passages[] = $piece;
+		}
+		$next = $start + $cut - $overlap;
+		if ( $next <= $start ) {
+			$next = $start + $cut;
+		}
+		$start = $next;
+	}
+	return $passages;
+}
+
+/**
+ * Stable id for one passage. The first passage keeps the post id.
+ *
+ * @param int $post_id Post id.
+ * @param int $index   Passage index, starting at zero.
+ * @return string
+ */
+function skyphusion_ai_embed_passage_id( $post_id, $index ) {
+	$base  = skyphusion_ai_embed_vector_id( $post_id );
+	$index = (int) $index;
+	if ( 1 > $index ) {
+		return $base;
+	}
+	return $base . '-' . (string) $index;
+}
+
+/**
+ * Ids for the passages already stored, or one id when the count is unknown.
+ *
+ * @param int $post_id Post id.
+ * @param int $count   Stored passage count.
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_passage_ids( $post_id, $count ) {
+	$count = (int) $count;
+	if ( 1 > $count ) {
+		$count = 1;
+	}
+	$ids   = array();
+	$index = 0;
+	while ( $count > $index ) {
+		$ids[] = skyphusion_ai_embed_passage_id( $post_id, $index );
+		++$index;
+	}
+	return $ids;
+}
+
+/**
+ * True when this vector id belongs to the post.
+ *
+ * @param string $vector_id Vector id.
+ * @param int    $post_id   Post id.
+ * @return bool
+ */
+function skyphusion_ai_embed_same_post( $vector_id, $post_id ) {
+	$vector_id = (string) $vector_id;
+	$own       = skyphusion_ai_embed_vector_id( $post_id );
+	if ( $vector_id === $own ) {
+		return true;
+	}
+	$prefix = $own . '-';
+	return 0 === strpos( $vector_id, $prefix );
+}
+
+/**
+ * Post meta that remembers how many passages were stored.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_part_key() {
+	return 'skyphusion_ai_embed_parts';
+}
+
+/**
+ * Passage count already stored for one post.
+ *
+ * @param int $post_id Post id.
+ * @return int
+ */
+function skyphusion_ai_embed_part_count( $post_id ) {
+	if ( ! function_exists( 'get_post_meta' ) ) {
+		return 0;
+	}
+	$value = get_post_meta( (int) $post_id, skyphusion_ai_embed_part_key(), true );
+	if ( ! is_numeric( $value ) ) {
+		return 0;
+	}
+	$count = (int) $value;
+	if ( 0 > $count ) {
+		return 0;
+	}
+	return $count;
+}
+
+/**
+ * Remember or forget the passage count for one post.
+ *
+ * @param int $post_id Post id.
+ * @param int $count   Passage count, or zero to forget it.
+ * @return void
+ */
+function skyphusion_ai_embed_part_set( $post_id, $count ) {
+	$count = (int) $count;
+	if ( 1 > $count ) {
+		if ( function_exists( 'delete_post_meta' ) ) {
+			delete_post_meta( (int) $post_id, skyphusion_ai_embed_part_key() );
+		}
+		return;
+	}
+	if ( function_exists( 'update_post_meta' ) ) {
+		update_post_meta( (int) $post_id, skyphusion_ai_embed_part_key(), (string) $count );
+	}
+}
+
+/**
  * True when the category and tag filter keeps this post.
  *
  * Mode none keeps every post. Include keeps a match. Exclude drops a match.
@@ -400,9 +608,10 @@ function skyphusion_ai_embed_create_body( $name, $model ) {
  * @return array{posts: int, tokens: int, neurons: int, passages: int, days: int, stored: int}
  */
 function skyphusion_ai_embed_estimate( $posts, $config ) {
-	$chars  = 0;
-	$count  = 0;
-	$fields = array();
+	$chars         = 0;
+	$count         = 0;
+	$passage_count = 0;
+	$fields        = array();
 	if ( isset( $config['fields'] ) && is_array( $config['fields'] ) ) {
 		$fields = $config['fields'];
 	}
@@ -418,8 +627,15 @@ function skyphusion_ai_embed_estimate( $posts, $config ) {
 		if ( skyphusion_ai_embed_hash_get( $post_id ) === hash( 'sha256', $text ) ) {
 			continue;
 		}
+		$pieces = skyphusion_ai_embed_passages( $text );
+		if ( array() === $pieces ) {
+			continue;
+		}
 		++$count;
-		$chars += strlen( $text );
+		$passage_count += count( $pieces );
+		foreach ( $pieces as $piece ) {
+			$chars += strlen( $piece );
+		}
 	}
 	$tokens = intdiv( $chars, 4 );
 	$model  = '@cf/baai/bge-large-en-v1.5';
@@ -437,9 +653,9 @@ function skyphusion_ai_embed_estimate( $posts, $config ) {
 		'posts'    => $count,
 		'tokens'   => $tokens,
 		'neurons'  => $neurons,
-		'passages' => $count,
+		'passages' => $passage_count,
 		'days'     => $days,
-		'stored'   => $count * 1024,
+		'stored'   => $passage_count * 1024,
 	);
 }
 
@@ -788,13 +1004,73 @@ function skyphusion_ai_embed_term_line( $post ) {
  */
 function skyphusion_ai_embed_remove( $post_id, $config, $credentials ) {
 	$url    = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'delete_by_ids' );
-	$body   = wp_json_encode( array( 'ids' => array( skyphusion_ai_embed_vector_id( $post_id ) ) ) );
+	$body   = wp_json_encode( array( 'ids' => skyphusion_ai_embed_passage_ids( $post_id, skyphusion_ai_embed_part_count( $post_id ) ) ) );
 	$result = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $body, 'application/json' );
 	if ( is_wp_error( $result ) ) {
 		return array( 'state' => 'blocked' );
 	}
 	skyphusion_ai_embed_hash_set( $post_id, '' );
+	skyphusion_ai_embed_part_set( $post_id, 0 );
 	return array( 'state' => 'removed' );
+}
+
+/**
+ * Embed passages in batches of 100. Workers AI accepts at most 100 strings.
+ *
+ * @param array<int, string> $passages Passage texts.
+ * @return array<int, array<int, float>>|WP_Error
+ */
+function skyphusion_ai_embed_passage_vectors( $passages ) {
+	$vectors = array();
+	$offset  = 0;
+	$total   = count( $passages );
+	while ( $total > $offset ) {
+		$batch = array_slice( $passages, $offset, 100 );
+		$got   = cloudflare_ai_provider_embeddings( $batch );
+		if ( is_wp_error( $got ) || ! is_array( $got ) || count( $got ) !== count( $batch ) ) {
+			return new WP_Error( 'skyphusion_ai_embed', 'The embeddings model did not return a vector for every passage.' );
+		}
+		foreach ( $got as $vector ) {
+			if ( ! is_array( $vector ) ) {
+				return new WP_Error( 'skyphusion_ai_embed', 'The embeddings model did not return a vector for every passage.' );
+			}
+			$vectors[] = $vector;
+		}
+		$offset += count( $batch );
+	}
+	return $vectors;
+}
+
+/**
+ * Upsert NDJSON lines. One request stays at or under 1000 vectors.
+ *
+ * @param array<string, mixed>  $config      Saved choices.
+ * @param array<string, string> $credentials Account id and token.
+ * @param array<int, string>    $lines       NDJSON objects.
+ * @return true|WP_Error
+ */
+function skyphusion_ai_embed_upsert_lines( $config, $credentials, $lines ) {
+	$url    = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'upsert' );
+	$offset = 0;
+	$total  = count( $lines );
+	if ( 1 > $total ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'Vectorize did not accept the change.' );
+	}
+	while ( $total > $offset ) {
+		$batch = array_slice( $lines, $offset, 1000 );
+		$save  = skyphusion_ai_vectorize_request(
+			'POST',
+			$url,
+			$credentials['token'],
+			implode( "\n", $batch ) . "\n",
+			'application/x-ndjson'
+		);
+		if ( is_wp_error( $save ) ) {
+			return $save;
+		}
+		$offset += count( $batch );
+	}
+	return true;
 }
 
 /**
@@ -853,25 +1129,66 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
 		$before = (int) skyphusion_ai_neuron_state()['neurons'];
 	}
-	$vectors = cloudflare_ai_provider_embeddings( array( $text ) );
-	if ( is_wp_error( $vectors ) || ! is_array( $vectors ) || ! isset( $vectors[0] ) || ! is_array( $vectors[0] ) ) {
+	$passages = skyphusion_ai_embed_passages( $text );
+	if ( array() === $passages ) {
+		return array( 'state' => 'blocked' );
+	}
+	$vectors = skyphusion_ai_embed_passage_vectors( $passages );
+	if ( is_wp_error( $vectors ) || ! is_array( $vectors ) || count( $vectors ) !== count( $passages ) ) {
 		skyphusion_ai_embed_fail_set( $post_id, true );
 		return array( 'state' => 'blocked' );
 	}
-	$line = wp_json_encode(
-		array(
-			'id'       => skyphusion_ai_embed_vector_id( $post_id ),
-			'values'   => $vectors[0],
-			'metadata' => skyphusion_ai_embed_metadata( $post ),
-		)
-	);
-	$url  = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'upsert' );
-	$save = skyphusion_ai_vectorize_request( 'POST', $url, $credentials['token'], (string) $line . "\n", 'application/x-ndjson' );
-	if ( is_wp_error( $save ) ) {
+	$lines = array();
+	foreach ( array_keys( $passages ) as $index ) {
+		$index = (int) $index;
+		if ( ! isset( $vectors[ $index ] ) || ! is_array( $vectors[ $index ] ) ) {
+			skyphusion_ai_embed_fail_set( $post_id, true );
+			return array( 'state' => 'blocked' );
+		}
+		$metadata         = skyphusion_ai_embed_metadata( $post );
+		$metadata['part'] = (string) $index;
+		$encoded          = wp_json_encode(
+			array(
+				'id'       => skyphusion_ai_embed_passage_id( $post_id, $index ),
+				'values'   => $vectors[ $index ],
+				'metadata' => $metadata,
+			)
+		);
+		if ( ! is_string( $encoded ) ) {
+			skyphusion_ai_embed_fail_set( $post_id, true );
+			return array( 'state' => 'blocked' );
+		}
+		$lines[] = $encoded;
+	}
+	$old   = skyphusion_ai_embed_part_count( $post_id );
+	$saved = skyphusion_ai_embed_upsert_lines( $config, $credentials, $lines );
+	if ( is_wp_error( $saved ) ) {
 		skyphusion_ai_embed_fail_set( $post_id, true );
 		return array( 'state' => 'blocked' );
+	}
+	$new_count = count( $passages );
+	if ( $new_count < $old ) {
+		$drop  = array();
+		$index = $new_count;
+		while ( $old > $index ) {
+			$drop[] = skyphusion_ai_embed_passage_id( $post_id, $index );
+			++$index;
+		}
+		$delete_url = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'delete_by_ids' );
+		$deleted    = skyphusion_ai_vectorize_request(
+			'POST',
+			$delete_url,
+			$credentials['token'],
+			(string) wp_json_encode( array( 'ids' => $drop ) ),
+			'application/json'
+		);
+		if ( is_wp_error( $deleted ) ) {
+			skyphusion_ai_embed_fail_set( $post_id, true );
+			return array( 'state' => 'blocked' );
+		}
 	}
 	skyphusion_ai_embed_hash_set( $post_id, $hash );
+	skyphusion_ai_embed_part_set( $post_id, $new_count );
 	skyphusion_ai_embed_fail_set( $post_id, false );
 	$after = $before;
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
@@ -1079,18 +1396,22 @@ function skyphusion_ai_embed_search( $query, $limit ) {
 		return array( 'state' => 'blocked' );
 	}
 	$limit = (int) $limit;
-	if ( $limit < 1 ) {
+	if ( 1 > $limit ) {
 		$limit = 5;
 	}
-	if ( $limit > 20 ) {
+	if ( 20 < $limit ) {
 		$limit = 20;
+	}
+	$ask = $limit + 15;
+	if ( 50 < $ask ) {
+		$ask = 50;
 	}
 	$credentials = skyphusion_ai_embed_credentials();
 	$url         = skyphusion_ai_vectorize_url( $credentials['account_id'], (string) $config['index'], 'query' );
 	$body        = wp_json_encode(
 		array(
 			'vector'         => $vectors[0],
-			'topK'           => $limit,
+			'topK'           => $ask,
 			'returnMetadata' => 'all',
 		)
 	);
@@ -1102,6 +1423,7 @@ function skyphusion_ai_embed_search( $query, $limit ) {
 	if ( ! isset( $decoded['result']['matches'] ) || ! is_array( $decoded['result']['matches'] ) ) {
 		return $rows;
 	}
+	$seen = array();
 	foreach ( $decoded['result']['matches'] as $match ) {
 		if ( ! is_array( $match ) ) {
 			continue;
@@ -1110,15 +1432,25 @@ function skyphusion_ai_embed_search( $query, $limit ) {
 		if ( isset( $match['metadata'] ) && is_array( $match['metadata'] ) ) {
 			$metadata = $match['metadata'];
 		}
+		$matched = isset( $metadata['post_id'] ) ? (int) $metadata['post_id'] : 0;
+		if ( 0 < $matched ) {
+			if ( isset( $seen[ $matched ] ) ) {
+				continue;
+			}
+			$seen[ $matched ] = true;
+		}
 		$title     = isset( $metadata['title'] ) ? (string) $metadata['title'] : '';
 		$url_value = isset( $metadata['url'] ) ? skyphusion_ai_embed_public_url( (string) $metadata['url'] ) : '';
 		$rows[]    = array(
 			'id'      => isset( $match['id'] ) ? (string) $match['id'] : '',
 			'score'   => isset( $match['score'] ) ? (float) $match['score'] : 0,
-			'post_id' => isset( $metadata['post_id'] ) ? (int) $metadata['post_id'] : 0,
+			'post_id' => $matched,
 			'title'   => $title,
 			'url'     => $url_value,
 		);
+		if ( count( $rows ) >= $limit ) {
+			break;
+		}
 	}
 	return $rows;
 }
@@ -1688,7 +2020,9 @@ function skyphusion_ai_embed_move( $destination, $posts ) {
 		if ( '' === skyphusion_ai_embed_hash_get( $post_id ) ) {
 			continue;
 		}
-		$ids[] = skyphusion_ai_embed_vector_id( $post_id );
+		foreach ( skyphusion_ai_embed_passage_ids( $post_id, skyphusion_ai_embed_part_count( $post_id ) ) as $vector_id ) {
+			$ids[] = $vector_id;
+		}
 	}
 	if ( array() === $ids ) {
 		return array(
