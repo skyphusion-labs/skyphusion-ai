@@ -37,7 +37,7 @@ expect('a prompt is not kept as the feature', $cfais_gateway_visitor['feature'],
 expect('a prompt is not kept as the model', $cfais_gateway_visitor['model'], '');
 expect('the site drops the user, the query, and the fragment', $cfais_gateway_visitor['site'], 'https://shop.example/store');
 expect('the log has five fields', count($cfais_gateway_visitor), 5);
-expect('the log names the plugin version', $cfais_gateway_visitor['version'], defined('SKYPHUSION_AI_VERSION') ? (string) SKYPHUSION_AI_VERSION : '0.6.1');
+expect('the log names the plugin version', $cfais_gateway_visitor['version'], defined('SKYPHUSION_AI_VERSION') ? (string) SKYPHUSION_AI_VERSION : '0.6.2');
 expect('translation is logged as text', skyphusion_ai_gateway_feature('translate'), 'text');
 
 $GLOBALS['cfais_user_id'] = 15;
