@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.5.3
+Stable tag: 0.6.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -106,7 +106,7 @@ The settings screen lists searches that found no page. The words stay in this si
 
 = Can the site answer from its own pages? =
 
-The site assistant is off until you turn it on. You can deploy an assistant Worker from this screen, or with `wp skyphusion-ai worker deploy`. A blank address keeps the PHP call. The page does not show the token. The answer streams from that Worker. The Worker finds the pages in one step. It asks the site each hour for the next empty text. The site writes that text. It answers from the stored pages and lists those pages. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own. Place `[skyphusion_ai_assistant]` on a page.
+The site assistant is off until you turn it on. You can deploy an assistant Worker from this screen, or with `wp skyphusion-ai worker deploy`. A blank address keeps the PHP call and streams the answer. The page does not show the token. A saved address streams from the Worker. The Worker finds the pages in one step. It asks the site each hour for the next empty text. The site writes that text. It answers from the stored pages and lists those pages. Signed-in people with one capability can ask. You can open it to every visitor instead. The chat button stays as it is. A saved chat needs the visitor to agree. An IP address is not stored. The assistant stops when the daily neuron budget is spent. It can also stop at its own daily limit. That limit does not stop the other tools. Zero means this job has no limit of its own. Place `[skyphusion_ai_assistant]` on a page.
 
 = Can empty alt text be filled? =
 
@@ -177,6 +177,18 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
 
 == Changelog ==
+
+= 0.6.0 =
+
+* The site assistant streams its answer when the Worker URL is blank. A saved Worker URL still streams.
+* A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart.
+* The plugin registers one read-only search ability, `skyphusion-ai/search`. See docs/search-ability.md. The call sends no token.
+* The site assistant answers from stored pages. You choose who can ask. A saved chat needs consent. A chat longer than ten turns sends one summary of the older turns.
+* Posts can be stored in Vectorize as short passages. Related pages can say why they match. A signed-in member in a chosen role can search those pages.
+* An hourly job can fill empty alt text and an empty SEO description. One click applies the recommended defaults. Reset clears plugin settings and keeps text already stored on posts.
+* The activity log stores each Workers AI call, including a failed call. Site Health tests the connection and the Vectorize index.
+* English into the 22 Indian languages uses IndicTrans2. Every other pair uses M2M100.
+* The provider id stays cloudflare. The plugin fee stays $0.
 
 = 0.5.3 =
 

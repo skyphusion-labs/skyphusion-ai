@@ -240,7 +240,7 @@ function skyphusion_ai_gateway_metadata( $feature, $model ) {
 	if ( function_exists( 'cloudflare_ai_provider_model_id' ) ) {
 		$clean_model = cloudflare_ai_provider_model_id( $model );
 	}
-	$version = '0.5.3';
+	$version = '0.6.0';
 	if ( defined( 'SKYPHUSION_AI_VERSION' ) ) {
 		$version = (string) SKYPHUSION_AI_VERSION;
 	}
