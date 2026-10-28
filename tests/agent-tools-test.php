@@ -139,4 +139,4 @@ expect('the plugin record does not embed a remote address', strpos($agent_php, '
 expect('README points at the agent tools doc', strpos($agent_readme, 'docs/agent-tools.md') !== false, true);
 expect('readme.txt points at the agent tools doc', strpos($agent_readme_txt, 'docs/agent-tools.md') !== false, true);
 expect('the record does not name the shop host', strpos($agent_php . $agent_doc, 'ggc.sh') !== false, false);
-expect('the plugin version is 0.6.0', strpos($agent_plugin, "define('SKYPHUSION_AI_VERSION', '0.6.0')") !== false, true);
+expect('the plugin version is 0.6.1', strpos($agent_plugin, "define('SKYPHUSION_AI_VERSION', '0.6.1')") !== false, true);
