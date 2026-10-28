@@ -365,7 +365,10 @@ fi
 OUT="$(mktemp "${TMPDIR:-/tmp}/plugin-check.XXXXXX")" || cannot "mktemp failed"
 ALL="$OUT.all"
 FOUND="$OUT.found"
-wpq plugin check "$PREFIX" --format=json >"$OUT" 2>/dev/null || true
+# --quiet hides "Success: Checks complete." A plugin with no findings
+# prints that line and no FILE lines. The check below treats a missing
+# success line as an unmeasured run, so this call must keep the line.
+wp --path="$WPDIR" plugin check "$PREFIX" --format=json >"$OUT" 2> >(grep -v -E 'Deprecated: Case statements|^$' >&2) || true
 
 # Output is "FILE: <name>" lines, each followed by one JSON array of findings,
 # mixed with PHP deprecation noise. Fold it to TSV: type, code, file.
