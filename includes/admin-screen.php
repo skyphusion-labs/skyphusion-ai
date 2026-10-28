@@ -89,7 +89,7 @@ function skyphusion_ai_admin_screen() {
 		return;
 	}
 
-	$user_id  = get_current_user_id();
+	$user_id   = get_current_user_id();
 	$check_key = 'skyphusion_ai_check_' . $user_id;
 	$check     = get_transient( $check_key );
 	if ( is_array( $check ) ) {
