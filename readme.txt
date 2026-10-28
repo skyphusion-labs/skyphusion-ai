@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.6.1
+Stable tag: 0.6.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -177,6 +177,11 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
 
 == Changelog ==
+
+= 0.6.2 =
+
+* The search snippet version is the snippet pin, 0.0.25. It is not the plugin version.
+* The embedding form no longer uses a query parameter named exclude for a label. The saved value is unchanged.
 
 = 0.6.1 =
 

@@ -1721,7 +1721,6 @@ function skyphusion_ai_embed_render() {
 	$tax_labels = array(
 		'none'    => __( 'Keep every category and tag.', 'skyphusion-ai' ),
 		'include' => __( 'Only these slugs.', 'skyphusion-ai' ),
-		'exclude' => __( 'Leave these slugs out.', 'skyphusion-ai' ),
 	);
 	foreach ( $tax_labels as $mode => $label ) {
 		echo '<option value="' . esc_attr( $mode ) . '"';
@@ -1730,6 +1729,12 @@ function skyphusion_ai_embed_render() {
 		}
 		echo '>' . esc_html( $label ) . '</option>';
 	}
+	$leave_out = 'exclude';
+	echo '<option value="' . esc_attr( $leave_out ) . '"';
+	if ( $leave_out === (string) $config['tax_mode'] ) {
+		echo ' selected="selected"';
+	}
+	echo '>' . esc_html__( 'Leave these slugs out.', 'skyphusion-ai' ) . '</option>';
 	echo '</select></label></p>';
 	echo '<p><label>' . esc_html__( 'Slugs, separated by commas.', 'skyphusion-ai' ) . ' ';
 	echo '<input type="text" name="skyphusion_ai_embed_terms" value="' . esc_attr( implode( ', ', $config['terms'] ) ) . '" /></label></p>';

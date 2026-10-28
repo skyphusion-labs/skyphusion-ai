@@ -58,7 +58,7 @@ function skyphusion_ai_enqueue()
         'cloudflare-ai-search',
         $src,
         array(),
-        null,
+        SKYPHUSION_AI_SNIPPET,
         true
     );
 }

@@ -24,7 +24,7 @@
 # the security sniffs, which do not fire on this tree.
 #
 # =============================================================================
-# OWED: 5637 findings across 11 files.
+# OWED: 5636 findings across 11 files.
 skyphusion-ai.php	Generic.Functions.OpeningFunctionBraceKernighanRitchie.BraceOnNewLine	1
 skyphusion-ai.php	Generic.WhiteSpace.DisallowSpaceIndent.SpacesUsed	4
 skyphusion-ai.php	PEAR.Functions.FunctionCallSignature.SpaceAfterOpenBracket	6
@@ -95,7 +95,6 @@ includes/frontend.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.Spacing
 includes/frontend.php	Squiz.Functions.FunctionDeclarationArgumentSpacing.SpacingBeforeClose	5
 includes/frontend.php	WordPress.Arrays.MultipleStatementAlignment.DoubleArrowNotAligned	7
 includes/frontend.php	WordPress.PHP.YodaConditions.NotYoda	16
-includes/frontend.php	WordPress.WP.EnqueuedResourceParameters.MissingVersion	1
 includes/frontend.php	WordPress.WhiteSpace.CastStructureSpacing.NoSpaceBeforeOpenParenthesis	2
 includes/frontend.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceAfterOpenParenthesis	34
 includes/frontend.php	WordPress.WhiteSpace.ControlStructureSpacing.NoSpaceBeforeCloseParenthesis	34

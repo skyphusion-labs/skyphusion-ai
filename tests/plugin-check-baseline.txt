@@ -152,15 +152,11 @@
 # "fixes" a deliberate choice into a defect.
 # =============================================================================
 # includes/frontend.php  EnqueuedResourceParameters.MissingVersion
-# wp_enqueue_script() passes null for $ver deliberately. $src comes from
-# cloudflare_ai_search_snippet_src(), which returns
-#   <endpoint>/assets/v<CLOUDFLARE_AI_SEARCH_SNIPPET>/search-snippet.es.js
-# so the version is already IN the path, and null is WordPress's documented
-# way to say exactly that. Adding ?ver= to a third-party CDN URL buys nothing
-# and risks fragmenting Cloudflare's cache. The wp_enqueue_style() call one
-# line up DOES pass CLOUDFLARE_AI_SEARCH_VERSION, correctly, because
-# assets/search.css is ours and is served through plugins_url(). The two
-# calls differ on purpose; do not "align" them.
+# Cleared. wp_enqueue_script() passes SKYPHUSION_AI_SNIPPET, which is 0.0.25.
+# That pin is already in the path. The query string stays on the snippet
+# build and does not follow the plugin version. Do not pass null again.
+# Do not pass SKYPHUSION_AI_VERSION. assets/search.css still uses the
+# plugin version, because that file is ours.
 #
 # skyphusion-ai.php  trademarked_term
 # The old main file name is gone. The warning was the slug, and the archive prefix change is what clears it.
