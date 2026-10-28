@@ -504,7 +504,7 @@ function skyphusion_ai_add_menu()
         'Skyphusion AI',
         'manage_options',
         'cloudflare-ai-search',
-        'skyphusion_ai_render_page'
+        'skyphusion_ai_admin_screen'
     );
 }
 add_action('admin_menu', 'skyphusion_ai_add_menu');
@@ -665,7 +665,7 @@ function skyphusion_ai_render_product_links()
         array('AI Gateway', $links['gateway'], $links['gateway_docs']),
         array('AI Search', $links['search'], $links['search_docs']),
     );
-    echo '<ul>';
+    echo '<ul class="skyphusion-ai-links">';
     foreach ($products as $product) {
         echo '<li><a href="' . esc_url($product[1]) . '" target="_blank" rel="noopener noreferrer">' . esc_html($product[0]) . '</a>';
         echo ' (<a href="' . esc_url($product[2]) . '" target="_blank" rel="noopener noreferrer">docs</a>)</li>';
