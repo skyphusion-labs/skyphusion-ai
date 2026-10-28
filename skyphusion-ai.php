@@ -23,6 +23,7 @@ define('SKYPHUSION_AI_FILE', __FILE__);
 require_once __DIR__ . '/includes/endpoint.php';
 require_once __DIR__ . '/includes/routes.php';
 require_once __DIR__ . '/includes/settings.php';
+require_once __DIR__ . '/includes/admin-screen.php';
 require_once __DIR__ . '/includes/defaults.php';
 require_once __DIR__ . '/includes/reset.php';
 require_once __DIR__ . '/includes/activity.php';
