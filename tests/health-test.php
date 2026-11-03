@@ -93,7 +93,7 @@ expect(
 expect(
     'approval for cloudflare allows this plugin',
     skyphusion_ai_health_caller_approved(
-        array('skyphusion-ai/skyphusion-ai.php' => array('cloudflare' => true)),
+        array('skyphusion-ai/skyphusion-ai.php' => array('skyphusion-ai' => true)),
         'skyphusion-ai/skyphusion-ai.php'
     ),
     true

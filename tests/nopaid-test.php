@@ -4,7 +4,7 @@
  *
  * The switch defaults on. Anthropic, Google, and OpenAI leave the
  * preferred-model lists. A Cloudflare model id that contains the word
- * google stays. The plugin still registers only the provider id cloudflare.
+ * google stays. The plugin still registers only the provider id skyphusion-ai.
  */
 
 $nopaid_had_setting = array_key_exists('no_paid_fallback', $GLOBALS['cfais_stored']);
@@ -18,7 +18,7 @@ $nopaid_paid = array(
     array('anthropic', 'claude-sonnet-4-6'),
     array('Google', 'gemini-2.5-flash'),
     array('openai', 'gpt-4.1-mini'),
-    array('cloudflare', '@cf/google/gemma-4-26b-a4b-it'),
+    array('skyphusion-ai', '@cf/google/gemma-4-26b-a4b-it'),
     array('mistral', 'ministral-8b'),
 );
 
@@ -27,7 +27,7 @@ expect(
     skyphusion_ai_nopaid_blocked_ids(),
     array('anthropic', 'google', 'openai')
 );
-expect('the only provider id is cloudflare', skyphusion_ai_nopaid_provider_id(), 'cloudflare');
+expect('the only provider id is skyphusion-ai', skyphusion_ai_nopaid_provider_id(), 'skyphusion-ai');
 expect('the paid-provider filter runs at priority 99', skyphusion_ai_nopaid_priority(), 99);
 expect(
     'text, image, and vision lists are filtered',
@@ -51,7 +51,7 @@ $nopaid_kept = skyphusion_ai_nopaid_filter_models($nopaid_paid, array());
 expect(
     'a google model id on cloudflare stays',
     $nopaid_kept,
-    array(array('cloudflare', '@cf/google/gemma-4-26b-a4b-it'))
+    array(array('skyphusion-ai', '@cf/google/gemma-4-26b-a4b-it'))
 );
 
 $nopaid_only_paid = array(
@@ -62,17 +62,17 @@ $nopaid_only_paid = array(
 expect(
     'a paid text list becomes one cloudflare row',
     skyphusion_ai_nopaid_filter_text($nopaid_only_paid),
-    array(array('cloudflare', skyphusion_ai_model_choice('writing')))
+    array(array('skyphusion-ai', skyphusion_ai_model_choice('writing')))
 );
 expect(
     'a paid image list becomes the cloudflare image model',
     skyphusion_ai_nopaid_filter_image($nopaid_only_paid),
-    array(array('cloudflare', skyphusion_ai_model_choice('image')))
+    array(array('skyphusion-ai', skyphusion_ai_model_choice('image')))
 );
 expect(
     'a paid vision list becomes the cloudflare vision model',
     skyphusion_ai_nopaid_filter_vision($nopaid_only_paid),
-    array(array('cloudflare', skyphusion_ai_model_choice('vision')))
+    array(array('skyphusion-ai', skyphusion_ai_model_choice('vision')))
 );
 
 expect(
@@ -155,8 +155,8 @@ expect('provider.php does not name OpenAI', stripos($nopaid_provider, 'openai') 
 expect('provider-models.php does not name Anthropic', stripos($nopaid_meta, 'anthropic') === false, true);
 expect('provider-models.php does not name OpenAI', stripos($nopaid_meta, 'openai') === false, true);
 expect(
-    'the metadata id is cloudflare',
-    1 === preg_match("/ProviderMetadata\\(\\s*'cloudflare'/", $nopaid_meta),
+    'the metadata id is skyphusion-ai',
+    1 === preg_match("/ProviderMetadata\\(\\s*'skyphusion-ai'/", $nopaid_meta),
     true
 );
 expect('the switch file does not register a provider', strpos($nopaid_src, 'registerProvider(') === false, true);

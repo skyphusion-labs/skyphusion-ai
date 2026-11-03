@@ -56,7 +56,7 @@ expect('notice for the environment', skyphusion_ai_token_source_notice('env'), $
 expect('the retired environment-and-saved key is not printed', skyphusion_ai_token_source_notice('env_ignores_saved'), 'No token is set.');
 expect('notice for the constant', skyphusion_ai_token_source_notice('constant'), $constant_sentence);
 expect('the retired constant-and-saved key is not printed', skyphusion_ai_token_source_notice('constant_ignores_saved'), 'No token is set.');
-expect('notice for the option', skyphusion_ai_token_source_notice('option'), 'Workers AI is using the token from Settings, then Connectors.');
+expect('notice for the option', skyphusion_ai_token_source_notice('option'), 'Workers AI is using the token the AI Client passes to this provider. WordPress reads it from Settings, then Connectors, or from the <code>SKYPHUSION_AI_API_KEY</code> variable.');
 expect('notice when nothing is set', skyphusion_ai_token_source_notice('none'), 'No token is set.');
 expect('an unknown key is not printed', skyphusion_ai_token_source_notice($secret), 'No token is set.');
 

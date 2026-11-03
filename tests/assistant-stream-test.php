@@ -284,7 +284,7 @@ expect('the assistant does not call the store API', strpos($stream_php, '/wc/sto
 expect('the assistant does not call OpenAI', strpos($stream_php, 'api.openai.com') === false, true);
 expect('the assistant does not call Anthropic', strpos($stream_php, 'api.anthropic.com') === false, true);
 expect('the assistant does not call Google', strpos($stream_php, 'generativelanguage.googleapis.com') === false, true);
-expect('the provider id stays cloudflare', skyphusion_ai_agent_tools_provider_id(), 'cloudflare');
+expect('the provider id is skyphusion-ai', skyphusion_ai_agent_tools_provider_id(), 'skyphusion-ai');
 expect('checkout stays a person', skyphusion_ai_agent_tools_checkout_is_a_person(), true);
 foreach (skyphusion_ai_agent_tools_surfaces() as $stream_surface) {
     expect(

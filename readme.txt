@@ -20,7 +20,7 @@ This plugin is free. It provides access to Cloudflare services only. It is not a
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
 
-WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `cloudflare`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
+WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `skyphusion-ai`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
 
 Set the account id on the Skyphusion AI screen. Add a gateway id only when calls should go through AI Gateway. The screen also links to Workers AI, AI Gateway, and AI Search.
 
@@ -46,7 +46,7 @@ Shortcode: `[cloudflare_ai_search]`
 
 Example:
 
-`wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'cloudflare' );`
+`wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'skyphusion-ai' );`
 
 Other plugins can call `cloudflare_ai_provider_embeddings()` and `skyphusion_ai_query()`. `cloudflare_ai_search_query()` still calls the same helper. The search helper posts to the public chat/completions path. It does not send a token.
 
@@ -72,7 +72,7 @@ What is sent and when: the visitor's browser sends the search words or the chat 
 
 What it is: the AI models that write, read images, make images, speak, translate and make embeddings. Host: api.cloudflare.com.
 
-What is sent and when: the plugin sends a request only when a feature that you turned on needs a model, or when an admin or another plugin calls the AI Client with the provider cloudflare. The request contains the prompt for that job. That can be a prompt from another plugin, a site assistant question and the stored passages that answer it, the post title and up to 6000 characters of post text for an empty SEO description, an image for empty alt text, text to translate, text to speak, or post passages for embeddings. The request also carries the account id and the API token. The plugin also reads the list of models on the account when it needs that list. It keeps the list for 12 hours. A failed read waits 10 minutes before the next try. That request sends the account id and the API token only.
+What is sent and when: the plugin sends a request only when a feature that you turned on needs a model, or when an admin or another plugin calls the AI Client with the provider skyphusion-ai. The request contains the prompt for that job. That can be a prompt from another plugin, a site assistant question and the stored passages that answer it, the post title and up to 6000 characters of post text for an empty SEO description, an image for empty alt text, text to translate, text to speak, or post passages for embeddings. The request also carries the account id and the API token. The plugin also reads the list of models on the account when it needs that list. It keeps the list for 12 hours. A failed read waits 10 minutes before the next try. That request sends the account id and the API token only.
 
 = Cloudflare AI Gateway =
 
@@ -108,7 +108,7 @@ Open the Cloudflare dashboard. Go to AI Search, then your instance, then Setting
 
 = Where does the API token go? =
 
-Save it in Settings, then Connectors. WordPress passes that token to the cloudflare provider through the AI Client. The plugin does not read the saved option itself. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
+Save it in Settings, then Connectors. WordPress passes that token to the skyphusion-ai provider through the AI Client. WordPress also reads the `SKYPHUSION_AI_API_KEY` environment variable or constant for that provider. The plugin does not read the saved option itself. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
 
 = Does the plugin stop at a neuron budget? =
 
@@ -208,7 +208,7 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
+No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
 
 == Changelog ==
 
@@ -218,6 +218,8 @@ No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can 
 * The site assistant scripts load as enqueued files. The page has no inline script.
 * The streamed assistant answer uses the WordPress HTTP API.
 * The External services section names each Cloudflare service, the data it receives, when, and the Cloudflare terms and privacy links.
+* The provider id is now `skyphusion-ai`. It was `cloudflare`. Another plugin also registers `cloudflare`. Call `using_provider('skyphusion-ai')`.
+* Upgrading from 0.6.2 or earlier: open Settings, then Connectors, and save the token again under Skyphusion AI for Cloudflare. WordPress keeps each token under the provider id, so the old saved token is not used.
 
 = 0.6.2 =
 

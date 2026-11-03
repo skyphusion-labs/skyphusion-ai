@@ -22,7 +22,7 @@ expect('this plugin does not upgrade WooCommerce', skyphusion_ai_agent_tools_upg
 expect('this plugin does not turn WebMCP on', skyphusion_ai_agent_tools_webmcp_on(), false);
 expect('checkout stays a person', skyphusion_ai_agent_tools_checkout_is_a_person(), true);
 expect('the snippet does not hold a token', skyphusion_ai_agent_tools_snippet_holds_secret(), false);
-expect('the provider id stays cloudflare', skyphusion_ai_agent_tools_provider_id(), 'cloudflare');
+expect('the provider id is skyphusion-ai', skyphusion_ai_agent_tools_provider_id(), 'skyphusion-ai');
 
 expect(
     'WooCommerce is the last of the four tools',

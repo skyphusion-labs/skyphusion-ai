@@ -10,7 +10,7 @@ The plugin does three jobs. Visitors get a search box and, if you turn it on, a 
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
-WordPress and WooCommerce call Workers AI through the WordPress AI Client. The provider id is `cloudflare`. That provider covers text, vision, JSON, tools, images, and speech. Plugin code can also call embeddings and the public AI Search endpoint. This plugin does not take over another provider that is already set up. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
+WordPress and WooCommerce call Workers AI through the WordPress AI Client. The provider id is `skyphusion-ai`. That provider covers text, vision, JSON, tools, images, and speech. Plugin code can also call embeddings and the public AI Search endpoint. This plugin does not take over another provider that is already set up. A caller that wants Cloudflare uses `using_provider('cloudflare')`.
 
 The search box does not send an API token. Workers AI reads the `CLOUDFLARE_API_KEY` environment variable first. It then tries a PHP constant of the same name. It falls back to the token from **Settings, then Connectors**. This plugin does not store the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
 
@@ -57,7 +57,7 @@ If the box does not appear, check the site's content security policy. It has to 
 ## WordPress and WooCommerce
 
 ```php
-wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'cloudflare' );
+wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'skyphusion-ai' );
 
 $vectors = cloudflare_ai_provider_embeddings( array( 'linen shirt' ) );
 
@@ -227,7 +227,7 @@ The chat button in this plugin is the Cloudflare snippet. It answers in a senten
 
 ### Agents
 
-The agent harness in WordPress is the AI Client. This plugin registers the provider id `cloudflare`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour. A saved gateway id adds five fields to each Workers AI log. The fields are the site, the feature, the model, the user id, and the plugin version. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. The four agent tools sit next to WooCommerce in docs/agent-tools.md. You still do not pay a plugin fee to make the Cloudflare call. Cloudflare free plans work. Past those plans, you pay Cloudflare.
+The agent harness in WordPress is the AI Client. This plugin registers the provider id `skyphusion-ai`. A caller can ask for text, vision, JSON, tools, images, or speech. Embeddings are a separate helper. The call is `using_provider('cloudflare')`. You can expand those calls the same way, with Cloudflare Workers AI or with Cloudflare AI Gateway. Leave the gateway id blank to call `api.cloudflare.com`. Set a gateway id to send them through `gateway.ai.cloudflare.com`. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour. A saved gateway id adds five fields to each Workers AI log. The fields are the site, the feature, the model, the user id, and the plugin version. A visitor has an empty user id. The prompt is not a field. A direct call to api.cloudflare.com does not add the fields. This plugin does not edit posts and it does not install other plugins. It does not open an MCP server in this release. An MCP server is planned. The four agent tools sit next to WooCommerce in docs/agent-tools.md. You still do not pay a plugin fee to make the Cloudflare call. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
 | plugin | license | what the agent can do |
 | --- | --- | --- |

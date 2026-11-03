@@ -37,7 +37,7 @@ function cloudflare_ai_provider_register()
         return;
     }
     $registry = WordPress\AiClient\AiClient::defaultRegistry();
-    if ($registry->hasProvider('cloudflare') || $registry->hasProvider('Cloudflare_AI_Provider')) {
+    if ($registry->hasProvider('skyphusion-ai') || $registry->hasProvider('Cloudflare_AI_Provider')) {
         return;
     }
     $registry->registerProvider('Cloudflare_AI_Provider');
@@ -502,7 +502,7 @@ function cloudflare_ai_provider_connector_key()
 }
 
 /**
- * The API key the WordPress AI Client gives to the cloudflare provider.
+ * The API key the WordPress AI Client gives to the skyphusion-ai provider.
  *
  * This plugin registers that provider. WordPress reads the key saved in
  * Settings, then Connectors, and passes it to the provider through the AI
@@ -520,10 +520,10 @@ function skyphusion_ai_client_api_key() {
 	}
 	try {
 		$registry = $client::defaultRegistry();
-		if ( ! $registry->hasProvider( 'cloudflare' ) ) {
+		if ( ! $registry->hasProvider( 'skyphusion-ai' ) ) {
 			return '';
 		}
-		$auth = $registry->getProviderRequestAuthentication( 'cloudflare' );
+		$auth = $registry->getProviderRequestAuthentication( 'skyphusion-ai' );
 	} catch ( \Throwable $error ) {
 		return '';
 	}

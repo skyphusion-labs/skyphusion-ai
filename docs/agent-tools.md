@@ -9,7 +9,7 @@ This plugin does not turn WebMCP on.
 Checkout stays a person.
 The search snippet does not hold an API token.
 The search snippet does not hold a WordPress application password.
-The provider id stays `cloudflare`.
+The provider id is `skyphusion-ai`.
 
 ## Cloudflare API MCP
 

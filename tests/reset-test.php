@@ -57,7 +57,7 @@ $GLOBALS['cfais_options']['skyphusion_ai_assistant_chats'] = array(array('q' => 
 $GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] = time() + 100;
 $GLOBALS['cfais_options']['connectors_ai_cloudflare_api_key'] = $reset_secret;
 $GLOBALS['cfais_options']['wpai_connector_approvals'] = array(
-    'skyphusion-ai.php' => array('cloudflare' => true),
+    'skyphusion-ai.php' => array('skyphusion-ai' => true),
     'other/plugin.php' => array('cloudflare' => true),
 );
 $GLOBALS['cfais_store']['skyphusion_ai_models'] = array('value' => array('ok' => 1), 'expires' => 0, 'ttl' => 0);

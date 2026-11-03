@@ -5,7 +5,7 @@
  * The WordPress AI plugin tries Anthropic, Google, and OpenAI before
  * any other provider. This switch removes those three from that list.
  * It is on when the setting is missing. This plugin still registers
- * only the provider id cloudflare.
+ * only the provider id skyphusion-ai.
  *
  * AIPCF filters the same three lists in plugin.php at priority 99.
  * That filter is off unless the merchant turns it on, and it does
@@ -36,7 +36,7 @@ function skyphusion_ai_nopaid_blocked_ids() {
  * @return string
  */
 function skyphusion_ai_nopaid_provider_id() {
-	return 'cloudflare';
+	return 'skyphusion-ai';
 }
 
 /**
@@ -145,7 +145,7 @@ function skyphusion_ai_nopaid_fallback_model( $job ) {
  * Keep Cloudflare rows. Drop every other provider.
  *
  * Each row is a provider id, then a model id. A Cloudflare model whose
- * id contains the word google stays, because the provider id is cloudflare.
+ * id contains the word google stays, because the provider id is skyphusion-ai.
  * When no Cloudflare row remains, one is added for this job. The paid
  * rows are not put back.
  *

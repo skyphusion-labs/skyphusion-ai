@@ -73,8 +73,8 @@ class Cloudflare_AI_Provider extends AbstractApiProvider
     protected static function createProviderMetadata(): ProviderMetadata
     {
         return new ProviderMetadata(
-            'cloudflare',
-            'Cloudflare',
+            'skyphusion-ai',
+            'Skyphusion AI for Cloudflare',
             ProviderTypeEnum::cloud(),
             'https://dash.cloudflare.com/?to=/:account/ai/workers-ai', // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- dashboard link, not a remote asset.
             RequestAuthenticationMethod::apiKey(),

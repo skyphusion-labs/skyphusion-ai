@@ -27,7 +27,7 @@ expect('defaults do not send mail', strpos($defaults_src, 'wp_mail') === false, 
 expect('defaults do not install the AI plugin', strpos($defaults_src, 'plugin-install.php') === false, true);
 expect('defaults do not name Qdrant', strpos(strtolower($defaults_src), 'qdrant') === false, true);
 expect('defaults do not name Postgres', strpos(strtolower($defaults_src), 'postgres') === false, true);
-expect('the provider id in defaults is cloudflare', strpos($defaults_src, "['cloudflare']") !== false, true);
+expect('the provider id in defaults is skyphusion-ai', strpos($defaults_src, "['skyphusion-ai']") !== false, true);
 expect('defaults do not name Anthropic', strpos(strtolower($defaults_src), 'anthropic') === false, true);
 expect('defaults do not name OpenAI', strpos(strtolower($defaults_src), 'openai') === false, true);
 
@@ -112,7 +112,7 @@ expect('an exposed store approves the cloudflare connector', $defaults_again['ap
 $defaults_basename = plugin_basename(SKYPHUSION_AI_FILE);
 expect(
     'the approval matrix names this plugin',
-    !empty($GLOBALS['cfais_options']['wpai_connector_approvals'][$defaults_basename]['cloudflare']),
+    !empty($GLOBALS['cfais_options']['wpai_connector_approvals'][$defaults_basename]['skyphusion-ai']),
     true
 );
 $defaults_notice = skyphusion_ai_defaults_notice($defaults_again);

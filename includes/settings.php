@@ -334,7 +334,7 @@ function skyphusion_ai_token_source_notice( $key ) {
 		case 'constant':
 			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> constant.', 'skyphusion-ai' );
 		case 'option':
-			return __( 'Workers AI is using the token from Settings, then Connectors.', 'skyphusion-ai' );
+			return __( 'Workers AI is using the token the AI Client passes to this provider. WordPress reads it from Settings, then Connectors, or from the <code>SKYPHUSION_AI_API_KEY</code> variable.', 'skyphusion-ai' );
 	}
 	return __( 'No token is set.', 'skyphusion-ai' );
 }
@@ -345,12 +345,12 @@ function skyphusion_ai_section_workers()
     echo '<p>' . sprintf(
         wp_kses(
             /* translators: %s is the URL of the WordPress Connectors settings screen. */
-            __('WordPress and WooCommerce call Workers AI through the AI Client. The provider id is <code>cloudflare</code>. The plugin reads the API token from the <code>CLOUDFLARE_API_KEY</code> environment variable first. It then tries a PHP constant of the same name. It then uses the token saved in <a href="%s">Settings, then Connectors</a>, which WordPress passes to the provider through the AI Client. The plugin does not read that saved option itself. A token in the environment or in a constant overrides the saved one. This screen does not store the token.', 'skyphusion-ai'),
+            __('WordPress and WooCommerce call Workers AI through the AI Client. The provider id is <code>skyphusion-ai</code>. The plugin reads the API token from the <code>CLOUDFLARE_API_KEY</code> environment variable first. It then tries a PHP constant of the same name. It then uses the token saved in <a href="%s">Settings, then Connectors</a>, which WordPress passes to the provider through the AI Client. The plugin does not read that saved option itself. A token in the environment or in a constant overrides the saved one. This screen does not store the token.', 'skyphusion-ai'),
             array('code' => array(), 'a' => array('href' => array()))
         ),
         esc_url($connectors)
     ) . '</p>';
-    echo '<p>' . wp_kses(__('Leave the gateway blank to call Workers AI directly. Set a gateway id to send the same calls through AI Gateway. A model call does not replace another provider that is already configured. Call <code>using_provider(\'cloudflare\')</code> when the caller wants this one.', 'skyphusion-ai'), array('code' => array())) . '</p>';
+    echo '<p>' . wp_kses(__('Leave the gateway blank to call Workers AI directly. Set a gateway id to send the same calls through AI Gateway. A model call does not replace another provider that is already configured. Call <code>using_provider(\'skyphusion-ai\')</code> when the caller wants this one.', 'skyphusion-ai'), array('code' => array())) . '</p>';
 	echo '<p>' . wp_kses(
 		skyphusion_ai_token_source_notice( skyphusion_ai_token_source_now() ),
 		array( 'code' => array() )
