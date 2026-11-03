@@ -283,17 +283,50 @@ expect(
  * `endpoint-test.php` already reads its own source to check its require lines,
  * so a structural assertion is an established shape in this harness.
  */
-$cold_path_option_key = "'connectors_ai_cloudflare_api_key'";
+/*
+ * The plugin must not read a Connectors API key option itself (WordPress.org
+ * review R 26Oct26/T2). WordPress passes that key to the provider through the
+ * AI Client registry, and both token functions ask the registry. This scans
+ * every shipped PHP file for the option prefix and asserts both functions name
+ * the one registry helper. A file that names the prefix fails here.
+ */
+$cold_path_shipped = array_merge(
+    glob(dirname(__DIR__) . '/includes/*.php'),
+    array(dirname(__DIR__) . '/skyphusion-ai.php', dirname(__DIR__) . '/uninstall.php')
+);
+$cold_path_naming = array();
+foreach ($cold_path_shipped as $cold_path_file) {
+    if (strpos((string) file_get_contents($cold_path_file), 'connectors_ai_') !== false) {
+        $cold_path_naming[] = basename($cold_path_file);
+    }
+}
+expect('the scan read the shipped files', count($cold_path_shipped) > 30, true);
+expect('no shipped PHP file names a Connectors API key option', $cold_path_naming, array());
+/*
+ * Own HTTP goes through the WordPress HTTP API (same review). The streamed
+ * assistant answer reads each block from the requests-request.progress action.
+ */
+$cold_path_curl = array();
+foreach ($cold_path_shipped as $cold_path_file) {
+    if (preg_match('/\bcurl_[a-z_]+\s*\(/', (string) file_get_contents($cold_path_file))) {
+        $cold_path_curl[] = basename($cold_path_file);
+    }
+}
+expect('no shipped PHP file calls a curl function', $cold_path_curl, array());
+expect(
+    'the streamed answer reads the HTTP API progress action',
+    strpos((string) file_get_contents(dirname(__DIR__) . '/includes/assistant.php'), "'requests-request.progress'") !== false,
+    true
+);
 $cold_path_settings_src = (string) file_get_contents(dirname(__DIR__) . '/includes/settings.php');
 $cold_path_provider_src = (string) file_get_contents(dirname(__DIR__) . '/includes/provider.php');
-
 expect(
-    'includes/settings.php names the connector option key',
-    strpos($cold_path_settings_src, $cold_path_option_key) !== false,
+    'includes/settings.php asks the AI Client registry helper',
+    strpos($cold_path_settings_src, 'skyphusion_ai_client_api_key()') !== false,
     true
 );
 expect(
-    'includes/provider.php names the SAME connector option key',
-    strpos($cold_path_provider_src, $cold_path_option_key) !== false,
+    'includes/provider.php asks the SAME registry helper',
+    strpos($cold_path_provider_src, 'return skyphusion_ai_client_api_key();') !== false,
     true
 );

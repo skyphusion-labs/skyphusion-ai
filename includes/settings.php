@@ -272,31 +272,29 @@ function skyphusion_ai_section_connection()
  * derived from the value. No prefix, no length, no mask. An input that is
  * not a non-empty string is absent, which is the same rule
  * cloudflare_ai_provider_connector_key() uses. Environment, then the
- * constant, then the Connectors option. This does not change that order.
+ * constant, then the key the AI Client holds. This does not change that order.
  *
- *   env                     environment, option empty
- *   env_ignores_saved       environment, option also set
- *   constant                constant, option empty
- *   constant_ignores_saved  constant, option also set
- *   option                  the Connectors option
- *   none                    nothing is set
+ *   env       environment
+ *   constant  constant
+ *   option    the AI Client key, which WordPress reads from Settings, then Connectors
+ *   none      nothing is set
+ *
+ * The plugin does not read the Connectors option, so it cannot say whether a
+ * saved token sits behind an environment variable or a constant.
  *
  * @param mixed $env      getenv('CLOUDFLARE_API_KEY'), or false when unset.
  * @param mixed $constant The constant when it is defined, otherwise null.
- * @param mixed $stored   The Connectors option value.
+ * @param mixed $client   The key from skyphusion_ai_client_api_key().
  * @return string
  */
-function skyphusion_ai_token_source( $env, $constant, $stored ) {
-	$from_env      = is_string( $env ) && '' !== $env;
-	$from_constant = is_string( $constant ) && '' !== $constant;
-	$from_option   = is_string( $stored ) && '' !== $stored;
-	if ( $from_env ) {
-		return $from_option ? 'env_ignores_saved' : 'env';
+function skyphusion_ai_token_source( $env, $constant, $client ) {
+	if ( is_string( $env ) && '' !== $env ) {
+		return 'env';
 	}
-	if ( $from_constant ) {
-		return $from_option ? 'constant_ignores_saved' : 'constant';
+	if ( is_string( $constant ) && '' !== $constant ) {
+		return 'constant';
 	}
-	if ( $from_option ) {
+	if ( is_string( $client ) && '' !== $client ) {
 		return 'option';
 	}
 	return 'none';
@@ -313,11 +311,11 @@ function skyphusion_ai_token_source( $env, $constant, $stored ) {
 function skyphusion_ai_token_source_now() {
 	$env      = getenv( 'CLOUDFLARE_API_KEY' );
 	$constant = defined( 'CLOUDFLARE_API_KEY' ) ? constant( 'CLOUDFLARE_API_KEY' ) : null;
-	$stored   = '';
-	if ( function_exists( 'get_option' ) ) {
-		$stored = get_option( 'connectors_ai_cloudflare_api_key', '' );
+	$client   = '';
+	if ( function_exists( 'skyphusion_ai_client_api_key' ) ) {
+		$client = skyphusion_ai_client_api_key();
 	}
-	return skyphusion_ai_token_source( $env, $constant, $stored );
+	return skyphusion_ai_token_source( $env, $constant, $client );
 }
 
 /**
@@ -333,12 +331,8 @@ function skyphusion_ai_token_source_notice( $key ) {
 	switch ( $key ) {
 		case 'env':
 			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> environment variable.', 'skyphusion-ai' );
-		case 'env_ignores_saved':
-			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> environment variable. The token saved in Settings, then Connectors is not being used.', 'skyphusion-ai' );
 		case 'constant':
 			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> constant.', 'skyphusion-ai' );
-		case 'constant_ignores_saved':
-			return __( 'Workers AI is using the token from the <code>CLOUDFLARE_API_KEY</code> constant. The token saved in Settings, then Connectors is not being used.', 'skyphusion-ai' );
 		case 'option':
 			return __( 'Workers AI is using the token from Settings, then Connectors.', 'skyphusion-ai' );
 	}
@@ -351,7 +345,7 @@ function skyphusion_ai_section_workers()
     echo '<p>' . sprintf(
         wp_kses(
             /* translators: %s is the URL of the WordPress Connectors settings screen. */
-            __('WordPress and WooCommerce call Workers AI through the AI Client. The provider id is <code>cloudflare</code>. The plugin reads the API token from the <code>CLOUDFLARE_API_KEY</code> environment variable first. It then tries a PHP constant of the same name. It falls back to the token saved in <a href="%s">Settings, then Connectors</a>. A token in the environment or in a constant overrides the saved one. This screen does not store the token.', 'skyphusion-ai'),
+            __('WordPress and WooCommerce call Workers AI through the AI Client. The provider id is <code>cloudflare</code>. The plugin reads the API token from the <code>CLOUDFLARE_API_KEY</code> environment variable first. It then tries a PHP constant of the same name. It then uses the token saved in <a href="%s">Settings, then Connectors</a>, which WordPress passes to the provider through the AI Client. The plugin does not read that saved option itself. A token in the environment or in a constant overrides the saved one. This screen does not store the token.', 'skyphusion-ai'),
             array('code' => array(), 'a' => array('href' => array()))
         ),
         esc_url($connectors)

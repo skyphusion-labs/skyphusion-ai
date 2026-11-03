@@ -79,6 +79,22 @@ expect('the script has an hourly task', strpos($worker_script, 'async scheduled'
 $GLOBALS['cfais_user_id'] = 4;
 $GLOBALS['cfais_can']['read'] = true;
 skyphusion_ai_assistant_apply(array('enabled' => '1'));
+if (!defined('SKYPHUSION_AI_VERSION')) {
+    define('SKYPHUSION_AI_VERSION', '0.0.0-test');
+}
+if (!function_exists('plugins_url')) {
+    function plugins_url($path = '', $plugin = '')
+    {
+        return 'https://example.test/wp-content/plugins/skyphusion-ai/' . ltrim($path, '/');
+    }
+}
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script($handle, $src = '', $deps = array(), $ver = false, $args = array())
+    {
+        $GLOBALS['cfais_enqueued_scripts'][$handle] = array('src' => $src, 'args' => $args);
+    }
+}
+$GLOBALS['cfais_enqueued_scripts'] = array();
 $worker_edge = skyphusion_ai_assistant_shortcode();
 expect('the page calls the worker', strpos($worker_edge, 'https://skyphusion-ai.example-sub.workers.dev') !== false, true);
 expect('the page does not show the token', strpos($worker_edge, $worker_token) === false, true);
@@ -90,7 +106,9 @@ expect('the worker labels the summary', strpos($worker_script, 'Earlier talk:') 
 expect('the worker does not read an address', strpos($worker_script, 'cf-connecting-ip') === false, true);
 expect('the worker cites a product sku', strpos($worker_script, 'SKU ') !== false, true);
 expect('the worker cites a managed count', strpos($worker_script, ' available.') !== false, true);
-expect('the edge page draws a product cite', strpos($worker_src, 'parsed.citations') !== false, true);
+expect('the edge page prints no script tag', stripos($worker_edge, '<script') === false, true);
+expect('the edge page enqueues the edge script', isset($GLOBALS['cfais_enqueued_scripts']['skyphusion-ai-assistant-edge']), true);
+expect('the edge page draws a product cite', strpos((string) file_get_contents(dirname(__DIR__) . '/assets/js/assistant-edge.js'), 'parsed.citations') !== false, true);
 
 $worker_before = skyphusion_ai_neuron_state();
 $GLOBALS['cfais_calls'] = 0;
