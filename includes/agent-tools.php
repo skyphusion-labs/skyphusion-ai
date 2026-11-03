@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * This release does not open an MCP server.
+ * This plugin does not open an MCP server.
  *
  * @return bool
  */

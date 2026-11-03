@@ -38,7 +38,7 @@ Search. The box is Cloudflare AI Search. The card shows the product image, the t
 
 Chat. You can turn on a chat button. It answers in a sentence. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. See docs/worker.md. It is not a staff inbox, and it has no seats. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log includes the plugin version. An image failure on a saved dynamic route does not start the hour. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month. AIPCF is a free Cloudflare provider. Its site assistant answers from the site's pages and is off until you turn it on. It is not a help desk.
 
-Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. It does not open an MCP server in this release. An MCP server is planned. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. Pro adds MCP. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
+Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
 
 The tables, the renewal figures, and the page each price came from are in the Compared section of README.md. Every price was read on 2026-10-25 from that vendor's own page.
 
@@ -208,7 +208,7 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
+No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
 
 == Changelog ==
 
@@ -218,6 +218,7 @@ No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. Yo
 * The site assistant scripts load as enqueued files. The page has no inline script.
 * The streamed assistant answer uses the WordPress HTTP API.
 * The External services section names each Cloudflare service, the data it receives, when, and the Cloudflare terms and privacy links.
+* The readme no longer says an MCP server is planned.
 * The provider id is now `skyphusion-ai`. It was `cloudflare`. Another plugin also registers `cloudflare`. Call `using_provider('skyphusion-ai')`.
 * Upgrading from 0.6.2 or earlier: open Settings, then Connectors, and save the token again under Skyphusion AI for Cloudflare. WordPress keeps each token under the provider id, so the old saved token is not used.
 

@@ -2,7 +2,7 @@
 
 This plugin records four agent tools.
 WooCommerce is the last one.
-This release does not open an MCP server.
+This plugin does not open an MCP server.
 This plugin does not install the WordPress MCP Adapter.
 This plugin does not upgrade WooCommerce.
 This plugin does not turn WebMCP on.
