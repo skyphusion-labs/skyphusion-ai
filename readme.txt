@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.6.2
+Stable tag: 0.6.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -20,7 +20,7 @@ This plugin is free. It provides access to Cloudflare services only. It is not a
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
 
-WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `cloudflare`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
+WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `skyphusion-ai`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
 
 Set the account id on the Skyphusion AI screen. Add a gateway id only when calls should go through AI Gateway. The screen also links to Workers AI, AI Gateway, and AI Search.
 
@@ -38,7 +38,7 @@ Search. The box is Cloudflare AI Search. The card shows the product image, the t
 
 Chat. You can turn on a chat button. It answers in a sentence. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. See docs/worker.md. It is not a staff inbox, and it has no seats. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log includes the plugin version. An image failure on a saved dynamic route does not start the hour. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month. AIPCF is a free Cloudflare provider. Its site assistant answers from the site's pages and is off until you turn it on. It is not a help desk.
 
-Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. It does not open an MCP server in this release. An MCP server is planned. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. Pro adds MCP. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
+Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
 
 The tables, the renewal figures, and the page each price came from are in the Compared section of README.md. Every price was read on 2026-10-25 from that vendor's own page.
 
@@ -46,7 +46,7 @@ Shortcode: `[cloudflare_ai_search]`
 
 Example:
 
-`wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'cloudflare' );`
+`wp_ai_client_prompt( 'Write a product summary.' )->using_provider( 'skyphusion-ai' );`
 
 Other plugins can call `cloudflare_ai_provider_embeddings()` and `skyphusion_ai_query()`. `cloudflare_ai_search_query()` still calls the same helper. The search helper posts to the public chat/completions path. It does not send a token.
 
@@ -54,9 +54,43 @@ Cloudflare, the Cloudflare logo, and Cloudflare Workers are trademarks and/or re
 
 == External services ==
 
-AI Search. The plugin loads a JavaScript file from your own AI Search instance. Your browser runs that file. The file is search-snippet.es.js, pinned to snippet build 0.0.25. The plugin builds the address from the public endpoint you paste. It accepts only an https address on search.ai.cloudflare.com. It rejects any path, query, fragment or user information in that address. It checks the address again every time it reads the setting. The plugin loads no script until you paste an endpoint. It also loads none until you turn on the search box, keyboard search or chat. The connection check posts to /search. The search helper posts to /chat/completions. The optional search-results answer posts there as well. None of these requests send an API token.
+This plugin connects to Cloudflare services. Each service is in the Cloudflare account of the site owner. The plugin does not connect to a service of the plugin author. Nothing is sent until you set the values that turn on that service. Cloudflare, Inc. provides all of these services.
 
-Workers AI and AI Gateway. The plugin sends prompts, images, speech text, and embedding texts to api.cloudflare.com. It sends them to gateway.ai.cloudflare.com instead when you set a gateway id. Each request carries the Connectors API token as a bearer token. The account id and the gateway id are not secrets.
+* Cloudflare terms of service: https://www.cloudflare.com/terms/
+* Cloudflare service-specific terms for Workers AI, AI Gateway, Vectorize and Workers: https://www.cloudflare.com/service-specific-terms-developer-platform/
+* Cloudflare privacy policy: https://www.cloudflare.com/privacypolicy/
+
+= Cloudflare AI Search =
+
+What it is: the search box, the keyboard search and the chat button. Host: your own instance on search.ai.cloudflare.com.
+
+The plugin loads a JavaScript file from your own AI Search instance. Your browser runs that file. The file is search-snippet.es.js, pinned to snippet build 0.0.25. The plugin builds the address from the public endpoint you paste. It accepts only an https address on search.ai.cloudflare.com. It rejects any path, query, fragment or user information in that address. It checks the address again every time it reads the setting. The plugin loads no script until you paste an endpoint. It also loads none until you turn on the search box, keyboard search or chat.
+
+What is sent and when: the visitor's browser sends the search words or the chat question to the instance when the visitor searches or asks. The browser request also carries the visitor's IP address and user agent, as every web request does. The site sends a test request to /search when an admin checks the connection. The site sends the search words to /chat/completions when the search-results answer is on and a visitor searches the site, and when another plugin calls the search helper. None of these requests send an API token.
+
+= Cloudflare Workers AI =
+
+What it is: the AI models that write, read images, make images, speak, translate and make embeddings. Host: api.cloudflare.com.
+
+What is sent and when: the plugin sends a request only when a feature that you turned on needs a model, or when an admin or another plugin calls the AI Client with the provider skyphusion-ai. The request contains the prompt for that job. That can be a prompt from another plugin, a site assistant question and the stored passages that answer it, the post title and up to 6000 characters of post text for an empty SEO description, an image for empty alt text, text to translate, text to speak, or post passages for embeddings. The request also carries the account id and the API token. The plugin also reads the list of models on the account when it needs that list. It keeps the list for 12 hours. A failed read waits 10 minutes before the next try. That request sends the account id and the API token only.
+
+= Cloudflare AI Gateway =
+
+What it is: an optional proxy for the same Workers AI calls. It can log, cache and limit those calls. Host: gateway.ai.cloudflare.com.
+
+What is sent and when: only when you save a gateway id. The same Workers AI requests then go to this host instead of api.cloudflare.com. Each request also sends a tag with the site address, the feature name, the model and the WordPress user id. A visitor sends an empty user id. The tag does not contain the prompt. Prompts are logged only when you turn on logging in your gateway.
+
+= Cloudflare Vectorize =
+
+What it is: the store for post embeddings. Related pages, member search and the site assistant read it. Host: api.cloudflare.com.
+
+What is sent and when: only when embeddings are on. When a published post is saved, or when an admin runs the sync, the plugin sends that post's vectors and this data for each passage: the post id, the post type, the title, the address, the terms, and for a product the image address, the SKU, the stock status and the stock count. A search by a signed-in member or by the site assistant sends the vector of the question. Each request carries the account id and the API token.
+
+= Cloudflare Workers =
+
+What it is: an optional assistant Worker that answers from the stored pages. Host: api.cloudflare.com for the deploy, and your own address on workers.dev for the Worker.
+
+What is sent and when: only when an admin deploys the Worker from the settings screen or with WP-CLI. The deploy sends the Worker code, the site address, the model id, the index name and a shared secret. After the deploy, the visitor's browser sends the question and the earlier turns of that chat to the Worker. The Worker calls the site once each hour with the shared secret to ask for the next empty text. When the Worker address is saved, a member search also sends the search words to the Worker.
 
 == Installation ==
 
@@ -74,7 +108,7 @@ Open the Cloudflare dashboard. Go to AI Search, then your instance, then Setting
 
 = Where does the API token go? =
 
-Save it in Settings, then Connectors. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
+Save it in Settings, then Connectors. WordPress passes that token to the skyphusion-ai provider through the AI Client. WordPress also reads the `SKYPHUSION_AI_API_KEY` environment variable or constant for that provider. The plugin does not read the saved option itself. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
 
 = Does the plugin stop at a neuron budget? =
 
@@ -174,9 +208,19 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants Cloudflare uses `using_provider('cloudflare')`. You can expand those calls with Workers AI or with AI Gateway. An MCP server is planned. This release does not open one. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
+No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
 
 == Changelog ==
+
+= 0.6.3 =
+
+* The plugin gets the Workers AI token from the WordPress AI Client registry. It does not read the Connectors option.
+* The site assistant scripts load as enqueued files. The page has no inline script.
+* The streamed assistant answer uses the WordPress HTTP API.
+* The External services section names each Cloudflare service, the data it receives, when, and the Cloudflare terms and privacy links.
+* The readme no longer says an MCP server is planned.
+* The provider id is now `skyphusion-ai`. It was `cloudflare`. Another plugin also registers `cloudflare`. Call `using_provider('skyphusion-ai')`.
+* Upgrading from 0.6.2 or earlier: open Settings, then Connectors, and save the token again under Skyphusion AI for Cloudflare. WordPress keeps each token under the provider id, so the old saved token is not used.
 
 = 0.6.2 =
 

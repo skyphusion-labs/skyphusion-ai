@@ -183,10 +183,10 @@ function skyphusion_ai_reset_approval() {
 	if ( ! isset( $approvals[ $basename ] ) || ! is_array( $approvals[ $basename ] ) ) {
 		return;
 	}
-	if ( ! array_key_exists( 'cloudflare', $approvals[ $basename ] ) ) {
+	if ( ! array_key_exists( 'skyphusion-ai', $approvals[ $basename ] ) ) {
 		return;
 	}
-	unset( $approvals[ $basename ]['cloudflare'] );
+	unset( $approvals[ $basename ]['skyphusion-ai'] );
 	if ( array() === $approvals[ $basename ] ) {
 		unset( $approvals[ $basename ] );
 	}

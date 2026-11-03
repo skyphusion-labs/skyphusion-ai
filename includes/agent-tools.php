@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 }
 
 /**
- * This release does not open an MCP server.
+ * This plugin does not open an MCP server.
  *
  * @return bool
  */
@@ -73,7 +73,7 @@ function skyphusion_ai_agent_tools_snippet_holds_secret() {
  * @return string
  */
 function skyphusion_ai_agent_tools_provider_id() {
-	return 'cloudflare';
+	return 'skyphusion-ai';
 }
 
 /**

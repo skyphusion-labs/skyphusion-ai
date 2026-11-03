@@ -22,7 +22,7 @@ expect('this plugin does not upgrade WooCommerce', skyphusion_ai_agent_tools_upg
 expect('this plugin does not turn WebMCP on', skyphusion_ai_agent_tools_webmcp_on(), false);
 expect('checkout stays a person', skyphusion_ai_agent_tools_checkout_is_a_person(), true);
 expect('the snippet does not hold a token', skyphusion_ai_agent_tools_snippet_holds_secret(), false);
-expect('the provider id stays cloudflare', skyphusion_ai_agent_tools_provider_id(), 'cloudflare');
+expect('the provider id is skyphusion-ai', skyphusion_ai_agent_tools_provider_id(), 'skyphusion-ai');
 
 expect(
     'WooCommerce is the last of the four tools',
@@ -139,4 +139,4 @@ expect('the plugin record does not embed a remote address', strpos($agent_php, '
 expect('README points at the agent tools doc', strpos($agent_readme, 'docs/agent-tools.md') !== false, true);
 expect('readme.txt points at the agent tools doc', strpos($agent_readme_txt, 'docs/agent-tools.md') !== false, true);
 expect('the record does not name the shop host', strpos($agent_php . $agent_doc, 'ggc.sh') !== false, false);
-expect('the plugin version is 0.6.2', strpos($agent_plugin, "define('SKYPHUSION_AI_VERSION', '0.6.2')") !== false, true);
+expect('the plugin version is 0.6.3', strpos($agent_plugin, "define('SKYPHUSION_AI_VERSION', '0.6.3')") !== false, true);

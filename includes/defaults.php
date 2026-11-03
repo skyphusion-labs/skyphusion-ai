@@ -136,7 +136,7 @@ function skyphusion_ai_defaults_approve() {
 	if ( ! isset( $approvals[ $basename ] ) || ! is_array( $approvals[ $basename ] ) ) {
 		$approvals[ $basename ] = array();
 	}
-	$approvals[ $basename ]['cloudflare'] = true;
+	$approvals[ $basename ]['skyphusion-ai'] = true;
 	update_option( 'wpai_connector_approvals', $approvals, false );
 	return true;
 }

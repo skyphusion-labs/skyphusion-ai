@@ -37,7 +37,7 @@ function cloudflare_ai_provider_register()
         return;
     }
     $registry = WordPress\AiClient\AiClient::defaultRegistry();
-    if ($registry->hasProvider('cloudflare') || $registry->hasProvider('Cloudflare_AI_Provider')) {
+    if ($registry->hasProvider('skyphusion-ai') || $registry->hasProvider('Cloudflare_AI_Provider')) {
         return;
     }
     $registry->registerProvider('Cloudflare_AI_Provider');
@@ -485,9 +485,9 @@ function cloudflare_ai_provider_connector_key()
 {
 	// The settings screen reports this same decision via
 	// skyphusion_ai_token_source(). "Set" means a non-empty string.
-	// Environment, then the constant, then the Connectors option. A change
-	// to either function has to land in both, or the screen will name a
-	// source this function does not return.
+	// Environment, then the constant, then the key the AI Client holds for
+	// the cloudflare provider. A change to either function has to land in
+	// both, or the screen will name a source this function does not return.
     $env = getenv('CLOUDFLARE_API_KEY');
     if (is_string($env) && $env !== '') {
         return $env;
@@ -498,11 +498,40 @@ function cloudflare_ai_provider_connector_key()
             return $value;
         }
     }
-    $stored = get_option('connectors_ai_cloudflare_api_key', '');
-    if (!is_string($stored)) {
-        return '';
-    }
-    return $stored;
+    return skyphusion_ai_client_api_key();
+}
+
+/**
+ * The API key the WordPress AI Client gives to the skyphusion-ai provider.
+ *
+ * This plugin registers that provider. WordPress reads the key saved in
+ * Settings, then Connectors, and passes it to the provider through the AI
+ * Client registry. The plugin asks the registry. It does not read the
+ * Connectors option. Without the AI Client, or before WordPress passes the
+ * key, the return is an empty string.
+ *
+ * @return string
+ */
+function skyphusion_ai_client_api_key() {
+	$client       = 'WordPress\\AiClient\\AiClient';
+	$api_key_auth = 'WordPress\\AiClient\\Providers\\Http\\DTO\\ApiKeyRequestAuthentication';
+	if ( ! class_exists( $client ) || ! class_exists( $api_key_auth ) ) {
+		return '';
+	}
+	try {
+		$registry = $client::defaultRegistry();
+		if ( ! $registry->hasProvider( 'skyphusion-ai' ) ) {
+			return '';
+		}
+		$auth = $registry->getProviderRequestAuthentication( 'skyphusion-ai' );
+	} catch ( \Throwable $error ) {
+		return '';
+	}
+	if ( ! $auth instanceof $api_key_auth ) {
+		return '';
+	}
+	$key = $auth->getApiKey();
+	return is_string( $key ) ? $key : '';
 }
 
 require_once __DIR__ . '/embed.php';

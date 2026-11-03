@@ -1672,14 +1672,15 @@ function skyphusion_ai_assistant_stream_write_piece( $piece ) {
 }
 
 /**
- * Curl write callback. Complete lines are emitted before the next chunk.
+ * Progress callback for the WordPress HTTP API.
  *
- * @param resource|object $handle Curl handle. Unused.
- * @param string          $chunk  Bytes from the upstream.
- * @return int
+ * WordPress fires the requests-request.progress action for each block of
+ * the response body. Complete lines are emitted before the next block.
+ *
+ * @param string $chunk Bytes from the upstream.
+ * @return void
  */
-function skyphusion_ai_assistant_stream_curl_write( $handle, $chunk ) {
-	unset( $handle );
+function skyphusion_ai_assistant_stream_chunk( $chunk ) {
 	$chunk = (string) $chunk;
 	if ( ! isset( $GLOBALS['skyphusion_ai_assistant_stream_raw'] ) ) {
 		$GLOBALS['skyphusion_ai_assistant_stream_raw'] = '';
@@ -1700,11 +1701,16 @@ function skyphusion_ai_assistant_stream_curl_write( $handle, $chunk ) {
 	if ( '' !== $ready ) {
 		skyphusion_ai_assistant_stream_emit( $ready, 'skyphusion_ai_assistant_stream_write_piece' );
 	}
-	return strlen( $chunk );
 }
 
 /**
  * Read the model response and emit each piece as it arrives.
+ *
+ * The request uses wp_remote_post(). The progress action hands each block
+ * to skyphusion_ai_assistant_stream_chunk() while the body arrives. The
+ * action is removed when the request ends, so no other request is read.
+ * When the transport does not fire the action, the whole body is emitted
+ * once at the end.
  *
  * @param array{url: string, headers: array<string, string>, body: string, model: string} $spec Request.
  * @return array{raw: string, status: int}
@@ -1712,47 +1718,14 @@ function skyphusion_ai_assistant_stream_curl_write( $handle, $chunk ) {
 function skyphusion_ai_assistant_stream_relay( $spec ) {
 	$GLOBALS['skyphusion_ai_assistant_stream_raw']   = '';
 	$GLOBALS['skyphusion_ai_assistant_stream_carry'] = '';
-	if ( function_exists( 'curl_init' ) && function_exists( 'curl_exec' ) ) {
-		// phpcs:disable WordPress.WP.AlternativeFunctions -- The HTTP API returns the whole body. This path writes each piece as it arrives.
-		$handle = curl_init( $spec['url'] );
-		if ( false === $handle ) {
-			return array(
-				'raw'    => '',
-				'status' => 0,
-			);
-		}
-		$header_lines = array();
-		foreach ( $spec['headers'] as $name => $value ) {
-			$header_lines[] = $name . ': ' . $value;
-		}
-		curl_setopt( $handle, CURLOPT_POST, true );
-		curl_setopt( $handle, CURLOPT_POSTFIELDS, $spec['body'] );
-		curl_setopt( $handle, CURLOPT_HTTPHEADER, $header_lines );
-		curl_setopt( $handle, CURLOPT_TIMEOUT, 30 );
-		curl_setopt( $handle, CURLOPT_WRITEFUNCTION, 'skyphusion_ai_assistant_stream_curl_write' );
-		curl_exec( $handle );
-		$status = (int) curl_getinfo( $handle, CURLINFO_RESPONSE_CODE );
-		// phpcs:enable WordPress.WP.AlternativeFunctions
-		$carry = '';
-		if ( isset( $GLOBALS['skyphusion_ai_assistant_stream_carry'] ) ) {
-			$carry = (string) $GLOBALS['skyphusion_ai_assistant_stream_carry'];
-		}
-		if ( '' !== trim( $carry ) ) {
-			skyphusion_ai_assistant_stream_emit( $carry, 'skyphusion_ai_assistant_stream_write_piece' );
-		}
-		$raw = (string) $GLOBALS['skyphusion_ai_assistant_stream_raw'];
-		unset( $GLOBALS['skyphusion_ai_assistant_stream_raw'], $GLOBALS['skyphusion_ai_assistant_stream_carry'] );
-		return array(
-			'raw'    => $raw,
-			'status' => $status,
-		);
-	}
 	if ( ! function_exists( 'wp_remote_post' ) ) {
 		return array(
 			'raw'    => '',
 			'status' => 0,
 		);
 	}
+	$hook = 'requests-request.progress';
+	add_action( $hook, 'skyphusion_ai_assistant_stream_chunk', 10, 1 );
 	$response = wp_remote_post(
 		$spec['url'],
 		array(
@@ -1761,14 +1734,27 @@ function skyphusion_ai_assistant_stream_relay( $spec ) {
 			'body'    => $spec['body'],
 		)
 	);
+	remove_action( $hook, 'skyphusion_ai_assistant_stream_chunk', 10 );
+	$streamed = (string) $GLOBALS['skyphusion_ai_assistant_stream_raw'];
+	$carry    = (string) $GLOBALS['skyphusion_ai_assistant_stream_carry'];
+	unset( $GLOBALS['skyphusion_ai_assistant_stream_raw'], $GLOBALS['skyphusion_ai_assistant_stream_carry'] );
 	if ( is_wp_error( $response ) ) {
 		return array(
-			'raw'    => '',
+			'raw'    => $streamed,
 			'status' => 0,
 		);
 	}
-	$raw    = (string) wp_remote_retrieve_body( $response );
 	$status = (int) wp_remote_retrieve_response_code( $response );
+	if ( '' !== $streamed ) {
+		if ( '' !== trim( $carry ) ) {
+			skyphusion_ai_assistant_stream_emit( $carry, 'skyphusion_ai_assistant_stream_write_piece' );
+		}
+		return array(
+			'raw'    => $streamed,
+			'status' => $status,
+		);
+	}
+	$raw = (string) wp_remote_retrieve_body( $response );
 	skyphusion_ai_assistant_stream_emit( $raw, 'skyphusion_ai_assistant_stream_write_piece' );
 	return array(
 		'raw'    => $raw,
@@ -1973,15 +1959,27 @@ function skyphusion_ai_assistant_posted_history() {
 }
 
 /**
- * Browser script for the blank Worker address.
+ * Load the browser script for the streamed form.
  *
- * The token is not in this script. The request stays on this site.
+ * The script is assets/js/assistant-stream.js. It loads in the footer, after
+ * the form, and reads the address and the nonce from the form attributes.
  *
- * @return string
+ * @return void
  */
-function skyphusion_ai_assistant_stream_script() {
-	$script = '(function(){var forms=document.querySelectorAll(".skyphusion-ai-assistant-php");forms.forEach(function(form){form._turns=[];var nodes=form.getElementsByTagName("input");var questions=[];var answers=[];for(var i=0;i<nodes.length;i++){if(nodes[i].name==="skyphusion_ai_assistant_turn_question[]"){questions.push(nodes[i].value);}if(nodes[i].name==="skyphusion_ai_assistant_turn_answer[]"){answers.push(nodes[i].value);}}var count=questions.length;if(answers.length<count){count=answers.length;}for(var n=0;n<count;n++){form._turns.push({question:questions[n],answer:answers[n]});}form.addEventListener("submit",function(event){event.preventDefault();var input=form.querySelector("input[type=text]");var asked=input.value;var out=form.querySelector(".skyphusion-ai-assistant-stream");var transcript=form.querySelector(".skyphusion-ai-assistant-transcript");var askedLine=document.createElement("p");askedLine.textContent=asked;transcript.appendChild(askedLine);out.textContent="";var body=new FormData();body.append("action","skyphusion_ai_assistant_stream");body.append("_wpnonce",form.getAttribute("data-nonce")||"");body.append("skyphusion_ai_assistant_question",asked);var consent=form.querySelector("input[type=checkbox]");if(consent&&consent.checked){body.append("skyphusion_ai_assistant_consent","1");}form._turns.forEach(function(turn){body.append("skyphusion_ai_assistant_turn_question[]",turn.question);body.append("skyphusion_ai_assistant_turn_answer[]",turn.answer);});fetch(form.getAttribute("data-stream"),{method:"POST",body:body,credentials:"same-origin"}).then(function(response){if(!response.body||!response.body.getReader){return;}var reader=response.body.getReader();var decoder=new TextDecoder();var pending="";function pump(){return reader.read().then(function(result){if(result.done){var reply=document.createElement("p");reply.textContent=out.textContent;transcript.appendChild(reply);form._turns.push({question:asked,answer:out.textContent});out.textContent="";input.value="";return;}pending+=decoder.decode(result.value,{stream:true});var parts=pending.split("\n");pending=parts.pop();parts.forEach(function(line){line=line.trim();if(line.indexOf("data:")!==0){return;}var data=line.slice(5).trim();if(!data||data==="[DONE]"){return;}try{var parsed=JSON.parse(data);if(parsed.text){out.textContent+=parsed.text;}if(parsed.citations&&parsed.citations.length){var list=document.createElement("ul");parsed.citations.forEach(function(row){if(!row){return;}var title=row.title||"";var url=row.url||"";if(!title&&!url){return;}var item=document.createElement("li");var image=row.image||"";if(image.indexOf("https://")===0||image.indexOf("http://")===0){var pic=document.createElement("img");pic.src=image;pic.alt=title;item.appendChild(pic);}if(url.indexOf("https://")===0||url.indexOf("http://")===0){var link=document.createElement("a");link.href=url;link.textContent=title;item.appendChild(link);}else if(title){item.appendChild(document.createTextNode(title));}var lines=row.lines||[];for(var p=0;p<lines.length;p++){if(!lines[p]){continue;}var fact=document.createElement("p");fact.textContent=lines[p];item.appendChild(fact);}list.appendChild(item);});transcript.appendChild(list);}}catch(error){}});return pump();});}return pump();});});});})();';
-	return $script;
+function skyphusion_ai_assistant_stream_enqueue() {
+	if ( ! function_exists( 'wp_enqueue_script' ) || ! function_exists( 'plugins_url' ) ) {
+		return;
+	}
+	wp_enqueue_script(
+		'skyphusion-ai-assistant-stream',
+		plugins_url( 'assets/js/assistant-stream.js', SKYPHUSION_AI_FILE ),
+		array(),
+		SKYPHUSION_AI_VERSION,
+		array(
+			'in_footer' => true,
+			'strategy'  => 'defer',
+		)
+	);
 }
 
 /**
@@ -2110,7 +2108,7 @@ function skyphusion_ai_assistant_shortcode() {
 	$html .= '<button type="submit">' . esc_html__( 'Ask', 'skyphusion-ai' ) . '</button>';
 	$html .= '<pre class="skyphusion-ai-assistant-stream"></pre>';
 	$html .= '</form>';
-	$html .= '<script>' . skyphusion_ai_assistant_stream_script() . '</script>';
+	skyphusion_ai_assistant_stream_enqueue();
 	return $html;
 }
 

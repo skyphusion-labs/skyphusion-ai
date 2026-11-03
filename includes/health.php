@@ -20,7 +20,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * @return string
  */
 function skyphusion_ai_health_connector_id() {
-	return 'cloudflare';
+	return 'skyphusion-ai';
 }
 
 /**

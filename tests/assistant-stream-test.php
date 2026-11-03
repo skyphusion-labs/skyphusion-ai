@@ -129,9 +129,29 @@ if (null === $stream_gateway_was) {
 }
 
 unset($GLOBALS['cfais_store']['skyphusion_ai_assistant_last']);
+if (!defined('SKYPHUSION_AI_VERSION')) {
+    define('SKYPHUSION_AI_VERSION', '0.0.0-test');
+}
+if (!function_exists('plugins_url')) {
+    function plugins_url($path = '', $plugin = '')
+    {
+        return 'https://example.test/wp-content/plugins/skyphusion-ai/' . ltrim($path, '/');
+    }
+}
+if (!function_exists('wp_enqueue_script')) {
+    function wp_enqueue_script($handle, $src = '', $deps = array(), $ver = false, $args = array())
+    {
+        $GLOBALS['cfais_enqueued_scripts'][$handle] = array('src' => $src, 'args' => $args);
+    }
+}
+$GLOBALS['cfais_enqueued_scripts'] = array();
 $stream_form = skyphusion_ai_assistant_shortcode();
 expect('a blank worker address has a stream slot', strpos($stream_form, 'skyphusion-ai-assistant-stream') !== false, true);
-expect('a blank worker address reads the stream', strpos($stream_form, 'getReader') !== false, true);
+expect('a blank worker address prints no script tag', stripos($stream_form, '<script') === false, true);
+expect('a blank worker address enqueues the stream script', isset($GLOBALS['cfais_enqueued_scripts']['skyphusion-ai-assistant-stream']), true);
+expect('the stream script is the shipped file', substr((string) ($GLOBALS['cfais_enqueued_scripts']['skyphusion-ai-assistant-stream']['src'] ?? ''), -29), 'assets/js/assistant-stream.js');
+expect('the stream script loads in the footer', !empty($GLOBALS['cfais_enqueued_scripts']['skyphusion-ai-assistant-stream']['args']['in_footer']), true);
+expect('a blank worker address reads the stream', strpos((string) file_get_contents(dirname(__DIR__) . '/assets/js/assistant-stream.js'), 'getReader') !== false, true);
 expect('a blank worker address does not call a worker', strpos($stream_form, '.workers.dev') === false, true);
 expect('a blank worker address has no worker attribute', strpos($stream_form, 'data-worker') === false, true);
 expect('a blank worker address does not name api.cloudflare.com', strpos($stream_form, 'api.cloudflare.com') === false, true);
@@ -264,7 +284,7 @@ expect('the assistant does not call the store API', strpos($stream_php, '/wc/sto
 expect('the assistant does not call OpenAI', strpos($stream_php, 'api.openai.com') === false, true);
 expect('the assistant does not call Anthropic', strpos($stream_php, 'api.anthropic.com') === false, true);
 expect('the assistant does not call Google', strpos($stream_php, 'generativelanguage.googleapis.com') === false, true);
-expect('the provider id stays cloudflare', skyphusion_ai_agent_tools_provider_id(), 'cloudflare');
+expect('the provider id is skyphusion-ai', skyphusion_ai_agent_tools_provider_id(), 'skyphusion-ai');
 expect('checkout stays a person', skyphusion_ai_agent_tools_checkout_is_a_person(), true);
 foreach (skyphusion_ai_agent_tools_surfaces() as $stream_surface) {
     expect(
@@ -293,3 +313,20 @@ if (false === $stream_prev_account || '' === $stream_prev_account) {
 } else {
     putenv('CLOUDFLARE_ACCOUNT_ID=' . $stream_prev_account);
 }
+
+/*
+ * The HTTP API progress callback. A line split across two blocks is emitted
+ * once, when the line is complete, and the raw body keeps every byte.
+ */
+$GLOBALS['skyphusion_ai_assistant_stream_raw']   = '';
+$GLOBALS['skyphusion_ai_assistant_stream_carry'] = '';
+ob_start();
+skyphusion_ai_assistant_stream_chunk('data: {"response":"Hel');
+$stream_first = (string) ob_get_clean();
+ob_start();
+skyphusion_ai_assistant_stream_chunk("lo\"}\n");
+$stream_second = (string) ob_get_clean();
+expect('a half line is not emitted', $stream_first, '');
+expect('the completed line is emitted', strpos($stream_second, 'Hello') !== false, true);
+expect('the raw body keeps both blocks', $GLOBALS['skyphusion_ai_assistant_stream_raw'], "data: {\"response\":\"Hello\"}\n");
+unset($GLOBALS['skyphusion_ai_assistant_stream_raw'], $GLOBALS['skyphusion_ai_assistant_stream_carry']);
