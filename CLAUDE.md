@@ -1,11 +1,16 @@
 # skyphusion-ai (agent contract)
 
-WordPress plugin, public, GPL-2.0, a revenue item. The release zip directory,
+WordPress plugin, public, GPL-2.0-or-later, a revenue item. The release zip directory,
 the main file, the function prefix, the option key and the WP-CLI command are
 `skyphusion-ai` / `skyphusion_ai_`. `includes/deprecated.php` keeps the old
 `cloudflare_ai_search_*` names for one release so the storefront keeps working.
 Do not delete that file until the storefront has moved. Do not change the
 shipped prefix as a side effect of other work.
+
+The optional assistant Worker script name is `skyphusion-ai`
+(`skyphusion_ai_worker_script_name()` in `includes/worker.php`). The source
+file is `worker/index.js`. This repo has no Wrangler config. `wp skyphusion-ai
+worker deploy` calls the same deploy as the settings button.
 
 ## Gates
 
