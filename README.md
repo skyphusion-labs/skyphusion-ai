@@ -286,7 +286,7 @@ It exits 0 when no finding is new, 1 when a finding is new or a count went up, a
 
 ## Distribution
 
-A distributed build carries the runtime only. That is `skyphusion-ai.php`, `includes/`, `assets/`, `readme.txt`, `README.md`, `LICENSE` and `uninstall.php`. The test files, the workflow and the dotfiles stay out of it. The coding-standard config stays out of it too. That is `composer.json`, `composer.lock` and `phpcs.xml.dist`.
+A distributed build carries the runtime only. That is `skyphusion-ai.php`, `includes/`, `assets/`, `readme.txt`, `README.md`, `LICENSE` and `uninstall.php`. The test files, the workflow and the dotfiles stay out of it. The coding-standard config stays out of it too. That is `composer.json`, `composer.lock` and `phpcs.xml.dist`. The directory listing images stay out of it too. They are in `.wordpress-org/`.
 
 `tests/endpoint-test.php` and `tests/account-order.php` define `ABSPATH` themselves, so the harness can load `includes/` directly. That is the opposite of what a shipped file should do. `tests/provider-test.php` also calls `shell_exec()`. None of that belongs in an archive a site owner installs.
 

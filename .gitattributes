@@ -14,3 +14,4 @@
 /composer.lock export-ignore
 /phpcs.xml.dist export-ignore
 /vendor export-ignore
+/.wordpress-org export-ignore
