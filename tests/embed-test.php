@@ -226,11 +226,16 @@ expect('removal is one index call', $GLOBALS['cfais_calls'], 1);
 expect('the hash is forgotten', isset($GLOBALS['cfais_embed_meta'][5]['skyphusion_ai_embed_hash']), false);
 expect('removal uses delete by id', strpos((string) $GLOBALS['cfais_last_request']['url'], '/delete_by_ids') !== false, true);
 
+// The run goes through the step (#201). The old one-request
+// skyphusion_ai_embed_run() is gone; these checks drive the step.
+$embed_run_prev_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
-$embed_dry = skyphusion_ai_embed_run(array($embed_long), false);
-expect('a dry run stays an estimate', $embed_dry['state'], 'estimate');
-expect('a dry run does not call the model', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+$embed_dry = skyphusion_ai_embed_estimate_all(skyphusion_ai_embed_config());
+expect('an estimate counts the post', $embed_dry['posts'], 1);
+expect('an estimate does not call the model', $GLOBALS['cfais_calls'], 0);
+expect('the old one-request run is gone', function_exists('skyphusion_ai_embed_run'), false);
 
 update_option('skyphusion_ai_vectorize', array(
     'index' => 'skyphusion-ai',
@@ -246,17 +251,27 @@ $GLOBALS['cfais_bodies'] = array(
     '{"result":{"data":[[0.25,0.5]]}}',
     '{"success":true,"result":{"mutationId":"m2"}}',
 );
-$embed_ran = skyphusion_ai_embed_run(array(embed_post(6, 'Run', 'First')), true);
-expect('a confirmed run stores the post', $embed_ran['state'], 'ran');
-expect('a confirmed run creates the index and stores the post', $GLOBALS['cfais_calls'], 3);
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(6, 'Run', 'First'));
+skyphusion_ai_embed_cursor_start(25);
+$embed_ran = skyphusion_ai_embed_step();
+expect('a step stores the post', $embed_ran['embedded'], 1);
+expect('the step finishes the pass', $embed_ran['state'], 'done');
+expect('a step creates the index and stores the post', $GLOBALS['cfais_calls'], 3);
 expect('the index is marked created', skyphusion_ai_embed_config()['created'], 1);
 expect('the index records the model', skyphusion_ai_embed_config()['model'], '@cf/baai/bge-large-en-v1.5');
 
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
-$embed_again = skyphusion_ai_embed_run(array(embed_post(6, 'Run', 'First')), true);
-expect('a second run skips unchanged posts', $embed_again['embedded'], 0);
-expect('a second run makes no request', $GLOBALS['cfais_calls'], 0);
+skyphusion_ai_embed_cursor_start(25);
+$embed_again = skyphusion_ai_embed_step();
+expect('a second pass skips unchanged posts', $embed_again['embedded'], 0);
+expect('a second pass makes no request', $GLOBALS['cfais_calls'], 0);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+if (null === $embed_run_prev_posts) {
+    unset($GLOBALS['skyphusion_ai_embed_posts']);
+} else {
+    $GLOBALS['skyphusion_ai_embed_posts'] = $embed_run_prev_posts;
+}
 
 $GLOBALS['cfais_calls'] = 0;
 $embed_keep_index = skyphusion_ai_embed_delete_index(false);

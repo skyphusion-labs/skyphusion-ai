@@ -150,7 +150,30 @@ expect('estimate gives the same passages as one full estimate', jobs_line('embed
 expect('estimate reads 105 batches', jobs_line('embed_batches=105'), true);
 expect('estimate makes no request', $GLOBALS['cfais_calls'], 0);
 
-// 4. retry: the 100 failed posts are stored again, in 105 batches.
+// 4a. retry at the daily limit: it stops on the first failed post, as a step does.
+$jobs_capped = skyphusion_ai_embed_config();
+$jobs_capped['limit'] = 1;
+$jobs_capped['day'] = skyphusion_ai_neuron_today();
+$jobs_capped['neurons'] = 1;
+update_option('skyphusion_ai_vectorize', $jobs_capped, false);
+expect('the fixture is at the daily limit', skyphusion_ai_embed_limit_blocked(skyphusion_ai_embed_config()), true);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('retry'), array());
+expect('retry at the limit says limit', jobs_line('embed_state=limit'), true);
+expect('retry at the limit stores nothing', jobs_line('embed_retried=0'), true);
+expect('retry at the limit stops in the batch of the first failed post', jobs_line('embed_batches=41'), true);
+expect('retry at the limit calls nothing', $GLOBALS['cfais_calls'], 0);
+$jobs_failed_kept = 0;
+foreach ($jobs_posts as $jobs_post) {
+    if (!empty($GLOBALS['cfais_embed_meta'][(int) $jobs_post['ID']]['skyphusion_ai_embed_failed'])) {
+        $jobs_failed_kept++;
+    }
+}
+expect('retry at the limit keeps every post failed for the next retry', $jobs_failed_kept, 100);
+embed_ready();
+
+// 4b. retry: the 100 failed posts are stored again, in 105 batches.
 unset($GLOBALS['cfais_bodies']);
 $GLOBALS['cfais_body'] = '{"success":true,"result":{"data":[[0.25,0.5]],"mutationId":"jobs1"}}';
 $GLOBALS['cfais_cli_log'] = array();
