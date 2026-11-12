@@ -20,6 +20,25 @@ A post is split into passages of about 500 characters with a short overlap befor
 Those three commands stop while embeddings are off.
 They do not call the model in that case.
 
+Run and rebuild go in steps.
+One step stores at most 25 posts, in post id order.
+Add `--batch=N` to set the step size, from 1 to 200.
+After each post, the plugin saves the last post id it did.
+The next step starts after that id.
+If a step stops part-way, only the post it was on is sent again.
+Each step prints one `embed_step=` line.
+The last line is `embed_state=ran` when every post is done.
+If the daily embeddings limit stops a step, the last line is `embed_state=limit`, and the next step runs about an hour later.
+A run that stopped resumes at the saved id.
+
+The settings button runs one step.
+After that, WP-Cron runs one step about every minute until the run is done.
+A site with no WP-CLI and no WP-Cron can call the same step over REST.
+Send `POST /wp-json/skyphusion-ai/v1/embed/step` as an admin, with an optional `batch` parameter.
+The reply gives `state`, `processed`, `embedded`, `after`, and `remaining`.
+Call it again while `state` is `step`.
+The run is done when `state` is `done`.
+
 `wp skyphusion-ai embed retry` stores posts whose last store did not finish.
 `wp skyphusion-ai embed search` followed by the words prints matches.
 Search does not write the index.
