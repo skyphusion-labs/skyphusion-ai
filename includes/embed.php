@@ -470,6 +470,66 @@ function skyphusion_ai_embed_part_set( $post_id, $count ) {
 }
 
 /**
+ * Taxonomies the category and tag filter reads for one post type.
+ *
+ * A WooCommerce product files its categories and tags under its own
+ * taxonomies. Every other type uses the core ones.
+ *
+ * @param string $type Post type.
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_term_taxonomies( $type ) {
+	if ( 'product' === $type ) {
+		return array( 'product_cat', 'product_tag' );
+	}
+	return array( 'category', 'post_tag' );
+}
+
+/**
+ * Category and tag slugs of one post.
+ *
+ * A row that already carries categories or tags keeps them. A row made from
+ * a WP_Post has neither key, so the slugs come from the term API, which reads
+ * the term cache get_posts() loaded (issue #198).
+ *
+ * @param array<string, mixed> $post One post.
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_post_slugs( $post ) {
+	$have    = array();
+	$carried = false;
+	foreach ( array( 'categories', 'tags' ) as $bucket ) {
+		if ( ! isset( $post[ $bucket ] ) || ! is_array( $post[ $bucket ] ) ) {
+			continue;
+		}
+		$carried = true;
+		foreach ( $post[ $bucket ] as $slug ) {
+			$have[] = (string) $slug;
+		}
+	}
+	if ( $carried || ! function_exists( 'get_the_terms' ) ) {
+		return $have;
+	}
+	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
+	$type    = isset( $post['post_type'] ) ? (string) $post['post_type'] : '';
+	if ( 1 > $post_id ) {
+		return $have;
+	}
+	foreach ( skyphusion_ai_embed_term_taxonomies( $type ) as $taxonomy ) {
+		$terms = get_the_terms( $post_id, $taxonomy );
+		if ( ! is_array( $terms ) ) {
+			continue;
+		}
+		foreach ( $terms as $term ) {
+			if ( is_object( $term ) && isset( $term->slug ) ) {
+				$have[] = (string) $term->slug;
+			}
+		}
+	}
+	return $have;
+}
+
+/**
  * True when the category and tag filter keeps this post.
  *
  * Mode none keeps every post. Include keeps a match. Exclude drops a match.
@@ -487,16 +547,8 @@ function skyphusion_ai_embed_terms_ok( $post, $config ) {
 	if ( isset( $config['terms'] ) && is_array( $config['terms'] ) ) {
 		$wanted = $config['terms'];
 	}
-	$have = array();
-	foreach ( array( 'categories', 'tags' ) as $bucket ) {
-		if ( ! isset( $post[ $bucket ] ) || ! is_array( $post[ $bucket ] ) ) {
-			continue;
-		}
-		foreach ( $post[ $bucket ] as $slug ) {
-			$have[] = (string) $slug;
-		}
-	}
-	$hit = false;
+	$have = skyphusion_ai_embed_post_slugs( $post );
+	$hit  = false;
 	foreach ( $wanted as $slug ) {
 		if ( in_array( (string) $slug, $have, true ) ) {
 			$hit = true;
@@ -1831,7 +1883,8 @@ function skyphusion_ai_embed_count_size() {
  * One page of the posts skyphusion_ai_embed_collect() would load.
  *
  * Oldest id first, so the pages do not overlap while nothing is saved.
- * The term cache is not loaded. The filter reads no terms.
+ * The term cache is loaded only when the category and tag filter is on,
+ * because only that filter reads terms.
  *
  * @param int $page Page number, from 1.
  * @param int $size Posts per page.
@@ -1846,15 +1899,17 @@ function skyphusion_ai_embed_collect_page( $page, $size ) {
 	if ( ! function_exists( 'get_posts' ) ) {
 		return array();
 	}
-	$args = skyphusion_ai_embed_query_args( skyphusion_ai_embed_config() );
+	$config = skyphusion_ai_embed_config();
+	$args   = skyphusion_ai_embed_query_args( $config );
 	if ( array() === $args['post_type'] ) {
 		return array();
 	}
+	$mode                           = isset( $config['tax_mode'] ) ? (string) $config['tax_mode'] : 'none';
 	$args['numberposts']            = $size;
 	$args['paged']                  = $page;
 	$args['orderby']                = 'ID';
 	$args['order']                  = 'ASC';
-	$args['update_post_term_cache'] = false;
+	$args['update_post_term_cache'] = ( 'include' === $mode || 'exclude' === $mode );
 	$posts                          = get_posts( $args );
 	if ( ! is_array( $posts ) ) {
 		return array();

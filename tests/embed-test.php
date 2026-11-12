@@ -401,6 +401,128 @@ $embed_tax_out = $embed_tax;
 $embed_tax_out['tax_mode'] = 'exclude';
 expect('an excluded category stays out', skyphusion_ai_embed_included($embed_match, $embed_tax_out), false);
 expect('a different category stays when others are excluded', skyphusion_ai_embed_included($embed_other, $embed_tax_out), true);
+// Issue #198: the filter on posts the way WordPress returns them. These come
+// through skyphusion_ai_embed_collect() as WP_Post objects, so no row carries
+// a categories or tags key. The terms live in the term API, by taxonomy, and a
+// product's are product_cat and product_tag.
+if (!class_exists('WP_Post')) {
+    // The public fields of core's WP_Post that the embed path reads. No
+    // categories or tags property: core's class has none either.
+    final class WP_Post
+    {
+        public $ID = 0;
+        public $post_title = '';
+        public $post_content = '';
+        public $post_excerpt = '';
+        public $post_status = 'publish';
+        public $post_password = '';
+        public $post_type = 'post';
+        public $post_date_gmt = '0000-00-00 00:00:00';
+        public function __construct($post)
+        {
+            foreach (get_object_vars($post) as $key => $value) {
+                $this->$key = $value;
+            }
+        }
+    }
+}
+if (!function_exists('get_posts')) {
+    function get_posts($args = array())
+    {
+        $GLOBALS['cfais_wp_get_posts_args'] = $args;
+        return isset($GLOBALS['cfais_wp_posts']) ? $GLOBALS['cfais_wp_posts'] : array();
+    }
+}
+if (!function_exists('get_the_terms')) {
+    function get_the_terms($post_id, $taxonomy)
+    {
+        $GLOBALS['cfais_wp_term_calls'][] = $taxonomy;
+        $rows = isset($GLOBALS['cfais_wp_terms'][(int) $post_id][$taxonomy]) ? $GLOBALS['cfais_wp_terms'][(int) $post_id][$taxonomy] : array();
+        if (array() === $rows) {
+            return false;
+        }
+        $terms = array();
+        foreach ($rows as $slug) {
+            $terms[] = (object) array('slug' => $slug, 'name' => ucfirst($slug), 'taxonomy' => $taxonomy);
+        }
+        return $terms;
+    }
+}
+function embed_wp_post($id, $type, $title)
+{
+    return new WP_Post((object) array(
+        'ID' => $id,
+        'post_title' => $title,
+        'post_content' => 'Body of ' . $title,
+        'post_type' => $type,
+    ));
+}
+$embed_saved_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
+unset($GLOBALS['skyphusion_ai_embed_posts']);
+$GLOBALS['cfais_wp_posts'] = array(
+    embed_wp_post(901, 'post', 'Linen post'),
+    embed_wp_post(902, 'post', 'Wool post'),
+    embed_wp_post(903, 'product', 'Linen shirt'),
+    embed_wp_post(904, 'product', 'Wool coat'),
+    embed_wp_post(905, 'post', 'Tagged post'),
+);
+$GLOBALS['cfais_wp_terms'] = array(
+    901 => array('category' => array('linen')),
+    902 => array('category' => array('wool')),
+    903 => array('product_cat' => array('linen')),
+    904 => array('product_cat' => array('wool')),
+    905 => array('post_tag' => array('linen')),
+);
+$embed_real_rows = skyphusion_ai_embed_collect();
+expect('real posts come back as rows', count($embed_real_rows), 5);
+expect('a real post row has no categories key', array_key_exists('categories', $embed_real_rows[0]), false);
+$embed_real_cfg = skyphusion_ai_embed_config();
+$embed_real_cfg['post_types'] = array('post', 'product');
+$embed_real_cfg['tax_mode'] = 'include';
+$embed_real_cfg['terms'] = array('linen');
+$embed_real_kept = array();
+foreach ($embed_real_rows as $embed_row) {
+    if (skyphusion_ai_embed_included($embed_row, $embed_real_cfg)) {
+        $embed_real_kept[] = (int) $embed_row['ID'];
+    }
+}
+expect('include keeps the real post in that category', in_array(901, $embed_real_kept, true), true);
+expect('include keeps the real product in that product category', in_array(903, $embed_real_kept, true), true);
+expect('include keeps the real post with that tag', in_array(905, $embed_real_kept, true), true);
+expect('include drops the real posts outside it', in_array(902, $embed_real_kept, true) || in_array(904, $embed_real_kept, true), false);
+$embed_real_cfg['tax_mode'] = 'exclude';
+$embed_real_left = array();
+foreach ($embed_real_rows as $embed_row) {
+    if (skyphusion_ai_embed_included($embed_row, $embed_real_cfg)) {
+        $embed_real_left[] = (int) $embed_row['ID'];
+    }
+}
+sort($embed_real_left);
+expect('exclude drops the real post, product and tagged post with that slug', $embed_real_left, array(902, 904));
+$embed_real_tally = skyphusion_ai_embed_estimate_tally($embed_real_rows, $embed_real_cfg);
+expect('the estimate counts only what the exclude filter keeps', $embed_real_tally['posts'], 2);
+$GLOBALS['cfais_wp_term_calls'] = array();
+$embed_real_cfg['tax_mode'] = 'none';
+skyphusion_ai_embed_included($embed_real_rows[0], $embed_real_cfg);
+expect('no filter reads no terms', $GLOBALS['cfais_wp_term_calls'], array());
+$embed_saved_opt = isset($GLOBALS['cfais_options']['skyphusion_ai_vectorize']) ? $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] : null;
+$GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = array_merge(is_array($embed_saved_opt) ? $embed_saved_opt : array(), array('tax_mode' => 'include', 'terms' => array('linen')));
+expect('the saved filter is on for the page check', skyphusion_ai_embed_config()['tax_mode'], 'include');
+skyphusion_ai_embed_collect_page(1, 100);
+expect('a count page loads the term cache when the filter is on', !empty($GLOBALS['cfais_wp_get_posts_args']['update_post_term_cache']), true);
+$GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = array_merge(is_array($embed_saved_opt) ? $embed_saved_opt : array(), array('tax_mode' => 'none'));
+skyphusion_ai_embed_collect_page(1, 100);
+expect('a count page skips the term cache when the filter is off', empty($GLOBALS['cfais_wp_get_posts_args']['update_post_term_cache']), true);
+if (null === $embed_saved_opt) {
+    unset($GLOBALS['cfais_options']['skyphusion_ai_vectorize']);
+} else {
+    $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = $embed_saved_opt;
+}
+unset($GLOBALS['cfais_wp_posts'], $GLOBALS['cfais_wp_terms'], $GLOBALS['cfais_wp_term_calls'], $GLOBALS['cfais_wp_get_posts_args']);
+if (null !== $embed_saved_posts) {
+    $GLOBALS['skyphusion_ai_embed_posts'] = $embed_saved_posts;
+}
+
 $embed_image = embed_post(66, 'Pic', 'Image text', array('post_type' => 'attachment', 'post_status' => 'inherit'));
 expect('an image stays out until chosen', skyphusion_ai_embed_included($embed_image, skyphusion_ai_embed_config()), false);
 $embed_images_on = skyphusion_ai_embed_config();
