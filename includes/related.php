@@ -472,6 +472,28 @@ function skyphusion_ai_related_refresh( $posts ) {
 }
 
 /**
+ * Refresh the whole selection, one batch at a time. The embeddings model is not called.
+ *
+ * @param int $batch Batch size, or zero for the saved size.
+ * @return array{state: string, saved: int, batches: int}
+ */
+function skyphusion_ai_related_refresh_all( $batch = 0 ) {
+	$sum            = array(
+		'state' => 'refreshed',
+		'saved' => 0,
+	);
+	$walk           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum ) {
+			$part          = skyphusion_ai_related_refresh( $rows );
+			$sum['saved'] += (int) $part['saved'];
+		},
+		$batch
+	);
+	$sum['batches'] = $walk['batches'];
+	return $sum;
+}
+
+/**
  * Saved list, or null when this post has not been refreshed.
  *
  * @param int $post_id Post id.
@@ -504,18 +526,19 @@ function skyphusion_ai_related_cli( $args, $assoc_args ) {
 		$command = (string) $args[0];
 	}
 	if ( 'refresh' === $command ) {
-		$posts = skyphusion_ai_embed_collect();
-		$one   = 0;
+		$one = 0;
 		if ( ! isset( $assoc_args['all'] ) && isset( $args[1] ) ) {
 			$one = (int) $args[1];
 		}
 		if ( $one > 0 ) {
-			$post  = skyphusion_ai_embed_load( $one );
-			$posts = is_array( $post ) ? array( $post ) : array();
+			$post   = skyphusion_ai_embed_load( $one );
+			$result = skyphusion_ai_related_refresh( is_array( $post ) ? array( $post ) : array() );
+		} else {
+			$result = skyphusion_ai_related_refresh_all( skyphusion_ai_embed_cli_batch( $assoc_args ) );
 		}
-		$result = skyphusion_ai_related_refresh( $posts );
 		WP_CLI::log( 'related_state=' . $result['state'] );
 		WP_CLI::log( 'related_saved=' . (string) $result['saved'] );
+		WP_CLI::log( 'related_batches=' . (string) ( $result['batches'] ?? 1 ) );
 		WP_CLI::log( 'embed_called=0' );
 		return;
 	}

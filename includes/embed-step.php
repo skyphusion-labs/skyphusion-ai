@@ -240,16 +240,8 @@ function skyphusion_ai_embed_step( $batch = 0, $sync = null ) {
 		skyphusion_ai_embed_cursor_save( $cursor );
 		return $result;
 	}
-	$ids  = skyphusion_ai_embed_ids();
-	$todo = array();
-	foreach ( $ids as $id ) {
-		if ( $id > (int) $cursor['after'] ) {
-			$todo[] = $id;
-			if ( count( $todo ) >= $size ) {
-				break;
-			}
-		}
-	}
+	$ids   = skyphusion_ai_embed_ids();
+	$todo  = skyphusion_ai_embed_next_ids( $ids, (int) $cursor['after'], $size );
 	$posts = skyphusion_ai_embed_load_page( $todo );
 	foreach ( $todo as $id ) {
 		if ( isset( $posts[ $id ] ) ) {
@@ -287,6 +279,94 @@ function skyphusion_ai_embed_step( $batch = 0, $sync = null ) {
 	}
 	$result['state'] = 'step';
 	return $result;
+}
+
+/**
+ * The next ids after the cursor, at most one batch.
+ *
+ * The step and the batch walk both pick their posts here.
+ *
+ * @param array<int, int> $ids   Sorted ids.
+ * @param int             $after Last id done.
+ * @param int             $size  Batch size.
+ * @return array<int, int>
+ */
+function skyphusion_ai_embed_next_ids( $ids, $after, $size ) {
+	$todo = array();
+	foreach ( $ids as $id ) {
+		if ( $id > $after ) {
+			$todo[] = $id;
+			if ( count( $todo ) >= $size ) {
+				break;
+			}
+		}
+	}
+	return $todo;
+}
+
+/**
+ * Give the selection to a job one batch at a time.
+ *
+ * Status, estimate, retry, reconcile, move and the related refresh use
+ * this. It reads the same ids and pages as the step, so no job loads
+ * every post at once. The cursor lives only in this request. It does
+ * not change the saved run cursor, so a job cannot move a run that is
+ * in progress. After each batch the runtime object cache is cleared
+ * when the cache can do that, so the posts of earlier batches do not
+ * stay in memory.
+ *
+ * @param callable $job   Gets one batch of posts in id order. Return false to stop.
+ * @param int      $batch Batch size, or zero for the saved size.
+ * @return array{batches: int, posts: int, stopped: bool}
+ */
+function skyphusion_ai_embed_each_batch( $job, $batch = 0 ) {
+	$size  = 0 < (int) $batch ? skyphusion_ai_embed_batch_size( $batch ) : (int) skyphusion_ai_embed_cursor()['batch'];
+	$ids   = skyphusion_ai_embed_ids();
+	$after = 0;
+	$walk  = array(
+		'batches' => 0,
+		'posts'   => 0,
+		'stopped' => false,
+	);
+	while ( true ) {
+		$todo = skyphusion_ai_embed_next_ids( $ids, $after, $size );
+		if ( array() === $todo ) {
+			break;
+		}
+		$after = (int) $todo[ count( $todo ) - 1 ];
+		$page  = skyphusion_ai_embed_load_page( $todo );
+		$rows  = array();
+		foreach ( $todo as $id ) {
+			if ( isset( $page[ $id ] ) ) {
+				$rows[] = $page[ $id ];
+			}
+		}
+		unset( $page );
+		++$walk['batches'];
+		$walk['posts'] += count( $rows );
+		$more           = call_user_func( $job, $rows );
+		unset( $rows );
+		skyphusion_ai_embed_forget_batch();
+		if ( false === $more ) {
+			$walk['stopped'] = true;
+			break;
+		}
+	}
+	return $walk;
+}
+
+/**
+ * Drop the posts of the last batch from the runtime object cache.
+ *
+ * Only when the cache says it can clear its runtime part. A persistent
+ * cache keeps what it stores.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_forget_batch() {
+	if ( function_exists( 'wp_cache_supports' ) && function_exists( 'wp_cache_flush_runtime' ) && wp_cache_supports( 'flush_runtime' ) ) {
+		wp_cache_flush_runtime();
+	}
 }
 
 /**

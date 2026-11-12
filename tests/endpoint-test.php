@@ -114,6 +114,7 @@ require __DIR__ . '/gateway-test.php';
 require __DIR__ . '/sources-test.php';
 require __DIR__ . '/embed-test.php';
 require __DIR__ . '/embed-step-test.php';
+require __DIR__ . '/embed-jobs-test.php';
 require __DIR__ . '/bridge-test.php';
 require __DIR__ . '/related-test.php';
 require __DIR__ . '/insights-test.php';
