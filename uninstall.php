@@ -25,4 +25,5 @@ delete_option( 'skyphusion_ai_neurons' );
 	delete_option( 'skyphusion_ai_activity' );
 	delete_option( 'skyphusion_ai_model_licences' );
 	delete_transient( 'skyphusion_ai_write_next' );
+	delete_transient( 'skyphusion_ai_link_linked' );
 delete_transient( 'skyphusion_ai_models' );
