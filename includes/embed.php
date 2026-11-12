@@ -1832,42 +1832,6 @@ function skyphusion_ai_embed_query_args( $config ) {
 }
 
 /**
- * Posts the estimate and the run walk.
- *
- * A test may set skyphusion_ai_embed_posts. Otherwise the chosen types
- * and statuses are loaded.
- *
- * @return array<int, mixed>
- */
-function skyphusion_ai_embed_collect() {
-	if ( isset( $GLOBALS['skyphusion_ai_embed_posts'] ) && is_array( $GLOBALS['skyphusion_ai_embed_posts'] ) ) {
-		return $GLOBALS['skyphusion_ai_embed_posts'];
-	}
-	if ( ! function_exists( 'get_posts' ) ) {
-		return array();
-	}
-	$config = skyphusion_ai_embed_config();
-	$args   = skyphusion_ai_embed_query_args( $config );
-	if ( array() === $args['post_type'] ) {
-		return array();
-	}
-	$posts = get_posts( $args );
-	if ( ! is_array( $posts ) ) {
-		return array();
-	}
-	$rows = array();
-	foreach ( $posts as $post ) {
-		if ( is_object( $post ) ) {
-			$post = get_object_vars( $post );
-		}
-		if ( is_array( $post ) ) {
-			$rows[] = $post;
-		}
-	}
-	return $rows;
-}
-
-/**
  * Posts in one counting step.
  *
  * Small on purpose. On a WordPress on Cloudflare store one admin request
@@ -1880,7 +1844,7 @@ function skyphusion_ai_embed_count_size() {
 }
 
 /**
- * One page of the posts skyphusion_ai_embed_collect() would load.
+ * One page of the chosen posts, for the settings screen count.
  *
  * Oldest id first, so the pages do not overlap while nothing is saved.
  * The term cache is loaded only when the category and tag filter is on,
@@ -2645,6 +2609,111 @@ function skyphusion_ai_embed_tally( $posts, $config ) {
 }
 
 /**
+ * Status counts for the whole selection, one batch at a time.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @param int                  $batch  Batch size, or zero for the saved size.
+ * @return array{embedded: int, waiting: int, failed: int, batches: int}
+ */
+function skyphusion_ai_embed_tally_all( $config, $batch = 0 ) {
+	$sum            = array(
+		'embedded' => 0,
+		'waiting'  => 0,
+		'failed'   => 0,
+	);
+	$walk           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum, $config ) {
+			$part = skyphusion_ai_embed_tally( $rows, $config );
+			foreach ( array_keys( $sum ) as $field ) {
+				$sum[ $field ] += (int) $part[ $field ];
+			}
+		},
+		$batch
+	);
+	$sum['batches'] = $walk['batches'];
+	return $sum;
+}
+
+/**
+ * Estimate for the whole selection, one batch at a time. The model is not called.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @param int                  $batch  Batch size, or zero for the saved size.
+ * @return array<string, int> The estimate, plus batches.
+ */
+function skyphusion_ai_embed_estimate_all( $config, $batch = 0 ) {
+	$sum                 = array(
+		'posts'    => 0,
+		'passages' => 0,
+		'chars'    => 0,
+	);
+	$walk                = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum, $config ) {
+			$part = skyphusion_ai_embed_estimate_tally( $rows, $config );
+			foreach ( array_keys( $sum ) as $field ) {
+				$sum[ $field ] += (int) $part[ $field ];
+			}
+		},
+		$batch
+	);
+	$estimate            = skyphusion_ai_embed_estimate_from( $sum, $config );
+	$estimate['batches'] = $walk['batches'];
+	return $estimate;
+}
+
+/**
+ * Reconcile the whole selection, one batch at a time.
+ *
+ * @param int $batch Batch size, or zero for the saved size.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_embed_reconcile_all( $batch = 0 ) {
+	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
+		return skyphusion_ai_embed_reconcile( array() );
+	}
+	$sum            = array(
+		'state'   => 'reconciled',
+		'removed' => 0,
+		'waiting' => 0,
+	);
+	$walk           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum ) {
+			$part            = skyphusion_ai_embed_reconcile( $rows );
+			$sum['removed'] += (int) $part['removed'];
+			$sum['waiting'] += (int) $part['waiting'];
+		},
+		$batch
+	);
+	$sum['batches'] = $walk['batches'];
+	return $sum;
+}
+
+/**
+ * Retry failed posts in the whole selection, one batch at a time.
+ *
+ * @param int $batch Batch size, or zero for the saved size.
+ * @return array{state: string, retried: int, batches?: int}
+ */
+function skyphusion_ai_embed_retry_all( $batch = 0 ) {
+	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
+		return skyphusion_ai_embed_retry( array() );
+	}
+	$sum            = array(
+		'state'   => 'retried',
+		'retried' => 0,
+	);
+	$walk           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum ) {
+			$part            = skyphusion_ai_embed_retry( $rows );
+			$sum['retried'] += (int) $part['retried'];
+		},
+		$batch
+	);
+	$sum['batches'] = $walk['batches'];
+	return $sum;
+}
+
+/**
  * Remove vectors for posts that no longer belong. The model is not called.
  *
  * @param array<int, mixed> $posts Posts to consider.
@@ -2753,21 +2822,95 @@ function skyphusion_ai_embed_store_count( $config ) {
  * @return array{state: string, moved: int}
  */
 function skyphusion_ai_embed_move( $destination, $posts ) {
+	$check = skyphusion_ai_embed_move_check( $destination );
+	if ( '' !== $check['state'] ) {
+		return array(
+			'state' => $check['state'],
+			'moved' => 0,
+		);
+	}
+	$created = false;
+	return skyphusion_ai_embed_move_batch( $check['target'], $posts, $created );
+}
+
+/**
+ * Copy stored vectors for the whole selection, one batch at a time.
+ *
+ * The destination is created once, before the first batch that has
+ * vectors. A batch that cannot be read or written stops the copy.
+ *
+ * @param string $destination Index name.
+ * @param int    $batch       Batch size, or zero for the saved size.
+ * @return array{state: string, moved: int, batches?: int}
+ */
+function skyphusion_ai_embed_move_all( $destination, $batch = 0 ) {
+	$check = skyphusion_ai_embed_move_check( $destination );
+	if ( '' !== $check['state'] ) {
+		return array(
+			'state' => $check['state'],
+			'moved' => 0,
+		);
+	}
+	$target         = $check['target'];
+	$created        = false;
+	$sum            = array(
+		'state' => 'copied',
+		'moved' => 0,
+	);
+	$walk           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$sum, &$created, $target ) {
+			$part          = skyphusion_ai_embed_move_batch( $target, $rows, $created );
+			$sum['moved'] += (int) $part['moved'];
+			if ( 'copied' !== $part['state'] ) {
+				$sum['state'] = $part['state'];
+				return false;
+			}
+			return true;
+		},
+		$batch
+	);
+	$sum['batches'] = $walk['batches'];
+	return $sum;
+}
+
+/**
+ * Check a move destination.
+ *
+ * @param string $destination Index name.
+ * @return array{state: string, target: string} An empty state means the move may go on.
+ */
+function skyphusion_ai_embed_move_check( $destination ) {
 	$target = skyphusion_ai_embed_index_name( $destination );
 	$config = skyphusion_ai_embed_config();
 	if ( '' === $target || $target === (string) $config['index'] ) {
 		return array(
-			'state' => 'blocked',
-			'moved' => 0,
+			'state'  => 'blocked',
+			'target' => '',
 		);
 	}
 	if ( empty( $config['created'] ) ) {
 		return array(
-			'state' => 'not_created',
-			'moved' => 0,
+			'state'  => 'not_created',
+			'target' => '',
 		);
 	}
-	$ids = array();
+	return array(
+		'state'  => '',
+		'target' => $target,
+	);
+}
+
+/**
+ * Copy the stored vectors of one batch of posts.
+ *
+ * @param string            $target  Checked destination index.
+ * @param array<int, mixed> $posts   Posts whose vectors are copied.
+ * @param bool              $created True once the destination create was sent. Set here.
+ * @return array{state: string, moved: int}
+ */
+function skyphusion_ai_embed_move_batch( $target, $posts, &$created ) {
+	$config = skyphusion_ai_embed_config();
+	$ids    = array();
 	foreach ( $posts as $post ) {
 		if ( ! is_array( $post ) ) {
 			continue;
@@ -2788,7 +2931,8 @@ function skyphusion_ai_embed_move( $destination, $posts ) {
 	}
 	$credentials = skyphusion_ai_embed_credentials();
 	$model       = isset( $config['model'] ) ? (string) $config['model'] : '';
-	$create      = skyphusion_ai_embed_create_body( $target, $model );
+	$create      = $created ? null : skyphusion_ai_embed_create_body( $target, $model );
+	$created     = true;
 	if ( null !== $create ) {
 		$create_url = skyphusion_ai_vectorize_url( $credentials['account_id'], '', '' );
 		skyphusion_ai_vectorize_request(
@@ -2901,7 +3045,7 @@ function skyphusion_ai_embed_cli( $args, $assoc_args ) {
 		return;
 	}
 	if ( 'estimate' === $command ) {
-		skyphusion_ai_embed_cli_estimate();
+		skyphusion_ai_embed_cli_estimate( $assoc_args );
 		return;
 	}
 	if ( 'run' === $command || 'reconcile' === $command || 'rebuild' === $command ) {
@@ -2909,7 +3053,7 @@ function skyphusion_ai_embed_cli( $args, $assoc_args ) {
 		return;
 	}
 	if ( 'retry' === $command ) {
-		skyphusion_ai_embed_cli_retry();
+		skyphusion_ai_embed_cli_retry( $assoc_args );
 		return;
 	}
 	if ( 'search' === $command ) {
@@ -2935,7 +3079,7 @@ function skyphusion_ai_embed_cli( $args, $assoc_args ) {
  */
 function skyphusion_ai_embed_cli_status( $assoc_args ) {
 	$config = skyphusion_ai_embed_config();
-	$tally  = skyphusion_ai_embed_tally( skyphusion_ai_embed_collect(), $config );
+	$tally  = skyphusion_ai_embed_tally_all( $config, skyphusion_ai_embed_cli_batch( $assoc_args ) );
 	WP_CLI::log( 'embed_index=' . $config['index'] );
 	WP_CLI::log( 'embed_created=' . (string) $config['created'] );
 	WP_CLI::log( 'embed_model=' . (string) $config['model'] );
@@ -2943,6 +3087,7 @@ function skyphusion_ai_embed_cli_status( $assoc_args ) {
 	WP_CLI::log( 'embed_embedded=' . (string) $tally['embedded'] );
 	WP_CLI::log( 'embed_waiting=' . (string) $tally['waiting'] );
 	WP_CLI::log( 'embed_failed=' . (string) $tally['failed'] );
+	WP_CLI::log( 'embed_batches=' . (string) $tally['batches'] );
 	if ( ! isset( $assoc_args['store'] ) ) {
 		return;
 	}
@@ -2955,18 +3100,32 @@ function skyphusion_ai_embed_cli_status( $assoc_args ) {
 }
 
 /**
+ * Batch size from the --batch flag, or zero for the saved size.
+ *
+ * @param array<string, string> $assoc_args Flags.
+ * @return int
+ */
+function skyphusion_ai_embed_cli_batch( $assoc_args ) {
+	if ( ! isset( $assoc_args['batch'] ) ) {
+		return 0;
+	}
+	return skyphusion_ai_embed_batch_size( $assoc_args['batch'] );
+}
+
+/**
  * Print the estimate. The model is not called.
  *
+ * @param array<string, string> $assoc_args Flags.
  * @return void
  */
-function skyphusion_ai_embed_cli_estimate() {
-	$result   = skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), false );
-	$estimate = $result['estimate'];
+function skyphusion_ai_embed_cli_estimate( $assoc_args = array() ) {
+	$estimate = skyphusion_ai_embed_estimate_all( skyphusion_ai_embed_config(), skyphusion_ai_embed_cli_batch( $assoc_args ) );
 	WP_CLI::log( 'embed_posts=' . (string) $estimate['posts'] );
 	WP_CLI::log( 'embed_neurons=' . (string) $estimate['neurons'] );
 	WP_CLI::log( 'embed_passages=' . (string) $estimate['passages'] );
 	WP_CLI::log( 'embed_days=' . (string) $estimate['days'] );
 	WP_CLI::log( 'embed_stored=' . (string) $estimate['stored'] );
+	WP_CLI::log( 'embed_batches=' . (string) $estimate['batches'] );
 	WP_CLI::log( 'embed_called=0' );
 }
 
@@ -2994,15 +3153,13 @@ function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 		skyphusion_ai_embed_cli_refuse();
 		return;
 	}
-	$batch = 0;
-	if ( isset( $assoc_args['batch'] ) ) {
-		$batch = skyphusion_ai_embed_batch_size( $assoc_args['batch'] );
-	}
+	$batch = skyphusion_ai_embed_cli_batch( $assoc_args );
 	if ( 'reconcile' === $command ) {
-		$result = skyphusion_ai_embed_reconcile( skyphusion_ai_embed_collect() );
+		$result = skyphusion_ai_embed_reconcile_all( $batch );
 		WP_CLI::log( 'embed_state=' . $result['state'] );
 		WP_CLI::log( 'embed_removed=' . (string) $result['removed'] );
 		WP_CLI::log( 'embed_waiting=' . (string) $result['waiting'] );
+		WP_CLI::log( 'embed_batches=' . (string) ( $result['batches'] ?? 0 ) );
 		WP_CLI::log( 'embed_called=0' );
 		return;
 	}
@@ -3047,16 +3204,18 @@ function skyphusion_ai_embed_cli_steps( $batch ) {
 /**
  * Try failed posts again. This stops while embeddings are off.
  *
+ * @param array<string, string> $assoc_args Flags.
  * @return void
  */
-function skyphusion_ai_embed_cli_retry() {
+function skyphusion_ai_embed_cli_retry( $assoc_args = array() ) {
 	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
 		skyphusion_ai_embed_cli_refuse();
 		return;
 	}
-	$result = skyphusion_ai_embed_retry( skyphusion_ai_embed_collect() );
+	$result = skyphusion_ai_embed_retry_all( skyphusion_ai_embed_cli_batch( $assoc_args ) );
 	WP_CLI::log( 'embed_state=' . $result['state'] );
 	WP_CLI::log( 'embed_retried=' . (string) $result['retried'] );
+	WP_CLI::log( 'embed_batches=' . (string) ( $result['batches'] ?? 0 ) );
 }
 
 /**
@@ -3112,9 +3271,10 @@ function skyphusion_ai_embed_cli_move( $assoc_args ) {
 	if ( isset( $assoc_args['index'] ) ) {
 		$destination = (string) $assoc_args['index'];
 	}
-	$result = skyphusion_ai_embed_move( $destination, skyphusion_ai_embed_collect() );
+	$result = skyphusion_ai_embed_move_all( $destination, skyphusion_ai_embed_cli_batch( $assoc_args ) );
 	WP_CLI::log( 'embed_state=' . $result['state'] );
 	WP_CLI::log( 'embed_moved=' . (string) $result['moved'] );
+	WP_CLI::log( 'embed_batches=' . (string) ( $result['batches'] ?? 0 ) );
 	WP_CLI::log( 'embed_called=0' );
 }
 

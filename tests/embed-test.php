@@ -402,7 +402,7 @@ $embed_tax_out['tax_mode'] = 'exclude';
 expect('an excluded category stays out', skyphusion_ai_embed_included($embed_match, $embed_tax_out), false);
 expect('a different category stays when others are excluded', skyphusion_ai_embed_included($embed_other, $embed_tax_out), true);
 // Issue #198: the filter on posts the way WordPress returns them. These come
-// through skyphusion_ai_embed_collect() as WP_Post objects, so no row carries
+// through skyphusion_ai_embed_load_page() as WP_Post objects, so no row carries
 // a categories or tags key. The terms live in the term API, by taxonomy, and a
 // product's are product_cat and product_tag.
 if (!class_exists('WP_Post')) {
@@ -473,7 +473,7 @@ $GLOBALS['cfais_wp_terms'] = array(
     904 => array('product_cat' => array('wool')),
     905 => array('post_tag' => array('linen')),
 );
-$embed_real_rows = skyphusion_ai_embed_collect();
+$embed_real_rows = array_values(skyphusion_ai_embed_load_page(array(901, 902, 903, 904, 905)));
 expect('real posts come back as rows', count($embed_real_rows), 5);
 expect('a real post row has no categories key', array_key_exists('categories', $embed_real_rows[0]), false);
 $embed_real_cfg = skyphusion_ai_embed_config();

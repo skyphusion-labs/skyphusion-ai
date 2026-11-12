@@ -40,6 +40,15 @@ Call it again while `state` is `step`.
 The run is done when `state` is `done`.
 
 `wp skyphusion-ai embed retry` stores posts whose last store did not finish.
+
+Status, estimate, retry, reconcile, move, and `related refresh` read the posts in batches too.
+They use the same post ids and the same batch size as a run, 25 by default.
+Add `--batch=N` to set the size, from 1 to 200.
+No command loads every post at once.
+Each prints `embed_batches=` (or `related_batches=`), the number of batches it read.
+These commands do not change the saved position of a run that is in progress.
+Move creates the other index once, then reads and writes one batch at a time.
+If one batch cannot be copied, the move stops there with `embed_state=blocked`.
 `wp skyphusion-ai embed search` followed by the words prints matches.
 Search does not write the index.
 
