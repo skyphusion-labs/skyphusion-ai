@@ -126,6 +126,7 @@ require __DIR__ . '/backfill-test.php';
 require __DIR__ . '/translate-test.php';
 require __DIR__ . '/links-test.php';
 require __DIR__ . '/links-batch-test.php';
+require __DIR__ . '/links-cache-test.php';
 require __DIR__ . '/prompts-test.php';
 require __DIR__ . '/health-test.php';
 require __DIR__ . '/defaults-test.php';

@@ -55,6 +55,7 @@ function skyphusion_ai_reset_transient_names() {
 		'skyphusion_ai_models',
 		'skyphusion_ai_write_next',
 		'skyphusion_ai_embed_store_status',
+		'skyphusion_ai_link_linked',
 	);
 }
 
