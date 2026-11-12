@@ -30,6 +30,15 @@ function skyphusion_ai_admin_screen_assets( $hook ) {
 		array(),
 		SKYPHUSION_AI_VERSION
 	);
+	// The embeddings count runs in small steps from this script, so the
+	// screen itself never loads every post (issue #196).
+	wp_enqueue_script(
+		'skyphusion-ai-embed-count',
+		plugins_url( 'assets/js/embed-count.js', SKYPHUSION_AI_FILE ),
+		array(),
+		SKYPHUSION_AI_VERSION,
+		true
+	);
 }
 add_action( 'admin_enqueue_scripts', 'skyphusion_ai_admin_screen_assets' );
 
