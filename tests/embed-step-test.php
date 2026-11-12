@@ -191,13 +191,21 @@ expect('the real step stores 25 posts', $step_real['embedded'], 25);
 expect('the real step writes 25 hashes', count($step_hashed), 25);
 expect('the hashes are the first 25 ids', $step_hashed, range(3, 75, 3));
 
-// NEGATIVE CONTROL: the one-request run on the same 60 posts stores all of them in one call.
+// NEGATIVE CONTROL: the old one-request shape (every post through the
+// real store in one call, as the removed skyphusion_ai_embed_run() did)
+// stores all 60 at once.
 foreach ($GLOBALS['skyphusion_ai_embed_posts'] as $step_post) {
     unset($GLOBALS['cfais_embed_meta'][(int) $step_post['ID']]);
 }
-$step_old = skyphusion_ai_embed_run($GLOBALS['skyphusion_ai_embed_posts'], true);
-expect('the old one-request run touches every post at once', $step_old['embedded'], 60);
-expect('so a one-request run fails the batch-size rule', $step_old['embedded'] > 25, true);
+$step_old = 0;
+foreach ($GLOBALS['skyphusion_ai_embed_posts'] as $step_post) {
+    $step_one = skyphusion_ai_embed_sync_post($step_post);
+    if ('embedded' === $step_one['state']) {
+        $step_old++;
+    }
+}
+expect('the old one-request shape touches every post at once', $step_old, 60);
+expect('so a one-request shape fails the batch-size rule', $step_old > 25, true);
 
 // 6. WP-CLI runs the same step until done, one line per step.
 foreach ($GLOBALS['skyphusion_ai_embed_posts'] as $step_post) {

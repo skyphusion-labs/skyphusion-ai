@@ -40,6 +40,8 @@ Call it again while `state` is `step`.
 The run is done when `state` is `done`.
 
 `wp skyphusion-ai embed retry` stores posts whose last store did not finish.
+The daily embeddings limit stops a retry on that post, as it stops a run step.
+The retry then prints `embed_state=limit`, and the post stays failed for the next retry.
 
 Status, estimate, retry, reconcile, move, and `related refresh` read the posts in batches too.
 They use the same post ids and the same batch size as a run, 25 by default.

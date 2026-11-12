@@ -2020,46 +2020,6 @@ function skyphusion_ai_embed_handle_count() {
 }
 
 /**
- * Estimate, or create the index and embed when the admin confirmed.
- *
- * @param array<int, mixed> $posts     Posts to consider.
- * @param bool              $confirmed True only after the admin asked to run.
- * @return array<string, mixed>
- */
-function skyphusion_ai_embed_run( $posts, $confirmed ) {
-	$config   = skyphusion_ai_embed_config();
-	$estimate = skyphusion_ai_embed_estimate( $posts, $config );
-	if ( ! $confirmed ) {
-		return array(
-			'state'    => 'estimate',
-			'estimate' => $estimate,
-		);
-	}
-	$ready = skyphusion_ai_embed_ensure( $config );
-	if ( 'ready' !== $ready['state'] ) {
-		return array(
-			'state'    => 'blocked',
-			'estimate' => $estimate,
-		);
-	}
-	$done = 0;
-	foreach ( $posts as $post ) {
-		if ( ! is_array( $post ) ) {
-			continue;
-		}
-		$result = skyphusion_ai_embed_sync_post( $post );
-		if ( 'embedded' === $result['state'] ) {
-			++$done;
-		}
-	}
-	return array(
-		'state'    => 'ran',
-		'embedded' => $done,
-		'estimate' => $estimate,
-	);
-}
-
-/**
  * Delete the index only when the admin asked.
  *
  * @param bool $confirmed True only after the admin asked.
@@ -2691,6 +2651,8 @@ function skyphusion_ai_embed_reconcile_all( $batch = 0 ) {
 /**
  * Retry failed posts in the whole selection, one batch at a time.
  *
+ * The daily limit stops the walk. No later batch is loaded.
+ *
  * @param int $batch Batch size, or zero for the saved size.
  * @return array{state: string, retried: int, batches?: int}
  */
@@ -2706,6 +2668,11 @@ function skyphusion_ai_embed_retry_all( $batch = 0 ) {
 		function ( $rows ) use ( &$sum ) {
 			$part            = skyphusion_ai_embed_retry( $rows );
 			$sum['retried'] += (int) $part['retried'];
+			if ( 'limit' === $part['state'] ) {
+				$sum['state'] = 'limit';
+				return false;
+			}
+			return true;
 		},
 		$batch
 	);
@@ -2761,6 +2728,10 @@ function skyphusion_ai_embed_reconcile( $posts ) {
 /**
  * Store failed posts again.
  *
+ * The daily embeddings limit stops the retry on that post, as it stops
+ * a run step. The state is then limit. The post stays failed, so the
+ * next retry sends it.
+ *
  * @param array<int, mixed> $posts Posts to consider.
  * @return array{state: string, retried: int}
  */
@@ -2782,6 +2753,12 @@ function skyphusion_ai_embed_retry( $posts ) {
 			continue;
 		}
 		$result = skyphusion_ai_embed_sync_post( $post );
+		if ( 'limit' === $result['state'] ) {
+			return array(
+				'state'   => 'limit',
+				'retried' => $retried,
+			);
+		}
 		if ( 'embedded' === $result['state'] ) {
 			++$retried;
 		}
