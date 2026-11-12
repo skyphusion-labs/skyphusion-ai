@@ -113,6 +113,7 @@ require __DIR__ . '/model-labels-test.php';
 require __DIR__ . '/gateway-test.php';
 require __DIR__ . '/sources-test.php';
 require __DIR__ . '/embed-test.php';
+require __DIR__ . '/bridge-test.php';
 require __DIR__ . '/related-test.php';
 require __DIR__ . '/insights-test.php';
 require __DIR__ . '/assistant-test.php';

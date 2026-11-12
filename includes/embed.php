@@ -7,6 +7,11 @@
  * are stored as short passages. Deleting the plugin removes the saved
  * choice and leaves the index in the Cloudflare account.
  *
+ * On wordpress-on-cloudflare the Worker can provision Workers AI and
+ * Vectorize as bindings. When SKYPHUSION_AI_CF_BRIDGE is set and
+ * skyphusion_worker_call() exists, embeddings and the Vectorize data
+ * plane use that bridge. Every other install keeps the REST API.
+ *
  * @package skyphusion-ai
  */
 
@@ -749,7 +754,436 @@ function skyphusion_ai_embed_on( $config ) {
 }
 
 /**
+ * True when Workers AI and Vectorize should use the WfP op bridge.
+ *
+ * Both halves are required. skyphusion_worker_call() is the bridge.
+ * SKYPHUSION_AI_CF_BRIDGE means the bindings are provisioned, the same
+ * pattern as SKYPHUSION_AI_ALT. The Worker does not write this constant
+ * yet. Until it does, this stays false and every call uses the REST API.
+ *
+ * @return bool
+ */
+function skyphusion_ai_cf_bridge_on() {
+	if ( ! defined( 'SKYPHUSION_AI_CF_BRIDGE' ) || ! SKYPHUSION_AI_CF_BRIDGE ) {
+		return false;
+	}
+	return function_exists( 'skyphusion_worker_call' );
+}
+
+/**
+ * Local stand-in account id. It is not a Cloudflare account.
+ *
+ * The URL builder rejects an empty account id. The bridge never sends
+ * this value. A control-plane call with no real token is refused before
+ * any HTTP request, so it is not sent there either.
+ *
+ * @return string
+ */
+function skyphusion_ai_bridge_account_id() {
+	return str_repeat( '0', 32 );
+}
+
+/**
+ * Local stand-in token. It is not a Cloudflare token.
+ *
+ * Callers refuse to run when the token is empty. This value only fills
+ * that gap. It must not be placed on a request.
+ *
+ * @return string
+ */
+function skyphusion_ai_bridge_token() {
+	return 'skyphusion-ai-wfp-bridge';
+}
+
+/**
+ * True when the token is the local stand-in.
+ *
+ * @param string $token Token from the credential helper.
+ * @return bool
+ */
+function skyphusion_ai_bridge_token_is( $token ) {
+	return skyphusion_ai_bridge_token() === (string) $token;
+}
+
+/**
+ * One op-bridge call. The name is aiEmbed or vectorize.
+ *
+ * The Worker reply is JSON. ok true, or success true, is accepted.
+ * The token is not part of the message.
+ *
+ * @param string               $name    Op name the Worker keys on.
+ * @param array<string, mixed> $payload Op body.
+ * @return array<string, mixed>|WP_Error
+ */
+function skyphusion_ai_worker_op( $name, $payload ) {
+	if ( 'aiEmbed' !== $name && 'vectorize' !== $name ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'The site could not reach Cloudflare.' );
+	}
+	if ( ! function_exists( 'skyphusion_worker_call' ) || ! function_exists( 'wp_json_encode' ) ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'The site could not reach Cloudflare.' );
+	}
+	$encoded = wp_json_encode( array( $name => $payload ) );
+	if ( ! is_string( $encoded ) || '' === $encoded ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'The site could not reach Cloudflare.' );
+	}
+	try {
+		$raw = skyphusion_worker_call( $encoded );
+	} catch ( Throwable $error ) {
+		unset( $error );
+		return new WP_Error( 'skyphusion_ai_embed', 'The site could not reach Cloudflare.' );
+	}
+	$decoded = json_decode( (string) $raw, true );
+	if ( ! is_array( $decoded ) ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'The site could not reach Cloudflare.' );
+	}
+	$ok = ! empty( $decoded['success'] );
+	if ( array_key_exists( 'ok', $decoded ) && true === $decoded['ok'] ) {
+		$ok = true;
+	}
+	if ( ! $ok ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'Vectorize did not accept the change.' );
+	}
+	return $decoded;
+}
+
+/**
+ * Index and suffix from a Vectorize REST URL.
+ *
+ * An empty suffix is the collection, or one index. Those are control
+ * plane. The binding cannot create or list indexes.
+ *
+ * @param string $url Absolute Vectorize URL.
+ * @return array{index: string, suffix: string}|null
+ */
+function skyphusion_ai_vectorize_url_parts( $url ) {
+	if ( function_exists( 'wp_parse_url' ) ) {
+		$path = wp_parse_url( (string) $url, PHP_URL_PATH );
+	} else {
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.parse_url_parse_url
+		$path = parse_url( (string) $url, PHP_URL_PATH );
+	}
+	if ( ! is_string( $path ) ) {
+		return null;
+	}
+	$matched = preg_match( '#/vectorize/v2/indexes(?:/([^/]+))?(?:/([^/]+))?$#', $path, $parts );
+	if ( 1 !== $matched ) {
+		return null;
+	}
+	$index  = isset( $parts[1] ) ? rawurldecode( (string) $parts[1] ) : '';
+	$suffix = isset( $parts[2] ) ? rawurldecode( (string) $parts[2] ) : '';
+	return array(
+		'index'  => $index,
+		'suffix' => $suffix,
+	);
+}
+
+/**
+ * Binding method for one data-plane URL, or null.
+ *
+ * Query, upsert, getByIds, and deleteByIds are data plane. Create,
+ * list, info, and index delete are not. A URL for a different index
+ * is not this binding.
+ *
+ * @param string $method HTTP method.
+ * @param string $url    Absolute Vectorize URL.
+ * @return string|null
+ */
+function skyphusion_ai_vectorize_bridge_op( $method, $url ) {
+	if ( 'POST' !== strtoupper( (string) $method ) ) {
+		return null;
+	}
+	$parts = skyphusion_ai_vectorize_url_parts( $url );
+	if ( null === $parts ) {
+		return null;
+	}
+	$map = array(
+		'query'         => 'query',
+		'upsert'        => 'upsert',
+		'get_by_ids'    => 'getByIds',
+		'delete_by_ids' => 'deleteByIds',
+	);
+	if ( ! isset( $map[ $parts['suffix'] ] ) ) {
+		return null;
+	}
+	$config = skyphusion_ai_embed_config();
+	$bound  = '';
+	if ( isset( $config['index'] ) ) {
+		$bound = skyphusion_ai_embed_index_name( (string) $config['index'] );
+	}
+	if ( '' === $bound || $parts['index'] !== $bound ) {
+		return null;
+	}
+	return $map[ $parts['suffix'] ];
+}
+
+/**
+ * Vectors from one NDJSON upsert body.
+ *
+ * @param string $body Request body.
+ * @return array<int, array<string, mixed>>|null
+ */
+function skyphusion_ai_vectorize_ndjson_vectors( $body ) {
+	$lines = preg_split( "/\r\n|\n|\r/", (string) $body );
+	if ( ! is_array( $lines ) ) {
+		return null;
+	}
+	$vectors = array();
+	foreach ( $lines as $line ) {
+		$line = trim( (string) $line );
+		if ( '' === $line ) {
+			continue;
+		}
+		$row = json_decode( $line, true );
+		if ( ! is_array( $row ) || ! isset( $row['id'], $row['values'] ) || ! is_array( $row['values'] ) ) {
+			return null;
+		}
+		$one = array(
+			'id'     => (string) $row['id'],
+			'values' => $row['values'],
+		);
+		if ( isset( $row['metadata'] ) && is_array( $row['metadata'] ) ) {
+			$one['metadata'] = $row['metadata'];
+		}
+		$vectors[] = $one;
+	}
+	if ( array() === $vectors ) {
+		return null;
+	}
+	return $vectors;
+}
+
+/**
+ * Worker payload for one data-plane op, or null when the body is unusable.
+ *
+ * @param string $op            Binding method name.
+ * @param string $body          Request body.
+ * @param string $content_type  Content type.
+ * @return array<string, mixed>|null
+ */
+function skyphusion_ai_vectorize_bridge_payload( $op, $body, $content_type ) {
+	$payload = array(
+		'op' => $op,
+	);
+	if ( 'upsert' === $op ) {
+		$typed = (string) $content_type;
+		$json  = false !== strpos( $typed, 'ndjson' ) || false !== strpos( $typed, 'json' );
+		if ( ! $json ) {
+			return null;
+		}
+		$vectors = skyphusion_ai_vectorize_ndjson_vectors( $body );
+		if ( null === $vectors ) {
+			return null;
+		}
+		$payload['vectors'] = $vectors;
+		return $payload;
+	}
+	$decoded = json_decode( (string) $body, true );
+	if ( ! is_array( $decoded ) ) {
+		return null;
+	}
+	if ( 'query' === $op ) {
+		if ( ! isset( $decoded['vector'] ) || ! is_array( $decoded['vector'] ) ) {
+			return null;
+		}
+		$payload['vector'] = $decoded['vector'];
+		if ( isset( $decoded['topK'] ) && is_numeric( $decoded['topK'] ) ) {
+			$payload['topK'] = (int) $decoded['topK'];
+		}
+		if ( isset( $decoded['returnMetadata'] ) ) {
+			$payload['returnMetadata'] = (string) $decoded['returnMetadata'];
+		}
+		return $payload;
+	}
+	if ( ! isset( $decoded['ids'] ) || ! is_array( $decoded['ids'] ) ) {
+		return null;
+	}
+	$ids = array();
+	foreach ( $decoded['ids'] as $id ) {
+		$ids[] = (string) $id;
+	}
+	$payload['ids'] = $ids;
+	return $payload;
+}
+
+/**
+ * REST-shaped envelope from a Worker vectorize reply.
+ *
+ * Callers already read result.matches and a list of vectors. The bridge
+ * keeps that shape so the rest of the plugin does not change.
+ *
+ * @param string               $op    Binding method name.
+ * @param array<string, mixed> $reply Worker JSON.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_vectorize_bridge_envelope( $op, $reply ) {
+	if ( ! empty( $reply['success'] ) && isset( $reply['result'] ) ) {
+		return $reply;
+	}
+	if ( 'query' === $op ) {
+		$matches = array();
+		if ( isset( $reply['matches'] ) && is_array( $reply['matches'] ) ) {
+			$matches = $reply['matches'];
+		} elseif ( isset( $reply['result']['matches'] ) && is_array( $reply['result']['matches'] ) ) {
+			$matches = $reply['result']['matches'];
+		}
+		return array(
+			'success' => true,
+			'result'  => array(
+				'matches' => $matches,
+			),
+		);
+	}
+	if ( 'getByIds' === $op ) {
+		$vectors = array();
+		if ( isset( $reply['vectors'] ) && is_array( $reply['vectors'] ) ) {
+			$vectors = $reply['vectors'];
+		} elseif ( isset( $reply['result'] ) && is_array( $reply['result'] ) ) {
+			if ( isset( $reply['result']['vectors'] ) && is_array( $reply['result']['vectors'] ) ) {
+				$vectors = $reply['result']['vectors'];
+			} else {
+				$vectors = $reply['result'];
+			}
+		}
+		return array(
+			'success' => true,
+			'result'  => $vectors,
+		);
+	}
+	$result = array(
+		'ok' => true,
+	);
+	if ( isset( $reply['result'] ) && is_array( $reply['result'] ) ) {
+		$result = $reply['result'];
+	}
+	return array(
+		'success' => true,
+		'result'  => $result,
+	);
+}
+
+/**
+ * Data-plane call through the bridge, or null to keep the REST path.
+ *
+ * Null is only for a control-plane call, or another index, when a real
+ * token is present. The stand-in token is never sent. Create and list
+ * are not binding ops.
+ *
+ * @param string $method       HTTP method.
+ * @param string $url          Absolute URL.
+ * @param string $token        API token or the local stand-in.
+ * @param string $body         Request body.
+ * @param string $content_type Content type.
+ * @return array<string, mixed>|WP_Error|null
+ */
+function skyphusion_ai_vectorize_via_bridge( $method, $url, $token, $body, $content_type ) {
+	$op = skyphusion_ai_vectorize_bridge_op( $method, $url );
+	if ( null === $op ) {
+		if ( skyphusion_ai_bridge_token_is( $token ) ) {
+			return new WP_Error( 'skyphusion_ai_embed', 'Vectorize did not accept the change.' );
+		}
+		return null;
+	}
+	$payload = skyphusion_ai_vectorize_bridge_payload( $op, $body, $content_type );
+	if ( null === $payload ) {
+		return new WP_Error( 'skyphusion_ai_embed', 'Vectorize did not accept the change.' );
+	}
+	$reply = skyphusion_ai_worker_op( 'vectorize', $payload );
+	if ( is_wp_error( $reply ) ) {
+		return $reply;
+	}
+	return skyphusion_ai_vectorize_bridge_envelope( $op, $reply );
+}
+
+/**
+ * Workers AI embeddings through the aiEmbed op. No token is sent.
+ *
+ * The neuron budget still applies. The return shape matches the REST helper.
+ *
+ * @param array<int, string> $texts Texts to embed.
+ * @return array<int, array<int, float>>|WP_Error
+ */
+function skyphusion_ai_bridge_embeddings( $texts ) {
+	$body = cloudflare_ai_provider_embeddings_body( $texts );
+	if ( empty( $body['text'] ) ) {
+		return new WP_Error( 'cloudflare_ai_embeddings', __( 'Add the Cloudflare account ID and API token before embedding text.', 'skyphusion-ai' ) );
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_refusal' ) ) {
+		$refusal = skyphusion_ai_neuron_refusal();
+		if ( is_wp_error( $refusal ) ) {
+			return $refusal;
+		}
+	}
+	if ( function_exists( 'skyphusion_ai_tool_refusal' ) ) {
+		$tool = skyphusion_ai_tool_refusal( 'embeddings' );
+		if ( is_wp_error( $tool ) ) {
+			return $tool;
+		}
+	}
+	$model = '@cf/baai/bge-large-en-v1.5';
+	if ( function_exists( 'cloudflare_ai_provider_embeddings_model' ) ) {
+		$model = cloudflare_ai_provider_embeddings_model();
+	}
+	$reply = skyphusion_ai_worker_op(
+		'aiEmbed',
+		array(
+			'model' => $model,
+			'text'  => $body['text'],
+		)
+	);
+	if ( is_wp_error( $reply ) ) {
+		if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+			skyphusion_ai_neuron_record( 'embeddings', $model, $reply );
+		}
+		return new WP_Error( 'cloudflare_ai_embeddings', __( 'The site could not reach Cloudflare.', 'skyphusion-ai' ) );
+	}
+	$decoded = $reply;
+	if ( isset( $reply['data'] ) && is_array( $reply['data'] ) && ! isset( $reply['result'] ) ) {
+		$decoded = array(
+			'success' => true,
+			'result'  => array(
+				'data' => $reply['data'],
+			),
+		);
+	}
+	if ( function_exists( 'skyphusion_ai_neuron_record' ) ) {
+		skyphusion_ai_neuron_record( 'embeddings', $model, $decoded );
+	}
+	$vectors = cloudflare_ai_provider_read_embeddings( $decoded );
+	if ( array() === $vectors ) {
+		return new WP_Error( 'cloudflare_ai_embeddings', __( 'The site could not reach Cloudflare.', 'skyphusion-ai' ) );
+	}
+	return $vectors;
+}
+
+/**
+ * Mark the pre-provisioned index ready. No create request is sent.
+ *
+ * A binding cannot create or list an index. The WfP provisioner already
+ * created it. A model with no preset stays blocked, as it does on REST.
+ *
+ * @param array<string, mixed> $config Saved choices.
+ * @param string               $model  Embeddings model id.
+ * @return array{state: string}
+ */
+function skyphusion_ai_embed_ensure_bridge( $config, $model ) {
+	$body = skyphusion_ai_embed_create_body( (string) $config['index'], $model );
+	if ( null === $body ) {
+		return array( 'state' => 'blocked' );
+	}
+	$config['created'] = 1;
+	$config['enabled'] = 1;
+	$config['model']   = $model;
+	if ( function_exists( 'update_option' ) ) {
+		update_option( skyphusion_ai_embed_option_name(), $config, false );
+	}
+	return array( 'state' => 'ready' );
+}
+
+/**
  * Account id and token from the same places as Workers AI.
+ *
+ * When the bridge is on and no real token is stored, the return is a
+ * local stand-in so callers can proceed. The stand-in is not sent.
  *
  * @return array{account_id: string, token: string}
  */
@@ -767,12 +1201,24 @@ function skyphusion_ai_embed_credentials() {
 		$key = cloudflare_ai_provider_connector_key();
 	}
 	if ( ! function_exists( 'cloudflare_ai_provider_resolve_credentials' ) ) {
-		return array(
+		$resolved = array(
 			'account_id' => '',
 			'token'      => '',
 		);
+	} else {
+		$resolved = cloudflare_ai_provider_resolve_credentials( $key, $account );
 	}
-	return cloudflare_ai_provider_resolve_credentials( $key, $account );
+	if ( ! skyphusion_ai_cf_bridge_on() ) {
+		return $resolved;
+	}
+	if ( '' !== $resolved['account_id'] && '' !== $resolved['token'] ) {
+		return $resolved;
+	}
+	if ( '' === $resolved['account_id'] ) {
+		$resolved['account_id'] = skyphusion_ai_bridge_account_id();
+	}
+	$resolved['token'] = skyphusion_ai_bridge_token();
+	return $resolved;
 }
 
 /**
@@ -813,6 +1259,12 @@ function skyphusion_ai_vectorize_url( $account, $index, $suffix ) {
  * @return array<string, mixed>|WP_Error
  */
 function skyphusion_ai_vectorize_request( $method, $url, $token, $body, $content_type ) {
+	if ( skyphusion_ai_cf_bridge_on() ) {
+		$bridged = skyphusion_ai_vectorize_via_bridge( $method, $url, $token, $body, $content_type );
+		if ( null !== $bridged ) {
+			return $bridged;
+		}
+	}
 	if ( '' === $url || '' === $token ) {
 		return new WP_Error( 'skyphusion_ai_embed', 'Add the Cloudflare account ID and API token before embedding text.' );
 	}
@@ -856,6 +1308,9 @@ function skyphusion_ai_embed_ensure( $config ) {
 			return array( 'state' => 'ready' );
 		}
 		return array( 'state' => 'blocked' );
+	}
+	if ( skyphusion_ai_cf_bridge_on() ) {
+		return skyphusion_ai_embed_ensure_bridge( $config, $model );
 	}
 	$body = skyphusion_ai_embed_create_body( (string) $config['index'], $model );
 	if ( null === $body ) {
