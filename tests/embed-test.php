@@ -342,6 +342,12 @@ $embed_p1 = skyphusion_ai_embed_count_step(1);
 expect('a full page asks for the next page', $embed_p1['state'], 'more');
 expect('the next page is page 2', $embed_p1['next'], 2);
 expect('a full page reads one page of posts', $embed_p1['seen'], skyphusion_ai_embed_count_size());
+// While page 1 is the last counted page: a skipped page and another admin
+// both start again, and neither spoils this admin's count.
+expect('a skipped page starts again', skyphusion_ai_embed_count_step(3)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 8;
+expect('another admin cannot continue this count', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 7;
 $embed_p2 = skyphusion_ai_embed_count_step(2);
 expect('the short last page finishes the count', $embed_p2['state'], 'done');
 expect('the pages read every post', $embed_p2['seen'], count($embed_many));
@@ -349,10 +355,6 @@ expect('the pages add up to the posts of one estimate', $embed_p2['estimate']['p
 expect('the pages add up to the passages of one estimate', $embed_p2['estimate']['passages'], $embed_whole['passages']);
 expect('the pages add up to the neurons of one estimate', $embed_p2['estimate']['neurons'], $embed_whole['neurons']);
 expect('a page after the finished count starts again', skyphusion_ai_embed_count_step(2)['state'], 'restart');
-expect('a skipped page starts again', skyphusion_ai_embed_count_step(3)['state'], 'restart');
-$GLOBALS['cfais_user_id'] = 8;
-expect('another admin cannot continue this count', skyphusion_ai_embed_count_step(2)['state'], 'restart');
-$GLOBALS['cfais_user_id'] = 7;
 expect('a page past the end reads nothing', count(skyphusion_ai_embed_collect_page(9, skyphusion_ai_embed_count_size())), 0);
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
 
