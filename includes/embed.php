@@ -2400,6 +2400,7 @@ function skyphusion_ai_embed_render() {
 	echo esc_html__( 'Count the posts', 'skyphusion-ai' ) . '</button></p>';
 	echo '<p>' . esc_html__( 'The count reads the posts in small steps, so a large store does not slow this screen. Count again after you change the choices below.', 'skyphusion-ai' ) . '</p>';
 	echo '<p>' . esc_html__( 'Password-protected posts stay out. The embeddings limit does not stop the other tools.', 'skyphusion-ai' ) . '</p>';
+	skyphusion_ai_embed_render_progress();
 	if ( ! empty( $config['created'] ) ) {
 		echo '<p>' . esc_html__( 'The index exists. A saved post is sent again only when its text changes.', 'skyphusion-ai' ) . '</p>';
 	}
@@ -2559,7 +2560,9 @@ function skyphusion_ai_embed_handle_save() {
 }
 
 /**
- * Run after the admin presses the button.
+ * Run one step after the admin presses the button.
+ *
+ * The cron event runs the next steps until the pass is done.
  *
  * @return void
  */
@@ -2568,7 +2571,7 @@ function skyphusion_ai_embed_handle_run() {
 		return;
 	}
 	check_admin_referer( 'skyphusion_ai_embed_run' );
-	skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), true );
+	skyphusion_ai_embed_step_now();
 	skyphusion_ai_embed_redirect();
 }
 
@@ -2718,28 +2721,6 @@ function skyphusion_ai_embed_retry( $posts ) {
 		'state'   => 'retried',
 		'retried' => $retried,
 	);
-}
-
-/**
- * Forget stored hashes and embed the selection again.
- *
- * @param array<int, mixed> $posts Posts to consider.
- * @return array<string, mixed>
- */
-function skyphusion_ai_embed_rebuild( $posts ) {
-	$config = skyphusion_ai_embed_config();
-	if ( ! skyphusion_ai_embed_on( $config ) ) {
-		return array( 'state' => 'off' );
-	}
-	foreach ( $posts as $post ) {
-		if ( ! is_array( $post ) ) {
-			continue;
-		}
-		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
-		skyphusion_ai_embed_hash_set( $post_id, '' );
-		skyphusion_ai_embed_fail_set( $post_id, false );
-	}
-	return skyphusion_ai_embed_run( $posts, true );
 }
 
 /**
@@ -2924,7 +2905,7 @@ function skyphusion_ai_embed_cli( $args, $assoc_args ) {
 		return;
 	}
 	if ( 'run' === $command || 'reconcile' === $command || 'rebuild' === $command ) {
-		skyphusion_ai_embed_cli_job( $command );
+		skyphusion_ai_embed_cli_job( $command, $assoc_args );
 		return;
 	}
 	if ( 'retry' === $command ) {
@@ -3002,17 +2983,23 @@ function skyphusion_ai_embed_cli_refuse() {
 /**
  * Run, reconcile, or rebuild. Each stops while embeddings are off.
  *
- * @param string $command Job name.
+ * Run and rebuild go one step at a time. --batch=N sets the step size.
+ *
+ * @param string                $command    Job name.
+ * @param array<string, string> $assoc_args Flags.
  * @return void
  */
-function skyphusion_ai_embed_cli_job( $command ) {
+function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 	if ( ! skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
 		skyphusion_ai_embed_cli_refuse();
 		return;
 	}
-	$posts = skyphusion_ai_embed_collect();
+	$batch = 0;
+	if ( isset( $assoc_args['batch'] ) ) {
+		$batch = skyphusion_ai_embed_batch_size( $assoc_args['batch'] );
+	}
 	if ( 'reconcile' === $command ) {
-		$result = skyphusion_ai_embed_reconcile( $posts );
+		$result = skyphusion_ai_embed_reconcile( skyphusion_ai_embed_collect() );
 		WP_CLI::log( 'embed_state=' . $result['state'] );
 		WP_CLI::log( 'embed_removed=' . (string) $result['removed'] );
 		WP_CLI::log( 'embed_waiting=' . (string) $result['waiting'] );
@@ -3020,11 +3007,40 @@ function skyphusion_ai_embed_cli_job( $command ) {
 		return;
 	}
 	if ( 'rebuild' === $command ) {
-		$result = skyphusion_ai_embed_rebuild( $posts );
-		WP_CLI::log( 'embed_state=' . $result['state'] );
+		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
+			skyphusion_ai_embed_hash_set( $post_id, '' );
+			skyphusion_ai_embed_fail_set( $post_id, false );
+		}
+		skyphusion_ai_embed_cursor_start( $batch );
+	}
+	skyphusion_ai_embed_cli_steps( $batch );
+}
+
+/**
+ * Run steps until the pass is done or stops.
+ *
+ * Each step prints one line. The last line is embed_state=ran when the
+ * pass is done.
+ *
+ * @param int $batch Batch size, or zero for the saved size.
+ * @return void
+ */
+function skyphusion_ai_embed_cli_steps( $batch ) {
+	$cursor = skyphusion_ai_embed_cursor();
+	if ( empty( $cursor['active'] ) ) {
+		skyphusion_ai_embed_cursor_start( $batch );
+	}
+	$guard = 0;
+	do {
+		++$guard;
+		$result = skyphusion_ai_embed_step( $batch );
+		WP_CLI::log( 'embed_step=' . (string) $guard . ' processed=' . (string) $result['processed'] . ' embedded=' . (string) $result['embedded'] . ' remaining=' . (string) $result['remaining'] );
+	} while ( 'step' === $result['state'] && 100000 > $guard );
+	if ( 'done' === $result['state'] ) {
+		WP_CLI::log( 'embed_state=ran' );
 		return;
 	}
-	$result = skyphusion_ai_embed_run( $posts, true );
+	skyphusion_ai_embed_schedule( $result['state'] );
 	WP_CLI::log( 'embed_state=' . $result['state'] );
 }
 
@@ -3109,4 +3125,5 @@ add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_ru
 add_action( 'admin_post_skyphusion_ai_embed_delete', 'skyphusion_ai_embed_handle_delete' );
 add_action( 'wp_ajax_skyphusion_ai_embed_count', 'skyphusion_ai_embed_handle_count' );
 
+require_once __DIR__ . '/embed-step.php';
 require_once __DIR__ . '/related.php';

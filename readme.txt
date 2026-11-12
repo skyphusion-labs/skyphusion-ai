@@ -124,7 +124,7 @@ Yes. The search results page lists the pages under the sentence. A page with an 
 
 = Does a saved post get an embedding? =
 
-Press Count the posts on the settings screen to see passages, neurons, days, and stored dimensions before the first run. The count reads the posts in small steps, so a large store does not slow the screen. Run the sync there, or run `wp skyphusion-ai embed run` when embeddings are on. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
+Press Count the posts on the settings screen to see passages, neurons, days, and stored dimensions before the first run. The count reads the posts in small steps, so a large store does not slow the screen. Run the sync there, or run `wp skyphusion-ai embed run` when embeddings are on. The sync goes in steps of 25 posts. WP-Cron runs the next step until the sync is done. A stopped sync starts again after the last post it did. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
 
 = Can a member search the stored pages? =
 
