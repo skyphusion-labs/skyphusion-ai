@@ -507,13 +507,32 @@ function skyphusion_ai_embed_post_slugs( $post ) {
 			$have[] = (string) $slug;
 		}
 	}
-	if ( $carried || ! function_exists( 'get_the_terms' ) ) {
+	if ( $carried ) {
 		return $have;
+	}
+	return skyphusion_ai_embed_api_terms( $post, 'slug' );
+}
+
+/**
+ * One field of every category and tag term of one post, from the term API.
+ *
+ * The taxonomies come from skyphusion_ai_embed_term_taxonomies(), so a
+ * product reads product_cat and product_tag. get_the_terms() reads the term
+ * cache when get_posts() loaded it. Issues #198 and #203.
+ *
+ * @param array<string, mixed> $post  One post.
+ * @param string               $field Term field: slug or name.
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_api_terms( $post, $field ) {
+	$found = array();
+	if ( ! function_exists( 'get_the_terms' ) || ! is_array( $post ) ) {
+		return $found;
 	}
 	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
 	$type    = isset( $post['post_type'] ) ? (string) $post['post_type'] : '';
 	if ( 1 > $post_id ) {
-		return $have;
+		return $found;
 	}
 	foreach ( skyphusion_ai_embed_term_taxonomies( $type ) as $taxonomy ) {
 		$terms = get_the_terms( $post_id, $taxonomy );
@@ -521,12 +540,12 @@ function skyphusion_ai_embed_post_slugs( $post ) {
 			continue;
 		}
 		foreach ( $terms as $term ) {
-			if ( is_object( $term ) && isset( $term->slug ) ) {
-				$have[] = (string) $term->slug;
+			if ( is_object( $term ) && isset( $term->$field ) ) {
+				$found[] = (string) $term->$field;
 			}
 		}
 	}
-	return $have;
+	return $found;
 }
 
 /**
@@ -1508,6 +1527,8 @@ function skyphusion_ai_embed_metadata( $post ) {
  * Categories and tags stored beside the vector.
  *
  * The line is empty when the post has none. A page view does not call this.
+ * A row made from a WP_Post carries no categories or tags key, so the names
+ * come from the term API by post type (issue #203).
  *
  * @param array<string, mixed> $post One post.
  * @return string
@@ -1529,15 +1550,10 @@ function skyphusion_ai_embed_term_line( $post ) {
 			}
 		}
 	}
-	if ( array() !== $names || ! function_exists( 'wp_get_post_terms' ) ) {
+	if ( array() !== $names ) {
 		return implode( ', ', $names );
 	}
-	$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
-	$found   = wp_get_post_terms( $post_id, array( 'category', 'post_tag' ), array( 'fields' => 'names' ) );
-	if ( ! is_array( $found ) ) {
-		return '';
-	}
-	foreach ( $found as $name ) {
+	foreach ( skyphusion_ai_embed_api_terms( $post, 'name' ) as $name ) {
 		$name = trim( (string) $name );
 		if ( '' === $name || 40 < strlen( $name ) || in_array( $name, $names, true ) ) {
 			continue;

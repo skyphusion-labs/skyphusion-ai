@@ -533,6 +533,20 @@ if (null === $embed_saved_opt) {
 } else {
     $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = $embed_saved_opt;
 }
+// Issue #203: the names shown beside the vector and in the related list, on
+// the same real rows. No row carries a categories or tags key, so the names
+// come from the term API, and a product's from product_cat and product_tag.
+$GLOBALS['cfais_wp_terms'][903]['product_tag'] = array('summer');
+expect('the term line of a real product names its product category and tag', skyphusion_ai_embed_term_line($embed_real_rows[2]), 'Linen, Summer');
+expect('the term line of a real post names its category', skyphusion_ai_embed_term_line($embed_real_rows[0]), 'Linen');
+expect('the term line of a real post names its tag', skyphusion_ai_embed_term_line($embed_real_rows[4]), 'Linen');
+expect('the term line reads no core taxonomy for a product', skyphusion_ai_embed_term_line($embed_real_rows[3]), 'Wool');
+expect('the related terms of a real product name its product category and tag', skyphusion_ai_related_post_terms($embed_real_rows[2]), array('Linen', 'Summer'));
+expect('the related terms of a real post name its category', skyphusion_ai_related_post_terms($embed_real_rows[1]), array('Wool'));
+expect('a row that carries names keeps them for the related terms', skyphusion_ai_related_post_terms(array('ID' => 903, 'post_type' => 'product', 'categories' => array('Kept'))), array('Kept'));
+$GLOBALS['cfais_wp_term_calls'] = array();
+skyphusion_ai_embed_term_line($embed_real_rows[2]);
+expect('the term line of a product reads product_cat then product_tag', $GLOBALS['cfais_wp_term_calls'], array('product_cat', 'product_tag'));
 unset($GLOBALS['cfais_wp_posts'], $GLOBALS['cfais_wp_terms'], $GLOBALS['cfais_wp_term_calls'], $GLOBALS['cfais_wp_get_posts_args']);
 if (null !== $embed_saved_posts) {
     $GLOBALS['skyphusion_ai_embed_posts'] = $embed_saved_posts;
