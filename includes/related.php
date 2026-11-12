@@ -40,7 +40,11 @@ function skyphusion_ai_related_term_list( $raw ) {
 }
 
 /**
- * Categories and tags already on the post array.
+ * Category and tag names of one post.
+ *
+ * A row that carries categories or tags keeps them. A row made from a
+ * WP_Post has neither key, so the names come from the term API, by post
+ * type (issue #203).
  *
  * @param array<string, mixed> $post One post.
  * @return array<int, string>
@@ -58,7 +62,10 @@ function skyphusion_ai_related_post_terms( $post ) {
 			$names[] = $name;
 		}
 	}
-	return $names;
+	if ( array() !== $names ) {
+		return $names;
+	}
+	return skyphusion_ai_related_term_list( skyphusion_ai_embed_api_terms( $post, 'name' ) );
 }
 
 /**
