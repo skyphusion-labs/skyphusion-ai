@@ -152,7 +152,7 @@ Yes. Call `skyphusion_ai_translate()` with the text and a language code. See doc
 
 = Can the editor suggest internal links? =
 
-Yes. The post editor lists a page when its title is already in the post. It also lists a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. Outbound suggestions use the stored vectors. The editor does not call the model.
+Yes. The post editor lists a page when its title is already in the post. It also lists a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. It reads the pages 100 at a time, so a large store does not load every page in one request. Both lists show the newest pages first. Outbound suggestions use the stored vectors. The editor does not call the model.
 
 = Can I edit the prompts? =
 

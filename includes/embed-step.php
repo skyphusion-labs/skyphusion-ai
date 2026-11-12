@@ -315,13 +315,24 @@ function skyphusion_ai_embed_next_ids( $ids, $after, $size ) {
  * when the cache can do that, so the posts of earlier batches do not
  * stay in memory.
  *
- * @param callable $job   Gets one batch of posts in id order. Return false to stop.
- * @param int      $batch Batch size, or zero for the saved size.
+ * A job over another set of posts, such as the link box, passes its
+ * own ids and page loader as the source. The cursor, the batch size and
+ * the cache clearing stay the same.
+ *
+ * @param callable                                  $job    Gets one batch of posts in id order. Return false to stop.
+ * @param int                                       $batch  Batch size, or zero for the saved size.
+ * @param array{ids: callable, load: callable}|null $source Sorted ids, and a loader that returns rows keyed by id. Null for the embed selection.
  * @return array{batches: int, posts: int, stopped: bool}
  */
-function skyphusion_ai_embed_each_batch( $job, $batch = 0 ) {
+function skyphusion_ai_embed_each_batch( $job, $batch = 0, $source = null ) {
+	$ids_of  = 'skyphusion_ai_embed_ids';
+	$load_of = 'skyphusion_ai_embed_load_page';
+	if ( is_array( $source ) && isset( $source['ids'], $source['load'] ) && is_callable( $source['ids'] ) && is_callable( $source['load'] ) ) {
+		$ids_of  = $source['ids'];
+		$load_of = $source['load'];
+	}
 	$size  = 0 < (int) $batch ? skyphusion_ai_embed_batch_size( $batch ) : (int) skyphusion_ai_embed_cursor()['batch'];
-	$ids   = skyphusion_ai_embed_ids();
+	$ids   = call_user_func( $ids_of );
 	$after = 0;
 	$walk  = array(
 		'batches' => 0,
@@ -334,7 +345,7 @@ function skyphusion_ai_embed_each_batch( $job, $batch = 0 ) {
 			break;
 		}
 		$after = (int) $todo[ count( $todo ) - 1 ];
-		$page  = skyphusion_ai_embed_load_page( $todo );
+		$page  = call_user_func( $load_of, $todo );
 		$rows  = array();
 		foreach ( $todo as $id ) {
 			if ( isset( $page[ $id ] ) ) {
