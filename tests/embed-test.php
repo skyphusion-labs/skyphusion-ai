@@ -4,6 +4,16 @@
  * already exist. This file adds wp_remote_request and post meta.
  */
 
+// The same store as the lead-guard-test.php transient stand-ins, and the same
+// body reset-test.php defines later. The embeddings count clears its sum.
+if (!function_exists('delete_transient')) {
+    function delete_transient($name)
+    {
+        unset($GLOBALS['cfais_store'][$name]);
+        return true;
+    }
+}
+
 if (!function_exists('esc_html__')) {
     function esc_html__($text, $domain = 'default')
     {
@@ -296,12 +306,64 @@ $GLOBALS['cfais_embed_autosave'] = false;
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_estimate']);
+ob_start();
+skyphusion_ai_embed_render();
+$embed_cold = (string) ob_get_clean();
+// Issue #196: the screen must not load every post. Posts are available
+// here, so a screen that still counted them on load would print 21 neurons.
+expect('the screen does not count the posts on load', strpos($embed_cold, '21 neurons') === false && strpos($embed_cold, 'This run would embed') === false, true);
+expect('the screen says the posts have not been counted', strpos($embed_cold, 'have not been counted') !== false, true);
+expect('the screen offers the count button', strpos($embed_cold, 'skyphusion-ai-embed-count') !== false, true);
+expect('the count button posts to admin-ajax', strpos($embed_cold, 'admin-ajax.php') !== false, true);
+
+$GLOBALS['cfais_user_id'] = 7;
+$embed_one = skyphusion_ai_embed_count_step(1);
+expect('one short page finishes the count', $embed_one['state'], 'done');
+expect('the count reads the one post', $embed_one['seen'], 1);
+expect('the counted estimate matches the estimate', $embed_one['estimate']['neurons'], 21);
+expect('the count is stored', is_array(skyphusion_ai_embed_estimate_stored()), true);
+
 ob_start();
 skyphusion_ai_embed_render();
 $embed_html = (string) ob_get_clean();
 expect('the screen shows the neuron estimate', strpos($embed_html, '21 neurons') !== false, true);
 expect('the screen shows nine passages', strpos($embed_html, '9 passages') !== false, true);
 expect('the screen says the model was not called', strpos($embed_html, 'has not been called') !== false, true);
+
+// More posts than one page: the pages add up to the estimate over all posts.
+$embed_many = array();
+for ($embed_i = 0; $embed_i <= skyphusion_ai_embed_count_size(); $embed_i++) {
+    $embed_many[] = embed_post(5000 + $embed_i, 'Many ' . $embed_i, 'Short text number ' . $embed_i . '.');
+}
+$GLOBALS['skyphusion_ai_embed_posts'] = $embed_many;
+$embed_whole = skyphusion_ai_embed_estimate($embed_many, skyphusion_ai_embed_config());
+$embed_p1 = skyphusion_ai_embed_count_step(1);
+expect('a full page asks for the next page', $embed_p1['state'], 'more');
+expect('the next page is page 2', $embed_p1['next'], 2);
+expect('a full page reads one page of posts', $embed_p1['seen'], skyphusion_ai_embed_count_size());
+$embed_p2 = skyphusion_ai_embed_count_step(2);
+expect('the short last page finishes the count', $embed_p2['state'], 'done');
+expect('the pages read every post', $embed_p2['seen'], count($embed_many));
+expect('the pages add up to the posts of one estimate', $embed_p2['estimate']['posts'], $embed_whole['posts']);
+expect('the pages add up to the passages of one estimate', $embed_p2['estimate']['passages'], $embed_whole['passages']);
+expect('the pages add up to the neurons of one estimate', $embed_p2['estimate']['neurons'], $embed_whole['neurons']);
+expect('a page after the finished count starts again', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+expect('a skipped page starts again', skyphusion_ai_embed_count_step(3)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 8;
+expect('another admin cannot continue this count', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 7;
+expect('a page past the end reads nothing', count(skyphusion_ai_embed_collect_page(9, skyphusion_ai_embed_count_size())), 0);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+
+$embed_js = (string) file_get_contents(dirname(__DIR__) . '/assets/js/embed-count.js');
+expect('the count script calls the count action', strpos($embed_js, 'skyphusion_ai_embed_count') !== false, true);
+expect('the count script sends the nonce', strpos($embed_js, '_ajax_nonce') !== false, true);
+expect('the count script sets text, not markup', strpos($embed_js, 'innerHTML') === false, true);
+$embed_screen_src = (string) file_get_contents(dirname(__DIR__) . '/includes/admin-screen.php');
+expect('the settings screen loads the count script', strpos($embed_screen_src, 'assets/js/embed-count.js') !== false, true);
+$embed_src_count = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php');
+expect('the count action is registered for admins only', strpos($embed_src_count, "'wp_ajax_skyphusion_ai_embed_count'") !== false && strpos($embed_src_count, 'wp_ajax_nopriv_skyphusion_ai_embed_count') === false, true);
 expect('the screen says the embeddings limit stays on this job', strpos($embed_html, 'does not stop the other tools') !== false, true);
 expect('the screen names the daily limit', strpos($embed_html, 'skyphusion_ai_embed_limit') !== false, true);
 expect('the screen makes no request', $GLOBALS['cfais_calls'], 0);

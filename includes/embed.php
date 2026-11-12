@@ -613,6 +613,20 @@ function skyphusion_ai_embed_create_body( $name, $model ) {
  * @return array{posts: int, tokens: int, neurons: int, passages: int, days: int, stored: int}
  */
 function skyphusion_ai_embed_estimate( $posts, $config ) {
+	return skyphusion_ai_embed_estimate_from( skyphusion_ai_embed_estimate_tally( $posts, $config ), $config );
+}
+
+/**
+ * Posts, passages and characters a run would send. This does not call the model.
+ *
+ * The screen adds these up one page at a time. The run adds them up for
+ * every post at once.
+ *
+ * @param array<int, mixed>    $posts  Posts to consider.
+ * @param array<string, mixed> $config Saved choices.
+ * @return array{posts: int, passages: int, chars: int}
+ */
+function skyphusion_ai_embed_estimate_tally( $posts, $config ) {
 	$chars         = 0;
 	$count         = 0;
 	$passage_count = 0;
@@ -642,8 +656,27 @@ function skyphusion_ai_embed_estimate( $posts, $config ) {
 			$chars += strlen( $piece );
 		}
 	}
-	$tokens = intdiv( $chars, 4 );
-	$model  = '@cf/baai/bge-large-en-v1.5';
+	return array(
+		'posts'    => $count,
+		'passages' => $passage_count,
+		'chars'    => $chars,
+	);
+}
+
+/**
+ * Neuron estimate from a tally.
+ *
+ * @param array<string, mixed> $tally  Output of skyphusion_ai_embed_estimate_tally(), or a sum of them.
+ * @param array<string, mixed> $config Saved choices.
+ * @return array<string, int>
+ */
+function skyphusion_ai_embed_estimate_from( $tally, $config ) {
+	$count         = isset( $tally['posts'] ) ? (int) $tally['posts'] : 0;
+	$passage_count = isset( $tally['passages'] ) ? (int) $tally['passages'] : 0;
+	$chars         = isset( $tally['chars'] ) ? (int) $tally['chars'] : 0;
+	$tokens        = intdiv( $chars, 4 );
+
+	$model = '@cf/baai/bge-large-en-v1.5';
 	if ( function_exists( 'cloudflare_ai_provider_embeddings_model' ) ) {
 		$model = cloudflare_ai_provider_embeddings_model();
 	}
@@ -1783,6 +1816,191 @@ function skyphusion_ai_embed_collect() {
 }
 
 /**
+ * Posts in one counting step.
+ *
+ * Small on purpose. On a WordPress on Cloudflare store one admin request
+ * has little memory left, so the screen never loads every post at once.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_count_size() {
+	return 100;
+}
+
+/**
+ * One page of the posts skyphusion_ai_embed_collect() would load.
+ *
+ * Oldest id first, so the pages do not overlap while nothing is saved.
+ * The term cache is not loaded. The filter reads no terms.
+ *
+ * @param int $page Page number, from 1.
+ * @param int $size Posts per page.
+ * @return array<int, mixed>
+ */
+function skyphusion_ai_embed_collect_page( $page, $size ) {
+	$page = max( 1, (int) $page );
+	$size = max( 1, (int) $size );
+	if ( isset( $GLOBALS['skyphusion_ai_embed_posts'] ) && is_array( $GLOBALS['skyphusion_ai_embed_posts'] ) ) {
+		return array_slice( array_values( $GLOBALS['skyphusion_ai_embed_posts'] ), ( $page - 1 ) * $size, $size );
+	}
+	if ( ! function_exists( 'get_posts' ) ) {
+		return array();
+	}
+	$args = skyphusion_ai_embed_query_args( skyphusion_ai_embed_config() );
+	if ( array() === $args['post_type'] ) {
+		return array();
+	}
+	$args['numberposts']            = $size;
+	$args['paged']                  = $page;
+	$args['orderby']                = 'ID';
+	$args['order']                  = 'ASC';
+	$args['update_post_term_cache'] = false;
+	$posts                          = get_posts( $args );
+	if ( ! is_array( $posts ) ) {
+		return array();
+	}
+	$rows = array();
+	foreach ( $posts as $post ) {
+		if ( is_object( $post ) ) {
+			$post = get_object_vars( $post );
+		}
+		if ( is_array( $post ) ) {
+			$rows[] = $post;
+		}
+	}
+	return $rows;
+}
+
+/**
+ * Option that keeps the last count.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_estimate_option() {
+	return 'skyphusion_ai_embed_estimate';
+}
+
+/**
+ * The last count, or null when the posts were never counted.
+ *
+ * @return array<string, int>|null
+ */
+function skyphusion_ai_embed_estimate_stored() {
+	if ( ! function_exists( 'get_option' ) ) {
+		return null;
+	}
+	$stored = get_option( skyphusion_ai_embed_estimate_option(), null );
+	if ( ! is_array( $stored ) || ! isset( $stored['posts'], $stored['neurons'] ) ) {
+		return null;
+	}
+	return $stored;
+}
+
+/**
+ * Count one page and keep the running sum for this admin.
+ *
+ * Page 1 starts again from zero. A later page only adds to the sum when
+ * the page before it was counted, so a lost step cannot count twice.
+ * The last page stores the estimate and clears the sum.
+ *
+ * @param int $page Page number, from 1.
+ * @return array<string, mixed> state more, done, or restart.
+ */
+function skyphusion_ai_embed_count_step( $page ) {
+	$page  = max( 1, (int) $page );
+	$user  = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+	$key   = 'skyphusion_ai_embed_count_' . $user;
+	$tally = array(
+		'posts'    => 0,
+		'passages' => 0,
+		'chars'    => 0,
+	);
+	if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) || ! function_exists( 'delete_transient' ) || ! function_exists( 'update_option' ) ) {
+		return array( 'state' => 'restart' );
+	}
+	if ( 1 < $page ) {
+		$stored = get_transient( $key );
+		if ( ! is_array( $stored ) || ! isset( $stored['page'] ) || (int) $stored['page'] !== $page - 1 ) {
+			return array( 'state' => 'restart' );
+		}
+		foreach ( array_keys( $tally ) as $field ) {
+			$tally[ $field ] = isset( $stored[ $field ] ) ? (int) $stored[ $field ] : 0;
+		}
+	}
+	$config = skyphusion_ai_embed_config();
+	$size   = skyphusion_ai_embed_count_size();
+	$rows   = skyphusion_ai_embed_collect_page( $page, $size );
+	$part   = skyphusion_ai_embed_estimate_tally( $rows, $config );
+	foreach ( array_keys( $tally ) as $field ) {
+		$tally[ $field ] += (int) $part[ $field ];
+	}
+	$seen = ( $page - 1 ) * $size + count( $rows );
+	if ( count( $rows ) < $size ) {
+		delete_transient( $key );
+		$estimate         = skyphusion_ai_embed_estimate_from( $tally, $config );
+		$estimate['time'] = time();
+		update_option( skyphusion_ai_embed_estimate_option(), $estimate, false );
+		return array(
+			'state'    => 'done',
+			'seen'     => $seen,
+			'estimate' => $estimate,
+		);
+	}
+	$tally['page'] = $page;
+	set_transient( $key, $tally, 3600 );
+	return array(
+		'state' => 'more',
+		'seen'  => $seen,
+		'next'  => $page + 1,
+	);
+}
+
+/**
+ * The estimate as one plain sentence.
+ *
+ * @param array<string, mixed> $estimate Output of skyphusion_ai_embed_estimate_from().
+ * @return string Plain text. The caller escapes it.
+ */
+function skyphusion_ai_embed_estimate_sentence( $estimate ) {
+	/* translators: 1: number of posts, 2: estimated neurons, 3: passages, 4: days, 5: stored dimensions. */
+	$sentence = __( 'This run would embed %1$d posts and %3$d passages. The estimate is %2$d neurons, about %4$d days, and %5$d stored dimensions. The model has not been called.', 'skyphusion-ai' );
+	return sprintf(
+		$sentence,
+		isset( $estimate['posts'] ) ? (int) $estimate['posts'] : 0,
+		isset( $estimate['neurons'] ) ? (int) $estimate['neurons'] : 0,
+		isset( $estimate['passages'] ) ? (int) $estimate['passages'] : 0,
+		isset( $estimate['days'] ) ? (int) $estimate['days'] : 0,
+		isset( $estimate['stored'] ) ? (int) $estimate['stored'] : 0
+	);
+}
+
+/**
+ * Count one page for the screen. Called by the count button.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_handle_count() {
+	if ( ! skyphusion_ai_embed_admin_allowed() ) {
+		wp_send_json_error( null, 403 );
+	}
+	check_ajax_referer( 'skyphusion_ai_embed_count' );
+	$page = 1;
+	if ( isset( $_POST['page'] ) ) {
+		$page = absint( wp_unslash( $_POST['page'] ) );
+	}
+	$step = skyphusion_ai_embed_count_step( $page );
+	$out  = array(
+		'state' => $step['state'],
+		'seen'  => isset( $step['seen'] ) ? (int) $step['seen'] : 0,
+		'next'  => isset( $step['next'] ) ? (int) $step['next'] : 0,
+	);
+	if ( 'done' === $step['state'] ) {
+		$out['text'] = skyphusion_ai_embed_estimate_sentence( $step['estimate'] );
+	}
+	wp_send_json_success( $out );
+}
+
+/**
  * Estimate, or create the index and embed when the admin confirmed.
  *
  * @param array<int, mixed> $posts     Posts to consider.
@@ -2106,21 +2324,26 @@ function skyphusion_ai_embed_render() {
 		return;
 	}
 	$config   = skyphusion_ai_embed_config();
-	$estimate = skyphusion_ai_embed_estimate( skyphusion_ai_embed_collect(), $config );
+	$estimate = skyphusion_ai_embed_estimate_stored();
 	echo '<hr />';
 	echo '<h2>' . esc_html__( 'Embeddings', 'skyphusion-ai' ) . '</h2>';
-	/* translators: 1: number of posts, 2: estimated neurons, 3: passages, 4: days, 5: stored dimensions. */
-	$sentence = __( 'This run would embed %1$d posts and %3$d passages. The estimate is %2$d neurons, about %4$d days, and %5$d stored dimensions. The model has not been called.', 'skyphusion-ai' );
-	echo '<p>' . esc_html(
-		sprintf(
-			$sentence,
-			(int) $estimate['posts'],
-			(int) $estimate['neurons'],
-			(int) $estimate['passages'],
-			(int) $estimate['days'],
-			(int) $estimate['stored']
-		)
-	) . '</p>';
+	echo '<p class="skyphusion-ai-embed-estimate" aria-live="polite">';
+	if ( null === $estimate ) {
+		echo esc_html__( 'The posts have not been counted. Press Count the posts to see what a run would embed.', 'skyphusion-ai' );
+	} else {
+		echo esc_html( skyphusion_ai_embed_estimate_sentence( $estimate ) );
+	}
+	echo '</p>';
+	$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'skyphusion_ai_embed_count' ) : '';
+	/* translators: %d is the number of posts read so far. */
+	$working = __( 'Counting. %d posts read so far.', 'skyphusion-ai' );
+	echo '<p><button type="button" class="button skyphusion-ai-embed-count"';
+	echo ' data-url="' . esc_url( admin_url( 'admin-ajax.php' ) ) . '"';
+	echo ' data-nonce="' . esc_attr( $nonce ) . '"';
+	echo ' data-working="' . esc_attr( $working ) . '"';
+	echo ' data-failed="' . esc_attr( __( 'The count stopped. Press Count the posts to start again.', 'skyphusion-ai' ) ) . '">';
+	echo esc_html__( 'Count the posts', 'skyphusion-ai' ) . '</button></p>';
+	echo '<p>' . esc_html__( 'The count reads the posts in small steps, so a large store does not slow this screen. Count again after you change the choices below.', 'skyphusion-ai' ) . '</p>';
 	echo '<p>' . esc_html__( 'Password-protected posts stay out. The embeddings limit does not stop the other tools.', 'skyphusion-ai' ) . '</p>';
 	if ( ! empty( $config['created'] ) ) {
 		echo '<p>' . esc_html__( 'The index exists. A saved post is sent again only when its text changes.', 'skyphusion-ai' ) . '</p>';
@@ -2829,5 +3052,6 @@ add_action( 'before_delete_post', 'skyphusion_ai_embed_on_delete', 10, 1 );
 add_action( 'admin_post_skyphusion_ai_embed_save', 'skyphusion_ai_embed_handle_save' );
 add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_run' );
 add_action( 'admin_post_skyphusion_ai_embed_delete', 'skyphusion_ai_embed_handle_delete' );
+add_action( 'wp_ajax_skyphusion_ai_embed_count', 'skyphusion_ai_embed_handle_count' );
 
 require_once __DIR__ . '/related.php';
