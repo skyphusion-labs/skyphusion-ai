@@ -276,6 +276,77 @@ if (null === $cfais_gateway_route_now) {
     $GLOBALS['cfais_stored']['gateway_route'] = $cfais_gateway_route_now;
 }
 
+$cfais_retry_keys = array('gateway_timeout', 'gateway_attempts', 'gateway_delay', 'gateway_backoff', 'gateway_retry_media');
+$cfais_retry_prev = array();
+foreach ($cfais_retry_keys as $cfais_retry_key) {
+    $cfais_retry_prev[$cfais_retry_key] = array_key_exists($cfais_retry_key, $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored'][$cfais_retry_key] : null;
+}
+foreach ($cfais_retry_keys as $cfais_retry_key) {
+    unset($GLOBALS['cfais_stored'][$cfais_retry_key]);
+}
+expect('blank retry settings send no header', skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text'), array());
+expect('a direct url sends no retry header', skyphusion_ai_gateway_retry_headers($cfais_gateway_direct, 'text'), array());
+$GLOBALS['cfais_stored']['gateway_timeout'] = '5000';
+$GLOBALS['cfais_stored']['gateway_attempts'] = '2';
+$GLOBALS['cfais_stored']['gateway_delay'] = '250';
+$GLOBALS['cfais_stored']['gateway_backoff'] = 'constant';
+$GLOBALS['cfais_stored']['gateway_retry_media'] = '0';
+$cfais_retry_text = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
+expect('text sends the timeout', isset($cfais_retry_text['cf-aig-request-timeout']) ? $cfais_retry_text['cf-aig-request-timeout'] : '', '5000');
+expect('text sends the attempts', isset($cfais_retry_text['cf-aig-max-attempts']) ? $cfais_retry_text['cf-aig-max-attempts'] : '', '2');
+expect('text sends the delay', isset($cfais_retry_text['cf-aig-retry-delay']) ? $cfais_retry_text['cf-aig-retry-delay'] : '', '250');
+expect('text sends the backoff', isset($cfais_retry_text['cf-aig-backoff']) ? $cfais_retry_text['cf-aig-backoff'] : '', 'constant');
+expect('image sends no retry headers', skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'image'), array());
+expect('speech sends no retry headers', skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'speech'), array());
+expect('a direct call still sends no retry headers', skyphusion_ai_gateway_retry_headers($cfais_gateway_direct, 'text'), array());
+$cfais_retry_joined = skyphusion_ai_gateway_metadata_header($cfais_gateway_url, 'text', '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+expect('the metadata header also carries the timeout', isset($cfais_retry_joined['cf-aig-request-timeout']) ? $cfais_retry_joined['cf-aig-request-timeout'] : '', '5000');
+$cfais_retry_direct_joined = skyphusion_ai_gateway_metadata_header($cfais_gateway_direct, 'text', '@cf/meta/llama-3.3-70b-instruct-fp8-fast');
+expect('a direct metadata call still has no timeout', isset($cfais_retry_direct_joined['cf-aig-request-timeout']), false);
+$GLOBALS['cfais_stored']['gateway_retry_media'] = '1';
+$cfais_retry_image = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'image');
+expect('image sends attempts after the opt in', isset($cfais_retry_image['cf-aig-max-attempts']) ? $cfais_retry_image['cf-aig-max-attempts'] : '', '2');
+$GLOBALS['cfais_stored']['gateway_attempts'] = '9';
+expect('an attempts value above 5 is ignored', isset(skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text')['cf-aig-max-attempts']), false);
+$GLOBALS['cfais_stored']['gateway_timeout'] = '120001';
+expect('a timeout above 120000 is ignored', isset(skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text')['cf-aig-request-timeout']), false);
+$_POST['skyphusion_ai_settings'] = array(
+    'gateway_timeout' => '8000',
+    'gateway_attempts' => '9',
+    'gateway_delay' => '',
+    'gateway_backoff' => 'linear',
+    'gateway_retry_media' => '1',
+);
+$cfais_retry_saved = skyphusion_ai_gateway_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array('gateway_attempts' => '2', 'gateway_delay' => '250', 'gateway_retry_media' => '0')
+);
+expect('the screen stores a valid timeout', $cfais_retry_saved['gateway_timeout'], '8000');
+expect('a bad attempts value keeps the old one', $cfais_retry_saved['gateway_attempts'], '2');
+expect('an empty delay clears the delay', $cfais_retry_saved['gateway_delay'], '');
+expect('the screen stores linear backoff', $cfais_retry_saved['gateway_backoff'], 'linear');
+expect('the screen can opt in image and speech', $cfais_retry_saved['gateway_retry_media'], '1');
+unset($_POST['skyphusion_ai_settings']);
+$cfais_retry_kept = skyphusion_ai_gateway_sanitize_option(
+    array('endpoint' => ''),
+    'skyphusion_ai_settings',
+    array('gateway_timeout' => '8000', 'gateway_backoff' => 'exponential')
+);
+expect('an omitted timeout keeps the old one', $cfais_retry_kept['gateway_timeout'], '8000');
+expect('an omitted backoff keeps the old one', $cfais_retry_kept['gateway_backoff'], 'exponential');
+$cfais_retry_help = (string) file_get_contents(dirname(__DIR__) . '/includes/gateway.php');
+expect('the retry help says blank fields send no header', strpos($cfais_retry_help, 'Blank fields send no header.') !== false, true);
+expect('the retry help keeps image and speech off', strpos($cfais_retry_help, 'Image and speech stay off until you turn this on.') !== false, true);
+expect('the retry help keeps the one hour fallback', strpos($cfais_retry_help, 'A refused gateway still uses the direct API for one hour.') !== false, true);
+foreach ($cfais_retry_keys as $cfais_retry_key) {
+    if (null === $cfais_retry_prev[$cfais_retry_key]) {
+        unset($GLOBALS['cfais_stored'][$cfais_retry_key]);
+    } else {
+        $GLOBALS['cfais_stored'][$cfais_retry_key] = $cfais_retry_prev[$cfais_retry_key];
+    }
+}
+
 $cfais_gateway_models = file_get_contents(dirname(__DIR__) . '/includes/models.php');
 expect('the account model list does not add a gateway tag', strpos((string) $cfais_gateway_models, 'cf-aig-metadata'), false);
 $cfais_gateway_settings = file_get_contents(dirname(__DIR__) . '/includes/settings.php');

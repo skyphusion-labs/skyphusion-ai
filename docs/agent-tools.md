@@ -112,3 +112,9 @@ The plugin adds the header only on `gateway.ai.cloudflare.com`.
 The plugin does not add the header on a direct `api.cloudflare.com` call.
 The docs were updated on 2026-11-19.
 Source: https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/
+
+The assistant Worker sends the same five fields on the AI binding.
+It sends them when you deploy a gateway id.
+The user field is empty.
+The Worker does not know the WordPress user.
+Embedding calls on the Worker do not store the request body.

@@ -136,18 +136,166 @@ function skyphusion_ai_worker_sse_neurons( $body ) {
 }
 
 /**
- * Multipart body for the script upload. The token is not in it.
+ * Saved Worker row. Empty until a deploy succeeds.
  *
- * @param string $script Worker source.
- * @param string $origin Allowed browser origin.
- * @param string $model  Default model id.
- * @param string $index  Vectorize index name.
- * @param string $site   Site address the Worker calls.
- * @param string $secret Shared secret for the hourly call.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_worker_saved() {
+	$stored = array();
+	if ( function_exists( 'get_option' ) ) {
+		$stored = get_option( skyphusion_ai_worker_option_name(), array() );
+	}
+	if ( ! is_array( $stored ) ) {
+		return array();
+	}
+	return $stored;
+}
+
+/**
+ * Gateway slug for the Worker. A blank slug keeps the direct AI binding.
+ *
+ * The one-hour direct fallback is a PHP request policy. This slug stays.
+ *
  * @return string
  */
-function skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $site, $secret ) {
-	$metadata = wp_json_encode(
+function skyphusion_ai_worker_gateway_id() {
+	$settings = array();
+	if ( function_exists( 'get_option' ) ) {
+		$settings = get_option( 'skyphusion_ai_settings', array() );
+	}
+	if ( ! is_array( $settings ) || ! isset( $settings['gateway_id'] ) ) {
+		return '';
+	}
+	$value = trim( (string) $settings['gateway_id'] );
+	if ( 1 !== preg_match( '/^[a-z0-9][a-z0-9_-]{0,63}$/', $value ) ) {
+		return '';
+	}
+	return $value;
+}
+
+/**
+ * Cache mode baked into the Worker at deploy.
+ *
+ * 3600 matches the PHP cache header. skip matches a cache set to off.
+ * An empty string adds no cache field, as a missing PHP choice does.
+ *
+ * @return string
+ */
+function skyphusion_ai_worker_gateway_cache() {
+	if ( ! function_exists( 'skyphusion_ai_settings' ) ) {
+		return '';
+	}
+	$settings = skyphusion_ai_settings();
+	if ( ! is_array( $settings ) || ! isset( $settings['cache'] ) ) {
+		return '';
+	}
+	if ( '1' === (string) $settings['cache'] ) {
+		return '3600';
+	}
+	if ( '0' === (string) $settings['cache'] ) {
+		return 'skip';
+	}
+	return '';
+}
+
+/**
+ * Whether text calls on the Worker may store the request body.
+ *
+ * Embeddings stay off in the script. false matches Log prompts left off.
+ *
+ * @return string
+ */
+function skyphusion_ai_worker_gateway_collect() {
+	if ( function_exists( 'skyphusion_ai_gateway_log_prompts' ) && skyphusion_ai_gateway_log_prompts() ) {
+		return 'true';
+	}
+	return 'false';
+}
+
+/**
+ * Gateway values the next deploy writes into the Worker.
+ *
+ * A blank id clears the gateway option. Route, cache, and logging
+ * matter only while an id is set.
+ *
+ * @return array{id: string, route: string, cache: string, collect: string}
+ */
+function skyphusion_ai_worker_gateway_env() {
+	$id    = skyphusion_ai_worker_gateway_id();
+	$route = '';
+	if ( '' !== $id && function_exists( 'skyphusion_ai_gateway_route' ) ) {
+		$route = skyphusion_ai_gateway_route();
+	}
+	return array(
+		'id'      => $id,
+		'route'   => $route,
+		'cache'   => ( '' === $id ) ? '' : skyphusion_ai_worker_gateway_cache(),
+		'collect' => ( '' === $id ) ? 'false' : skyphusion_ai_worker_gateway_collect(),
+	);
+}
+
+/**
+ * True when a live Worker does not match the saved gateway settings.
+ *
+ * No saved address is not stale. A deploy from before this field
+ * is stale only when a gateway id is now saved.
+ *
+ * @return bool
+ */
+function skyphusion_ai_worker_stale() {
+	if ( '' === skyphusion_ai_worker_url() ) {
+		return false;
+	}
+	$saved = skyphusion_ai_worker_saved();
+	$now   = skyphusion_ai_worker_gateway_env();
+	if ( ! array_key_exists( 'gateway_id', $saved ) ) {
+		return '' !== $now['id'];
+	}
+	if ( (string) $saved['gateway_id'] !== $now['id'] ) {
+		return true;
+	}
+	if ( '' === $now['id'] ) {
+		return false;
+	}
+	$route   = isset( $saved['gateway_route'] ) ? (string) $saved['gateway_route'] : '';
+	$cache   = isset( $saved['gateway_cache'] ) ? (string) $saved['gateway_cache'] : '';
+	$collect = isset( $saved['gateway_collect'] ) ? (string) $saved['gateway_collect'] : 'false';
+	return $route !== $now['route'] || $cache !== $now['cache'] || $collect !== $now['collect'];
+}
+
+/**
+ * Screen sentence when the live Worker is behind, or an empty string.
+ *
+ * @return string
+ */
+function skyphusion_ai_worker_stale_text() {
+	if ( ! skyphusion_ai_worker_stale() ) {
+		return '';
+	}
+	return __( 'The live Worker is behind the saved gateway settings. Deploy the Worker again.', 'skyphusion-ai' );
+}
+
+/**
+ * Multipart body for the script upload. The token is not in it.
+ *
+ * @param string $script  Worker source.
+ * @param string $origin  Allowed browser origin.
+ * @param string $model   Default model id.
+ * @param string $index   Vectorize index name.
+ * @param string $site    Site address the Worker calls.
+ * @param string $secret  Shared secret for the hourly call.
+ * @param array  $gateway Gateway id, route, cache, and collect.
+ * @return string
+ */
+function skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $site, $secret, $gateway = array() ) {
+	if ( ! is_array( $gateway ) ) {
+		$gateway = array();
+	}
+	$gateway_id      = isset( $gateway['id'] ) ? (string) $gateway['id'] : '';
+	$gateway_route   = isset( $gateway['route'] ) ? (string) $gateway['route'] : '';
+	$gateway_cache   = isset( $gateway['cache'] ) ? (string) $gateway['cache'] : '';
+	$gateway_collect = isset( $gateway['collect'] ) ? (string) $gateway['collect'] : 'false';
+	$metadata        = wp_json_encode(
 		array(
 			'main_module'        => 'index.js',
 			'compatibility_date' => '2026-10-01',
@@ -181,9 +329,30 @@ function skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $site
 					'name' => 'BACKFILL_SECRET',
 					'text' => $secret,
 				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'GATEWAY_ID',
+					'text' => $gateway_id,
+				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'GATEWAY_ROUTE',
+					'text' => $gateway_route,
+				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'GATEWAY_CACHE',
+					'text' => $gateway_cache,
+				),
+				array(
+					'type' => 'plain_text',
+					'name' => 'GATEWAY_COLLECT',
+					'text' => $gateway_collect,
+				),
 			),
 		)
 	);
+
 	$boundary = 'skyphusionaiworker';
 	$body     = '--' . $boundary . "\r\n";
 	$body    .= "Content-Disposition: form-data; name=\"metadata\"\r\n";
@@ -284,13 +453,14 @@ function skyphusion_ai_worker_deploy() {
 	if ( function_exists( 'skyphusion_ai_assistant_model' ) ) {
 		$model = skyphusion_ai_assistant_model();
 	}
+	$gateway     = skyphusion_ai_worker_gateway_env();
 	$script_name = skyphusion_ai_worker_script_name();
 	$base        = 'https://api.cloudflare.com/client/v4/accounts/' . rawurlencode( $account );
 	$uploaded    = skyphusion_ai_worker_api(
 		'PUT',
 		$base . '/workers/scripts/' . rawurlencode( $script_name ),
 		$token,
-		skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $origin, $secret ),
+		skyphusion_ai_worker_multipart( $script, $origin, $model, $index, $origin, $secret, $gateway ),
 		'multipart/form-data; boundary=skyphusionaiworker'
 	);
 	if ( is_wp_error( $uploaded ) ) {
@@ -341,8 +511,12 @@ function skyphusion_ai_worker_deploy() {
 		update_option(
 			skyphusion_ai_worker_option_name(),
 			array(
-				'url'    => $url,
-				'secret' => $secret,
+				'url'             => $url,
+				'secret'          => $secret,
+				'gateway_id'      => $gateway['id'],
+				'gateway_route'   => $gateway['route'],
+				'gateway_cache'   => $gateway['cache'],
+				'gateway_collect' => $gateway['collect'],
 			),
 			false
 		);
@@ -625,6 +799,10 @@ function skyphusion_ai_worker_render() {
 		echo '<p>' . esc_html__( 'Not deployed.', 'skyphusion-ai' ) . '</p>';
 	} else {
 		echo '<p>' . esc_html( $url ) . '</p>';
+		$stale = skyphusion_ai_worker_stale_text();
+		if ( '' !== $stale ) {
+			echo '<p>' . esc_html( $stale ) . '</p>';
+		}
 	}
 	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
 	echo '<input type="hidden" name="action" value="skyphusion_ai_worker_deploy" />';

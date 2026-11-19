@@ -72,7 +72,48 @@ expect('the screen does not show the worker secret', strpos($worker_screen, (str
 $worker_pack = skyphusion_ai_worker_multipart('export default {}', 'https://shop.example', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'skyphusion-ai', 'https://shop.example', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
 expect('the upload binds Vectorize', strpos($worker_pack, 'vectorize') !== false, true);
 expect('the upload does not contain the token', strpos($worker_pack, $worker_token) === false, true);
+$worker_gw_pack = skyphusion_ai_worker_multipart('export default {}', 'https://shop.example', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'skyphusion-ai', 'https://shop.example', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', array(
+    'id' => 'store',
+    'route' => 'route1',
+    'cache' => '3600',
+    'collect' => 'true',
+));
+$worker_gw_at = strpos($worker_gw_pack, "\r\n\r\n");
+$worker_gw_end = strpos($worker_gw_pack, "\r\n--", $worker_gw_at + 4);
+$worker_gw_meta = json_decode(substr($worker_gw_pack, $worker_gw_at + 4, $worker_gw_end - ($worker_gw_at + 4)), true);
+$worker_gw_bind = array();
+if (is_array($worker_gw_meta) && isset($worker_gw_meta['bindings']) && is_array($worker_gw_meta['bindings'])) {
+    foreach ($worker_gw_meta['bindings'] as $worker_gw_row) {
+        if (is_array($worker_gw_row) && isset($worker_gw_row['name'])) {
+            $worker_gw_bind[$worker_gw_row['name']] = $worker_gw_row;
+        }
+    }
+}
+expect('the upload keeps the AI binding', isset($worker_gw_bind['AI']['type']) ? $worker_gw_bind['AI']['type'] : '', 'ai');
+expect('the upload keeps Vectorize', isset($worker_gw_bind['VECTORIZE']['type']) ? $worker_gw_bind['VECTORIZE']['type'] : '', 'vectorize');
+expect('the upload sends the gateway id', isset($worker_gw_bind['GATEWAY_ID']['text']) ? $worker_gw_bind['GATEWAY_ID']['text'] : '', 'store');
+expect('the upload sends the route', isset($worker_gw_bind['GATEWAY_ROUTE']['text']) ? $worker_gw_bind['GATEWAY_ROUTE']['text'] : '', 'route1');
+expect('the upload sends the cache ttl', isset($worker_gw_bind['GATEWAY_CACHE']['text']) ? $worker_gw_bind['GATEWAY_CACHE']['text'] : '', '3600');
+expect('the upload sends prompt logging', isset($worker_gw_bind['GATEWAY_COLLECT']['text']) ? $worker_gw_bind['GATEWAY_COLLECT']['text'] : '', 'true');
+expect('the gateway upload does not contain the token', strpos($worker_gw_pack, $worker_token) === false, true);
+$worker_blank_at = strpos($worker_pack, "\r\n\r\n");
+$worker_blank_end = strpos($worker_pack, "\r\n--", $worker_blank_at + 4);
+$worker_blank_meta = json_decode(substr($worker_pack, $worker_blank_at + 4, $worker_blank_end - ($worker_blank_at + 4)), true);
+$worker_blank_id = '';
+if (is_array($worker_blank_meta) && isset($worker_blank_meta['bindings']) && is_array($worker_blank_meta['bindings'])) {
+    foreach ($worker_blank_meta['bindings'] as $worker_blank_row) {
+        if (is_array($worker_blank_row) && isset($worker_blank_row['name']) && 'GATEWAY_ID' === $worker_blank_row['name']) {
+            $worker_blank_id = (string) $worker_blank_row['text'];
+        }
+    }
+}
+expect('a blank gateway id is an empty binding', $worker_blank_id, '');
 expect('the script queries Vectorize', strpos($worker_script, 'env.VECTORIZE.query') !== false, true);
+expect('the script passes a gateway object', strpos($worker_script, 'gateway: gateway') !== false, true);
+expect('a blank gateway id skips the gateway option', strpos($worker_script, 'if (!gateway)') !== false, true);
+expect('text calls can use a dynamic route', strpos($worker_script, "'dynamic/' + route") !== false, true);
+expect('embeddings stay on the embedding model', strpos($worker_script, 'skyphusionAiRun(env, EMBED_MODEL') !== false, true);
+expect('the worker can log the Workers AI model', strpos($worker_script, 'logModel') !== false, true);
 expect('the script keeps the large embedding model', strpos($worker_script, '@cf/baai/bge-large-en-v1.5') !== false, true);
 expect('the script has an hourly task', strpos($worker_script, 'async scheduled') !== false, true);
 
@@ -151,6 +192,74 @@ expect('the offer does not call the model', $GLOBALS['cfais_calls'], 0);
 $GLOBALS['cfais_calls'] = 0;
 skyphusion_ai_backfill_on_hourly();
 expect('the site hourly job does not call the model', $GLOBALS['cfais_calls'], 0);
+
+if (!isset($GLOBALS['cfais_stored']) || !is_array($GLOBALS['cfais_stored'])) {
+    $GLOBALS['cfais_stored'] = array();
+}
+$worker_gw_keys = array('gateway_id', 'gateway_route', 'cache', 'log_prompts');
+$worker_gw_prev = array();
+foreach ($worker_gw_keys as $worker_gw_key) {
+    $worker_gw_prev[$worker_gw_key] = array_key_exists($worker_gw_key, $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored'][$worker_gw_key] : null;
+}
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+$GLOBALS['cfais_stored']['gateway_route'] = 'route1';
+$GLOBALS['cfais_stored']['cache'] = '1';
+$GLOBALS['cfais_stored']['log_prompts'] = '1';
+$GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] = time() + 3600;
+expect('the worker keeps the gateway id during the direct hour', skyphusion_ai_worker_gateway_id(), 'store');
+expect('php hides the gateway id during the direct hour', cloudflare_ai_provider_gateway_id('store'), '');
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_status'] = 200;
+$GLOBALS['cfais_bodies'] = array(
+    '{"success":true,"result":{"id":"skyphusion-ai"}}',
+    '{"success":true,"result":{"subdomain":"example-sub"}}',
+    '{"success":true,"result":{"enabled":true}}',
+    '{"success":true,"result":{"schedules":[{"cron":"0 * * * *"}]}}',
+);
+$worker_gw_deployed = skyphusion_ai_worker_deploy();
+expect('a gateway deploy still saves the address', $worker_gw_deployed['url'], 'https://skyphusion-ai.example-sub.workers.dev');
+$worker_gw_saved = get_option('skyphusion_ai_worker', array());
+expect('deploy stores the gateway id', isset($worker_gw_saved['gateway_id']) ? $worker_gw_saved['gateway_id'] : '', 'store');
+expect('deploy stores the route', isset($worker_gw_saved['gateway_route']) ? $worker_gw_saved['gateway_route'] : '', 'route1');
+expect('deploy stores the cache mode', isset($worker_gw_saved['gateway_cache']) ? $worker_gw_saved['gateway_cache'] : '', '3600');
+expect('deploy stores prompt logging', isset($worker_gw_saved['gateway_collect']) ? $worker_gw_saved['gateway_collect'] : '', 'true');
+expect('the worker matches the saved gateway', skyphusion_ai_worker_stale(), false);
+$GLOBALS['cfais_stored']['gateway_route'] = 'other';
+expect('a route change marks the worker stale', skyphusion_ai_worker_stale(), true);
+ob_start();
+skyphusion_ai_worker_render();
+$worker_stale_screen = (string) ob_get_clean();
+expect('the screen says the worker is behind', strpos($worker_stale_screen, 'The live Worker is behind the saved gateway settings.') !== false, true);
+expect('the stale screen does not show the token', strpos($worker_stale_screen, $worker_token) === false, true);
+$GLOBALS['cfais_stored']['gateway_route'] = 'route1';
+$GLOBALS['cfais_stored']['cache'] = '0';
+expect('a cache change marks the worker stale', skyphusion_ai_worker_stale(), true);
+$GLOBALS['cfais_stored']['cache'] = '1';
+$GLOBALS['cfais_stored']['log_prompts'] = '0';
+expect('a logging change marks the worker stale', skyphusion_ai_worker_stale(), true);
+$GLOBALS['cfais_stored']['log_prompts'] = '1';
+$GLOBALS['cfais_stored']['gateway_id'] = '';
+expect('a blank gateway id marks the worker stale', skyphusion_ai_worker_stale(), true);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array(
+    '{"success":true,"result":{"id":"skyphusion-ai"}}',
+    '{"success":true,"result":{"subdomain":"example-sub"}}',
+    '{"success":true,"result":{"enabled":true}}',
+    '{"success":true,"result":{"schedules":[{"cron":"0 * * * *"}]}}',
+);
+skyphusion_ai_worker_deploy();
+$worker_cleared = get_option('skyphusion_ai_worker', array());
+expect('a blank gateway clears the stored id', isset($worker_cleared['gateway_id']) ? $worker_cleared['gateway_id'] : 'missing', '');
+expect('a blank gateway is current after deploy', skyphusion_ai_worker_stale(), false);
+expect('a blank gateway clears the route snapshot', isset($worker_cleared['gateway_route']) ? $worker_cleared['gateway_route'] : 'missing', '');
+foreach ($worker_gw_keys as $worker_gw_key) {
+    if (null === $worker_gw_prev[$worker_gw_key]) {
+        unset($GLOBALS['cfais_stored'][$worker_gw_key]);
+    } else {
+        $GLOBALS['cfais_stored'][$worker_gw_key] = $worker_gw_prev[$worker_gw_key];
+    }
+}
 
 $worker_uninstall = (string) file_get_contents(dirname(__DIR__) . '/uninstall.php');
 expect('uninstall removes the worker option', strpos($worker_uninstall, 'skyphusion_ai_worker') !== false, true);
