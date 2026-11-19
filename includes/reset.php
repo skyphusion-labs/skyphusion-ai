@@ -29,6 +29,7 @@ function skyphusion_ai_reset_option_names() {
 		'skyphusion_ai_search_outcomes',
 		'skyphusion_ai_neurons',
 		'skyphusion_ai_vectorize',
+		'skyphusion_ai_embed_count',
 		'skyphusion_ai_insights',
 		'skyphusion_ai_assistant',
 		'skyphusion_ai_assistant_chats',

@@ -1932,11 +1932,55 @@ function skyphusion_ai_embed_estimate_stored() {
 }
 
 /**
+ * Option that keeps the running count for each admin.
+ *
+ * The value is a map of user id to the tally so far.
+ * It is not autoloaded. It is not a transient. An external object
+ * cache drops a transient before the next request.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_count_option() {
+	return 'skyphusion_ai_embed_count';
+}
+
+/**
+ * Running counts, keyed by user id.
+ *
+ * @return array<int, array<string, int>>
+ */
+function skyphusion_ai_embed_count_book() {
+	if ( ! function_exists( 'get_option' ) ) {
+		return array();
+	}
+	$stored = get_option( skyphusion_ai_embed_count_option(), array() );
+	if ( ! is_array( $stored ) ) {
+		return array();
+	}
+	return $stored;
+}
+
+/**
+ * Store the running counts. Delete the option when none remain.
+ *
+ * @param array<int, array<string, int>> $counts Running counts by user id.
+ * @return void
+ */
+function skyphusion_ai_embed_count_save( $counts ) {
+	if ( array() === $counts && function_exists( 'delete_option' ) ) {
+		delete_option( skyphusion_ai_embed_count_option() );
+		return;
+	}
+	update_option( skyphusion_ai_embed_count_option(), $counts, false );
+}
+
+/**
  * Count one page and keep the running sum for this admin.
  *
  * Page 1 starts again from zero. A later page only adds to the sum when
  * the page before it was counted, so a lost step cannot count twice.
- * The last page stores the estimate and clears the sum.
+ * The sum is one option, keyed by user id. The last page stores the
+ * estimate and clears this admin's sum.
  *
  * @param int $page Page number, from 1.
  * @return array<string, mixed> state more, done, or restart.
@@ -1944,17 +1988,17 @@ function skyphusion_ai_embed_estimate_stored() {
 function skyphusion_ai_embed_count_step( $page ) {
 	$page  = max( 1, (int) $page );
 	$user  = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
-	$key   = 'skyphusion_ai_embed_count_' . $user;
 	$tally = array(
 		'posts'    => 0,
 		'passages' => 0,
 		'chars'    => 0,
 	);
-	if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) || ! function_exists( 'delete_transient' ) || ! function_exists( 'update_option' ) ) {
+	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 		return array( 'state' => 'restart' );
 	}
+	$counts = skyphusion_ai_embed_count_book();
 	if ( 1 < $page ) {
-		$stored = get_transient( $key );
+		$stored = ( isset( $counts[ $user ] ) && is_array( $counts[ $user ] ) ) ? $counts[ $user ] : null;
 		if ( ! is_array( $stored ) || ! isset( $stored['page'] ) || (int) $stored['page'] !== $page - 1 ) {
 			return array( 'state' => 'restart' );
 		}
@@ -1971,7 +2015,8 @@ function skyphusion_ai_embed_count_step( $page ) {
 	}
 	$seen = ( $page - 1 ) * $size + count( $rows );
 	if ( count( $rows ) < $size ) {
-		delete_transient( $key );
+		unset( $counts[ $user ] );
+		skyphusion_ai_embed_count_save( $counts );
 		$estimate         = skyphusion_ai_embed_estimate_from( $tally, $config );
 		$estimate['time'] = time();
 		update_option( skyphusion_ai_embed_estimate_option(), $estimate, false );
@@ -1981,8 +2026,9 @@ function skyphusion_ai_embed_count_step( $page ) {
 			'estimate' => $estimate,
 		);
 	}
-	$tally['page'] = $page;
-	set_transient( $key, $tally, 3600 );
+	$tally['page']   = $page;
+	$counts[ $user ] = $tally;
+	skyphusion_ai_embed_count_save( $counts );
 	return array(
 		'state' => 'more',
 		'seen'  => $seen,

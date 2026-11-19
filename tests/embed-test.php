@@ -357,6 +357,20 @@ $embed_p1 = skyphusion_ai_embed_count_step(1);
 expect('a full page asks for the next page', $embed_p1['state'], 'more');
 expect('the next page is page 2', $embed_p1['next'], 2);
 expect('a full page reads one page of posts', $embed_p1['seen'], skyphusion_ai_embed_count_size());
+// The running sum is an option. Drop any count transient so the next
+// page cannot continue from the object cache.
+$embed_book = get_option('skyphusion_ai_embed_count', array());
+expect('the running tally is an option', is_array($embed_book) && isset($embed_book[7]['page']) && 1 === (int) $embed_book[7]['page'], true);
+$embed_count_transient = false;
+if (isset($GLOBALS['cfais_store']) && is_array($GLOBALS['cfais_store'])) {
+    foreach (array_keys($GLOBALS['cfais_store']) as $embed_store_key) {
+        if (0 === strpos((string) $embed_store_key, 'skyphusion_ai_embed_count')) {
+            $embed_count_transient = true;
+            unset($GLOBALS['cfais_store'][$embed_store_key]);
+        }
+    }
+}
+expect('the count cursor is not a transient', $embed_count_transient, false);
 // While page 1 is the last counted page: a skipped page and another admin
 // both start again, and neither spoils this admin's count.
 expect('a skipped page starts again', skyphusion_ai_embed_count_step(3)['state'], 'restart');
@@ -390,6 +404,8 @@ $embed_src = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php'
 expect('this file does not name another vector store', stripos($embed_src, 'qdrant') === false && stripos($embed_src, 'postgres') === false, true);
 $embed_uninstall = (string) file_get_contents(dirname(__DIR__) . '/uninstall.php');
 expect('uninstall removes the vectorize option', strpos($embed_uninstall, 'skyphusion_ai_vectorize') !== false, true);
+expect('uninstall removes the running count', strpos($embed_uninstall, "delete_option( 'skyphusion_ai_embed_count' )") !== false, true);
+expect('the running count option is not autoloaded', strpos($embed_src_count, 'update_option( skyphusion_ai_embed_count_option(), $counts, false )') !== false, true);
 expect('uninstall does not call vectorize', strpos($embed_uninstall, 'vectorize/v2') === false, true);
 $embed_cli = (string) file_get_contents(dirname(__DIR__) . '/includes/cli.php');
 expect('the cli command reaches the helper', strpos($embed_cli, 'skyphusion_ai_embed_cli') !== false, true);
