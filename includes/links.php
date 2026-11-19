@@ -389,40 +389,283 @@ function skyphusion_ai_link_public_rows( $posts ) {
 }
 
 /**
- * Pages to check for inbound links. The test stand-in is $GLOBALS['skyphusion_ai_link_posts'].
+ * Posts in one link-box batch.
  *
+ * The same size as one settings-screen counting step: one admin request
+ * has little memory left on a WordPress on Cloudflare store.
+ *
+ * @return int
+ */
+function skyphusion_ai_link_batch() {
+	return 100;
+}
+
+/**
+ * Ids of the published posts and pages the link box checks, lowest first.
+ *
+ * Ids only, so a large store stays cheap. The test stand-in is
+ * $GLOBALS['skyphusion_ai_link_posts'].
+ *
+ * @return array<int, int>
+ */
+function skyphusion_ai_link_ids() {
+	$ids = array();
+	if ( isset( $GLOBALS['skyphusion_ai_link_posts'] ) && is_array( $GLOBALS['skyphusion_ai_link_posts'] ) ) {
+		foreach ( $GLOBALS['skyphusion_ai_link_posts'] as $row ) {
+			if ( is_array( $row ) && isset( $row['post_id'] ) && 0 < (int) $row['post_id'] ) {
+				$ids[] = (int) $row['post_id'];
+			}
+		}
+	} elseif ( function_exists( 'get_posts' ) ) {
+		$found = get_posts(
+			array(
+				'post_type'     => array( 'post', 'page' ),
+				'post_status'   => 'publish',
+				'numberposts'   => -1,
+				'fields'        => 'ids',
+				'orderby'       => 'ID',
+				'order'         => 'ASC',
+				'no_found_rows' => true,
+			)
+		);
+		if ( is_array( $found ) ) {
+			foreach ( $found as $id ) {
+				if ( 0 < (int) $id ) {
+					$ids[] = (int) $id;
+				}
+			}
+		}
+	}
+	$ids = array_values( array_unique( $ids ) );
+	sort( $ids );
+	return $ids;
+}
+
+/**
+ * Rows for one batch of ids, keyed by id. A password-protected page stays out.
+ *
+ * @param array<int, int> $ids Post ids.
  * @return array<int, array<string, mixed>>
  */
-function skyphusion_ai_link_posts() {
+function skyphusion_ai_link_load_page( $ids ) {
+	$rows = array();
+	if ( array() === $ids ) {
+		return $rows;
+	}
 	if ( isset( $GLOBALS['skyphusion_ai_link_posts'] ) && is_array( $GLOBALS['skyphusion_ai_link_posts'] ) ) {
-		return $GLOBALS['skyphusion_ai_link_posts'];
+		foreach ( $GLOBALS['skyphusion_ai_link_posts'] as $row ) {
+			if ( is_array( $row ) && isset( $row['post_id'] ) && in_array( (int) $row['post_id'], $ids, true ) ) {
+				$rows[ (int) $row['post_id'] ] = $row;
+			}
+		}
+		return $rows;
 	}
 	if ( ! function_exists( 'get_posts' ) ) {
-		return array();
+		return $rows;
 	}
 	$loaded = get_posts(
 		array(
 			'post_type'   => array( 'post', 'page' ),
 			'post_status' => 'publish',
-			'numberposts' => -1,
+			'post__in'    => $ids,
+			'orderby'     => 'post__in',
+			'numberposts' => count( $ids ),
 		)
 	);
 	if ( ! is_array( $loaded ) ) {
-		return array();
+		return $rows;
 	}
-	return skyphusion_ai_link_public_rows( $loaded );
+	foreach ( skyphusion_ai_link_public_rows( $loaded ) as $row ) {
+		$rows[ (int) $row['post_id'] ] = $row;
+	}
+	return $rows;
 }
 
 /**
- * Ids that already have an inbound link. The test stand-in is $GLOBALS['skyphusion_ai_link_linked'].
+ * Transient that keeps the unlinked-pages scan result.
  *
- * @return array<int, int>
+ * @return string
  */
-function skyphusion_ai_link_linked() {
-	if ( isset( $GLOBALS['skyphusion_ai_link_linked'] ) && is_array( $GLOBALS['skyphusion_ai_link_linked'] ) ) {
-		return $GLOBALS['skyphusion_ai_link_linked'];
+function skyphusion_ai_link_cache_key() {
+	return 'skyphusion_ai_link_linked';
+}
+
+/**
+ * First part of the scan fingerprint.
+ *
+ * It holds a hash of this file, so a change to the scan code never reuses
+ * a result that older code made.
+ *
+ * @return string
+ */
+function skyphusion_ai_link_cache_scheme() {
+	$code = hash_file( 'sha256', __FILE__ );
+	return 'links-1|' . ( is_string( $code ) ? $code : 'nocode' ) . '|';
+}
+
+/**
+ * The fields of one page that the unlinked-pages result depends on.
+ *
+ * Id, address and text, each with its length, so two different pages
+ * never give the same bytes.
+ *
+ * @param array<string, mixed> $row One page row.
+ * @return string
+ */
+function skyphusion_ai_link_print_row( $row ) {
+	$id      = isset( $row['post_id'] ) ? (string) (int) $row['post_id'] : '0';
+	$url     = isset( $row['url'] ) ? (string) $row['url'] : '';
+	$content = isset( $row['content'] ) ? (string) $row['content'] : '';
+	return $id . '|' . strlen( $url ) . ':' . $url . '|' . strlen( $content ) . ':' . $content . "\n";
+}
+
+/**
+ * Kept linked ids for this fingerprint, or null when there are none.
+ *
+ * @param string $fingerprint Fingerprint of every page.
+ * @return array<int, int>|null
+ */
+function skyphusion_ai_link_cached_linked( $fingerprint ) {
+	if ( ! function_exists( 'get_transient' ) ) {
+		return null;
 	}
-	return skyphusion_ai_link_inbound_ids( skyphusion_ai_link_posts() );
+	$entry = get_transient( skyphusion_ai_link_cache_key() );
+	if ( ! is_array( $entry ) || ! isset( $entry['print'], $entry['linked'] ) ) {
+		return null;
+	}
+	if ( ! is_string( $entry['print'] ) || ! is_array( $entry['linked'] ) || ! hash_equals( $entry['print'], (string) $fingerprint ) ) {
+		return null;
+	}
+	$linked = array();
+	foreach ( $entry['linked'] as $id ) {
+		if ( 0 < (int) $id ) {
+			$linked[] = (int) $id;
+		}
+	}
+	return $linked;
+}
+
+/**
+ * Keep the linked ids for this fingerprint for one day.
+ *
+ * The day only limits storage. A changed page changes the fingerprint.
+ *
+ * @param string          $fingerprint Fingerprint of every page.
+ * @param array<int, int> $linked      Linked ids.
+ * @return void
+ */
+function skyphusion_ai_link_store_linked( $fingerprint, $linked ) {
+	if ( ! function_exists( 'set_transient' ) ) {
+		return;
+	}
+	$ids = array();
+	foreach ( $linked as $id ) {
+		$ids[] = (int) $id;
+	}
+	set_transient(
+		skyphusion_ai_link_cache_key(),
+		array(
+			'print'  => (string) $fingerprint,
+			'linked' => $ids,
+		),
+		86400
+	);
+}
+
+/**
+ * Return links and unlinked pages, read one batch at a time.
+ *
+ * This uses the batch walk of the embed jobs (#205), with the link
+ * box's own ids and loader. No request loads every page at once.
+ *
+ * The first pass keeps each page's id, title and address, and finds the
+ * pages that already contain the title. The second pass checks each
+ * page's text against every address, for the unlinked list. Both lists
+ * put the newest id first, as the newest pages came first before.
+ *
+ * The second pass checks every page against every address, so it is the
+ * slow part on a large store. Its result is kept in a transient, keyed by
+ * a fingerprint of every page the first pass read (issue #211). A render
+ * uses the kept result only when the fingerprint is the same, so a changed
+ * page never gets a stale list.
+ *
+ * The test stand-in for the linked ids is $GLOBALS['skyphusion_ai_link_linked'].
+ *
+ * @param string $title   Title of the post on the screen.
+ * @param int    $post_id Post on the screen.
+ * @return array{returns: array<int, array<string, mixed>>, orphans: array<int, array<string, mixed>>, pages: int, batches: int, cached: bool}
+ */
+function skyphusion_ai_link_scan( $title, $post_id ) {
+	$scan = array(
+		'returns' => array(),
+		'orphans' => array(),
+		'pages'   => 0,
+		'batches' => 0,
+		'cached'  => false,
+	);
+	if ( ! function_exists( 'skyphusion_ai_embed_each_batch' ) ) {
+		return $scan;
+	}
+	$source  = array(
+		'ids'  => 'skyphusion_ai_link_ids',
+		'load' => 'skyphusion_ai_link_load_page',
+	);
+	$index   = array();
+	$returns = array();
+	$digest  = hash_init( 'sha256' );
+	hash_update( $digest, skyphusion_ai_link_cache_scheme() );
+	$first           = skyphusion_ai_embed_each_batch(
+		function ( $rows ) use ( &$index, &$returns, $digest, $title, $post_id ) {
+			foreach ( $rows as $row ) {
+				hash_update( $digest, skyphusion_ai_link_print_row( $row ) );
+				$id           = (int) $row['post_id'];
+				$index[ $id ] = array(
+					'post_id' => $id,
+					'title'   => isset( $row['title'] ) ? (string) $row['title'] : '',
+					'url'     => isset( $row['url'] ) ? (string) $row['url'] : '',
+				);
+			}
+			foreach ( skyphusion_ai_link_returns( $title, array_reverse( $rows ), $post_id ) as $found ) {
+				$returns[ (int) $found['post_id'] ] = $found;
+			}
+			krsort( $returns );
+			$returns = array_slice( $returns, 0, 5, true );
+		},
+		skyphusion_ai_link_batch(),
+		$source
+	);
+	$scan['returns'] = array_values( $returns );
+	$scan['pages']   = count( $index );
+	$scan['batches'] = $first['batches'];
+	$fingerprint     = hash_final( $digest );
+	if ( array() === $index ) {
+		return $scan;
+	}
+	$kept = skyphusion_ai_link_cached_linked( $fingerprint );
+	if ( isset( $GLOBALS['skyphusion_ai_link_linked'] ) && is_array( $GLOBALS['skyphusion_ai_link_linked'] ) ) {
+		$linked = $GLOBALS['skyphusion_ai_link_linked'];
+	} elseif ( null !== $kept ) {
+		$linked         = $kept;
+		$scan['cached'] = true;
+	} else {
+		$linked           = array();
+		$targets          = array_values( $index );
+		$second           = skyphusion_ai_embed_each_batch(
+			function ( $rows ) use ( &$linked, $targets ) {
+				foreach ( skyphusion_ai_link_inbound_ids( array_merge( $rows, $targets ) ) as $id ) {
+					$linked[ (int) $id ] = (int) $id;
+				}
+			},
+			skyphusion_ai_link_batch(),
+			$source
+		);
+		$linked           = array_values( $linked );
+		$scan['batches'] += $second['batches'];
+		skyphusion_ai_link_store_linked( $fingerprint, $linked );
+	}
+	krsort( $index );
+	$scan['orphans'] = skyphusion_ai_link_orphans( array_values( $index ), $linked );
+	return $scan;
 }
 
 /**
@@ -504,9 +747,10 @@ function skyphusion_ai_link_render( $post = null ) {
 	if ( '' === $title ) {
 		$title = skyphusion_ai_link_title( $post_id );
 	}
+	$scan = skyphusion_ai_link_scan( $title, $post_id );
 	echo '<h3>' . esc_html__( 'Return links', 'skyphusion-ai' ) . '</h3>';
 	echo '<p>' . esc_html__( 'A return link is a phrase already in the other page. Nothing is inserted.', 'skyphusion-ai' ) . '</p>';
-	$returns = skyphusion_ai_link_returns( $title, skyphusion_ai_link_posts(), $post_id );
+	$returns = $scan['returns'];
 	if ( array() === $returns ) {
 		echo '<p>' . esc_html__( 'No other page already contains this title.', 'skyphusion-ai' ) . '</p>';
 	} else {
@@ -528,9 +772,8 @@ function skyphusion_ai_link_render( $post = null ) {
 		echo '</ul>';
 	}
 	echo '<h3>' . esc_html__( 'Pages that nothing links to', 'skyphusion-ai' ) . '</h3>';
-	$pages   = skyphusion_ai_link_posts();
-	$orphans = skyphusion_ai_link_orphans( $pages, skyphusion_ai_link_linked() );
-	if ( array() === $pages ) {
+	$orphans = $scan['orphans'];
+	if ( 0 === $scan['pages'] ) {
 		echo '<p>' . esc_html__( 'No published page was found.', 'skyphusion-ai' ) . '</p>';
 	} elseif ( array() === $orphans ) {
 		echo '<p>' . esc_html__( 'Every stored page has a link.', 'skyphusion-ai' ) . '</p>';

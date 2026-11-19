@@ -4,6 +4,16 @@
  * already exist. This file adds wp_remote_request and post meta.
  */
 
+// The same store as the lead-guard-test.php transient stand-ins, and the same
+// body reset-test.php defines later. The embeddings count clears its sum.
+if (!function_exists('delete_transient')) {
+    function delete_transient($name)
+    {
+        unset($GLOBALS['cfais_store'][$name]);
+        return true;
+    }
+}
+
 if (!function_exists('esc_html__')) {
     function esc_html__($text, $domain = 'default')
     {
@@ -216,11 +226,16 @@ expect('removal is one index call', $GLOBALS['cfais_calls'], 1);
 expect('the hash is forgotten', isset($GLOBALS['cfais_embed_meta'][5]['skyphusion_ai_embed_hash']), false);
 expect('removal uses delete by id', strpos((string) $GLOBALS['cfais_last_request']['url'], '/delete_by_ids') !== false, true);
 
+// The run goes through the step (#201). The old one-request
+// skyphusion_ai_embed_run() is gone; these checks drive the step.
+$embed_run_prev_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
-$embed_dry = skyphusion_ai_embed_run(array($embed_long), false);
-expect('a dry run stays an estimate', $embed_dry['state'], 'estimate');
-expect('a dry run does not call the model', $GLOBALS['cfais_calls'], 0);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+$embed_dry = skyphusion_ai_embed_estimate_all(skyphusion_ai_embed_config());
+expect('an estimate counts the post', $embed_dry['posts'], 1);
+expect('an estimate does not call the model', $GLOBALS['cfais_calls'], 0);
+expect('the old one-request run is gone', function_exists('skyphusion_ai_embed_run'), false);
 
 update_option('skyphusion_ai_vectorize', array(
     'index' => 'skyphusion-ai',
@@ -236,17 +251,27 @@ $GLOBALS['cfais_bodies'] = array(
     '{"result":{"data":[[0.25,0.5]]}}',
     '{"success":true,"result":{"mutationId":"m2"}}',
 );
-$embed_ran = skyphusion_ai_embed_run(array(embed_post(6, 'Run', 'First')), true);
-expect('a confirmed run stores the post', $embed_ran['state'], 'ran');
-expect('a confirmed run creates the index and stores the post', $GLOBALS['cfais_calls'], 3);
+$GLOBALS['skyphusion_ai_embed_posts'] = array(embed_post(6, 'Run', 'First'));
+skyphusion_ai_embed_cursor_start(25);
+$embed_ran = skyphusion_ai_embed_step();
+expect('a step stores the post', $embed_ran['embedded'], 1);
+expect('the step finishes the pass', $embed_ran['state'], 'done');
+expect('a step creates the index and stores the post', $GLOBALS['cfais_calls'], 3);
 expect('the index is marked created', skyphusion_ai_embed_config()['created'], 1);
 expect('the index records the model', skyphusion_ai_embed_config()['model'], '@cf/baai/bge-large-en-v1.5');
 
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
-$embed_again = skyphusion_ai_embed_run(array(embed_post(6, 'Run', 'First')), true);
-expect('a second run skips unchanged posts', $embed_again['embedded'], 0);
-expect('a second run makes no request', $GLOBALS['cfais_calls'], 0);
+skyphusion_ai_embed_cursor_start(25);
+$embed_again = skyphusion_ai_embed_step();
+expect('a second pass skips unchanged posts', $embed_again['embedded'], 0);
+expect('a second pass makes no request', $GLOBALS['cfais_calls'], 0);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+if (null === $embed_run_prev_posts) {
+    unset($GLOBALS['skyphusion_ai_embed_posts']);
+} else {
+    $GLOBALS['skyphusion_ai_embed_posts'] = $embed_run_prev_posts;
+}
 
 $GLOBALS['cfais_calls'] = 0;
 $embed_keep_index = skyphusion_ai_embed_delete_index(false);
@@ -296,12 +321,66 @@ $GLOBALS['cfais_embed_autosave'] = false;
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
 $GLOBALS['cfais_calls'] = 0;
 unset($GLOBALS['cfais_bodies']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_estimate']);
+ob_start();
+skyphusion_ai_embed_render();
+$embed_cold = (string) ob_get_clean();
+// Issue #196: the screen must not load every post. Posts are available
+// here, so a screen that still counted them on load would print 21 neurons.
+expect('the screen does not count the posts on load', strpos($embed_cold, '21 neurons') === false && strpos($embed_cold, 'This run would embed') === false, true);
+expect('the screen says the posts have not been counted', strpos($embed_cold, 'have not been counted') !== false, true);
+expect('the screen offers the count button', strpos($embed_cold, 'skyphusion-ai-embed-count') !== false, true);
+expect('the count button posts to admin-ajax', strpos($embed_cold, 'admin-ajax.php') !== false, true);
+
+$GLOBALS['cfais_user_id'] = 7;
+$embed_one = skyphusion_ai_embed_count_step(1);
+expect('one short page finishes the count', $embed_one['state'], 'done');
+expect('the count reads the one post', $embed_one['seen'], 1);
+expect('the counted estimate matches the estimate', $embed_one['estimate']['neurons'], 21);
+expect('the count is stored', is_array(skyphusion_ai_embed_estimate_stored()), true);
+
 ob_start();
 skyphusion_ai_embed_render();
 $embed_html = (string) ob_get_clean();
 expect('the screen shows the neuron estimate', strpos($embed_html, '21 neurons') !== false, true);
 expect('the screen shows nine passages', strpos($embed_html, '9 passages') !== false, true);
 expect('the screen says the model was not called', strpos($embed_html, 'has not been called') !== false, true);
+
+// More posts than one page: the pages add up to the estimate over all posts.
+$embed_many = array();
+for ($embed_i = 0; $embed_i <= skyphusion_ai_embed_count_size(); $embed_i++) {
+    $embed_many[] = embed_post(5000 + $embed_i, 'Many ' . $embed_i, 'Short text number ' . $embed_i . '.');
+}
+$GLOBALS['skyphusion_ai_embed_posts'] = $embed_many;
+$embed_whole = skyphusion_ai_embed_estimate($embed_many, skyphusion_ai_embed_config());
+$embed_p1 = skyphusion_ai_embed_count_step(1);
+expect('a full page asks for the next page', $embed_p1['state'], 'more');
+expect('the next page is page 2', $embed_p1['next'], 2);
+expect('a full page reads one page of posts', $embed_p1['seen'], skyphusion_ai_embed_count_size());
+// While page 1 is the last counted page: a skipped page and another admin
+// both start again, and neither spoils this admin's count.
+expect('a skipped page starts again', skyphusion_ai_embed_count_step(3)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 8;
+expect('another admin cannot continue this count', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 7;
+$embed_p2 = skyphusion_ai_embed_count_step(2);
+expect('the short last page finishes the count', $embed_p2['state'], 'done');
+expect('the pages read every post', $embed_p2['seen'], count($embed_many));
+expect('the pages add up to the posts of one estimate', $embed_p2['estimate']['posts'], $embed_whole['posts']);
+expect('the pages add up to the passages of one estimate', $embed_p2['estimate']['passages'], $embed_whole['passages']);
+expect('the pages add up to the neurons of one estimate', $embed_p2['estimate']['neurons'], $embed_whole['neurons']);
+expect('a page after the finished count starts again', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+expect('a page past the end reads nothing', count(skyphusion_ai_embed_collect_page(9, skyphusion_ai_embed_count_size())), 0);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+
+$embed_js = (string) file_get_contents(dirname(__DIR__) . '/assets/js/embed-count.js');
+expect('the count script calls the count action', strpos($embed_js, 'skyphusion_ai_embed_count') !== false, true);
+expect('the count script sends the nonce', strpos($embed_js, '_ajax_nonce') !== false, true);
+expect('the count script sets text, not markup', strpos($embed_js, 'innerHTML') === false, true);
+$embed_screen_src = (string) file_get_contents(dirname(__DIR__) . '/includes/admin-screen.php');
+expect('the settings screen loads the count script', strpos($embed_screen_src, 'assets/js/embed-count.js') !== false, true);
+$embed_src_count = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php');
+expect('the count action is registered for admins only', strpos($embed_src_count, "'wp_ajax_skyphusion_ai_embed_count'") !== false && strpos($embed_src_count, 'wp_ajax_nopriv_skyphusion_ai_embed_count') === false, true);
 expect('the screen says the embeddings limit stays on this job', strpos($embed_html, 'does not stop the other tools') !== false, true);
 expect('the screen names the daily limit', strpos($embed_html, 'skyphusion_ai_embed_limit') !== false, true);
 expect('the screen makes no request', $GLOBALS['cfais_calls'], 0);
@@ -337,6 +416,142 @@ $embed_tax_out = $embed_tax;
 $embed_tax_out['tax_mode'] = 'exclude';
 expect('an excluded category stays out', skyphusion_ai_embed_included($embed_match, $embed_tax_out), false);
 expect('a different category stays when others are excluded', skyphusion_ai_embed_included($embed_other, $embed_tax_out), true);
+// Issue #198: the filter on posts the way WordPress returns them. These come
+// through skyphusion_ai_embed_load_page() as WP_Post objects, so no row carries
+// a categories or tags key. The terms live in the term API, by taxonomy, and a
+// product's are product_cat and product_tag.
+if (!class_exists('WP_Post')) {
+    // The public fields of core's WP_Post that the embed path reads. No
+    // categories or tags property: core's class has none either.
+    final class WP_Post
+    {
+        public $ID = 0;
+        public $post_title = '';
+        public $post_content = '';
+        public $post_excerpt = '';
+        public $post_status = 'publish';
+        public $post_password = '';
+        public $post_type = 'post';
+        public $post_date_gmt = '0000-00-00 00:00:00';
+        public function __construct($post)
+        {
+            foreach (get_object_vars($post) as $key => $value) {
+                $this->$key = $value;
+            }
+        }
+    }
+}
+if (!function_exists('get_posts')) {
+    function get_posts($args = array())
+    {
+        $GLOBALS['cfais_wp_get_posts_args'] = $args;
+        return isset($GLOBALS['cfais_wp_posts']) ? $GLOBALS['cfais_wp_posts'] : array();
+    }
+}
+if (!function_exists('get_the_terms')) {
+    function get_the_terms($post_id, $taxonomy)
+    {
+        $GLOBALS['cfais_wp_term_calls'][] = $taxonomy;
+        $rows = isset($GLOBALS['cfais_wp_terms'][(int) $post_id][$taxonomy]) ? $GLOBALS['cfais_wp_terms'][(int) $post_id][$taxonomy] : array();
+        if (array() === $rows) {
+            return false;
+        }
+        $terms = array();
+        foreach ($rows as $slug) {
+            $terms[] = (object) array('slug' => $slug, 'name' => ucfirst($slug), 'taxonomy' => $taxonomy);
+        }
+        return $terms;
+    }
+}
+function embed_wp_post($id, $type, $title)
+{
+    return new WP_Post((object) array(
+        'ID' => $id,
+        'post_title' => $title,
+        'post_content' => 'Body of ' . $title,
+        'post_type' => $type,
+    ));
+}
+$embed_saved_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
+unset($GLOBALS['skyphusion_ai_embed_posts']);
+$GLOBALS['cfais_wp_posts'] = array(
+    embed_wp_post(901, 'post', 'Linen post'),
+    embed_wp_post(902, 'post', 'Wool post'),
+    embed_wp_post(903, 'product', 'Linen shirt'),
+    embed_wp_post(904, 'product', 'Wool coat'),
+    embed_wp_post(905, 'post', 'Tagged post'),
+);
+$GLOBALS['cfais_wp_terms'] = array(
+    901 => array('category' => array('linen')),
+    902 => array('category' => array('wool')),
+    903 => array('product_cat' => array('linen')),
+    904 => array('product_cat' => array('wool')),
+    905 => array('post_tag' => array('linen')),
+);
+$embed_real_rows = array_values(skyphusion_ai_embed_load_page(array(901, 902, 903, 904, 905)));
+expect('real posts come back as rows', count($embed_real_rows), 5);
+expect('a real post row has no categories key', array_key_exists('categories', $embed_real_rows[0]), false);
+$embed_real_cfg = skyphusion_ai_embed_config();
+$embed_real_cfg['post_types'] = array('post', 'product');
+$embed_real_cfg['tax_mode'] = 'include';
+$embed_real_cfg['terms'] = array('linen');
+$embed_real_kept = array();
+foreach ($embed_real_rows as $embed_row) {
+    if (skyphusion_ai_embed_included($embed_row, $embed_real_cfg)) {
+        $embed_real_kept[] = (int) $embed_row['ID'];
+    }
+}
+expect('include keeps the real post in that category', in_array(901, $embed_real_kept, true), true);
+expect('include keeps the real product in that product category', in_array(903, $embed_real_kept, true), true);
+expect('include keeps the real post with that tag', in_array(905, $embed_real_kept, true), true);
+expect('include drops the real posts outside it', in_array(902, $embed_real_kept, true) || in_array(904, $embed_real_kept, true), false);
+$embed_real_cfg['tax_mode'] = 'exclude';
+$embed_real_left = array();
+foreach ($embed_real_rows as $embed_row) {
+    if (skyphusion_ai_embed_included($embed_row, $embed_real_cfg)) {
+        $embed_real_left[] = (int) $embed_row['ID'];
+    }
+}
+sort($embed_real_left);
+expect('exclude drops the real post, product and tagged post with that slug', $embed_real_left, array(902, 904));
+$embed_real_tally = skyphusion_ai_embed_estimate_tally($embed_real_rows, $embed_real_cfg);
+expect('the estimate counts only what the exclude filter keeps', $embed_real_tally['posts'], 2);
+$GLOBALS['cfais_wp_term_calls'] = array();
+$embed_real_cfg['tax_mode'] = 'none';
+skyphusion_ai_embed_included($embed_real_rows[0], $embed_real_cfg);
+expect('no filter reads no terms', $GLOBALS['cfais_wp_term_calls'], array());
+$embed_saved_opt = isset($GLOBALS['cfais_options']['skyphusion_ai_vectorize']) ? $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] : null;
+$GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = array_merge(is_array($embed_saved_opt) ? $embed_saved_opt : array(), array('tax_mode' => 'include', 'terms' => array('linen')));
+expect('the saved filter is on for the page check', skyphusion_ai_embed_config()['tax_mode'], 'include');
+skyphusion_ai_embed_collect_page(1, 100);
+expect('a count page loads the term cache when the filter is on', !empty($GLOBALS['cfais_wp_get_posts_args']['update_post_term_cache']), true);
+$GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = array_merge(is_array($embed_saved_opt) ? $embed_saved_opt : array(), array('tax_mode' => 'none'));
+skyphusion_ai_embed_collect_page(1, 100);
+expect('a count page skips the term cache when the filter is off', empty($GLOBALS['cfais_wp_get_posts_args']['update_post_term_cache']), true);
+if (null === $embed_saved_opt) {
+    unset($GLOBALS['cfais_options']['skyphusion_ai_vectorize']);
+} else {
+    $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = $embed_saved_opt;
+}
+// Issue #203: the names shown beside the vector and in the related list, on
+// the same real rows. No row carries a categories or tags key, so the names
+// come from the term API, and a product's from product_cat and product_tag.
+$GLOBALS['cfais_wp_terms'][903]['product_tag'] = array('summer');
+expect('the term line of a real product names its product category and tag', skyphusion_ai_embed_term_line($embed_real_rows[2]), 'Linen, Summer');
+expect('the term line of a real post names its category', skyphusion_ai_embed_term_line($embed_real_rows[0]), 'Linen');
+expect('the term line of a real post names its tag', skyphusion_ai_embed_term_line($embed_real_rows[4]), 'Linen');
+expect('the term line reads no core taxonomy for a product', skyphusion_ai_embed_term_line($embed_real_rows[3]), 'Wool');
+expect('the related terms of a real product name its product category and tag', skyphusion_ai_related_post_terms($embed_real_rows[2]), array('Linen', 'Summer'));
+expect('the related terms of a real post name its category', skyphusion_ai_related_post_terms($embed_real_rows[1]), array('Wool'));
+expect('a row that carries names keeps them for the related terms', skyphusion_ai_related_post_terms(array('ID' => 903, 'post_type' => 'product', 'categories' => array('Kept'))), array('Kept'));
+$GLOBALS['cfais_wp_term_calls'] = array();
+skyphusion_ai_embed_term_line($embed_real_rows[2]);
+expect('the term line of a product reads product_cat then product_tag', $GLOBALS['cfais_wp_term_calls'], array('product_cat', 'product_tag'));
+unset($GLOBALS['cfais_wp_posts'], $GLOBALS['cfais_wp_terms'], $GLOBALS['cfais_wp_term_calls'], $GLOBALS['cfais_wp_get_posts_args']);
+if (null !== $embed_saved_posts) {
+    $GLOBALS['skyphusion_ai_embed_posts'] = $embed_saved_posts;
+}
+
 $embed_image = embed_post(66, 'Pic', 'Image text', array('post_type' => 'attachment', 'post_status' => 'inherit'));
 expect('an image stays out until chosen', skyphusion_ai_embed_included($embed_image, skyphusion_ai_embed_config()), false);
 $embed_images_on = skyphusion_ai_embed_config();

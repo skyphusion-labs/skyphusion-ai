@@ -57,6 +57,12 @@ function cloudflare_ai_provider_embeddings($texts)
     if (!is_array($texts)) {
         return new WP_Error('cloudflare_ai_embeddings', __('Embeddings need a list of texts.', 'skyphusion-ai'));
     }
+	if ( function_exists( 'skyphusion_ai_cf_bridge_on' )
+		&& skyphusion_ai_cf_bridge_on()
+		&& function_exists( 'skyphusion_ai_bridge_embeddings' )
+	) {
+		return skyphusion_ai_bridge_embeddings( $texts );
+	}
     $settings = skyphusion_ai_settings();
     $key = cloudflare_ai_provider_connector_key();
     $credentials = cloudflare_ai_provider_resolve_credentials($key, $settings['account_id']);

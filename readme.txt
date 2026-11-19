@@ -124,7 +124,7 @@ Yes. The search results page lists the pages under the sentence. A page with an 
 
 = Does a saved post get an embedding? =
 
-The settings screen shows passages, neurons, days, and stored dimensions before the first run. Run the sync there, or run `wp skyphusion-ai embed run` when embeddings are on. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
+Press Count the posts on the settings screen to see passages, neurons, days, and stored dimensions before the first run. The count reads the posts in small steps, so a large store does not slow the screen. Run the sync there, or run `wp skyphusion-ai embed run` when embeddings are on. The sync goes in steps of 25 posts. WP-Cron runs the next step until the sync is done. A stopped sync starts again after the last post it did. A published post is stored in Cloudflare Vectorize. A post that did not change is not sent again. A password-protected post is left out. An editor can leave one post out. The embeddings daily limit does not stop the other tools. Deleting the plugin leaves the index in the Cloudflare account.
 
 = Can a member search the stored pages? =
 
@@ -152,7 +152,7 @@ Yes. Call `skyphusion_ai_translate()` with the text and a language code. See doc
 
 = Can the editor suggest internal links? =
 
-Yes. The post editor lists a page when its title is already in the post. It also lists a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. Outbound suggestions use the stored vectors. The editor does not call the model.
+Yes. The post editor lists a page when its title is already in the post. It also lists a return link when this title is already a whole word in another published post or page. Neither page is changed. The same screen lists published posts and pages that nothing links to. It reads the pages 100 at a time, so a large store does not load every page in one request. Both lists show the newest pages first. The site keeps the result of the check for pages that nothing links to for one day. When a page, its address, or the list of pages changes, the next screen checks again. Outbound suggestions use the stored vectors. The editor does not call the model.
 
 = Can I edit the prompts? =
 
