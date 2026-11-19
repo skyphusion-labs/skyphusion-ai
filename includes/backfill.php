@@ -833,10 +833,13 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 			$gateway = (string) $settings['gateway_id'];
 		}
 	}
-	$url = '';
+	$vision = ( 'vision' === (string) $feature ) || ( '' !== (string) $image );
+	$url    = '';
 	if ( is_array( $credentials ) ) {
 		$account = isset( $credentials['account_id'] ) ? (string) $credentials['account_id'] : '';
-		if ( function_exists( 'skyphusion_ai_gateway_text_url' ) ) {
+		if ( $vision && function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+			$url = cloudflare_ai_provider_run_url( $account, $gateway, $model );
+		} elseif ( function_exists( 'skyphusion_ai_gateway_text_url' ) ) {
 			$url = skyphusion_ai_gateway_text_url( $account, $gateway, $model );
 		} elseif ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
 			$url = cloudflare_ai_provider_run_url( $account, $gateway, $model );
@@ -862,7 +865,7 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 			)
 		);
 	}
-	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
+	if ( ! $vision && function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
 		$body = skyphusion_ai_gateway_apply_route( $body );
 	}
 	$headers = array(

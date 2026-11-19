@@ -585,6 +585,43 @@ expect('a new day writes the field', get_post_meta(84, skyphusion_ai_backfill_al
 $backfill_skips = skyphusion_ai_backfill_config();
 expect('a new day does not keep yesterday', skyphusion_ai_backfill_used($backfill_skips), 0);
 
+$backfill_route_id = array_key_exists('gateway_id', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['gateway_id'] : null;
+$backfill_route_was = array_key_exists('gateway_route', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['gateway_route'] : null;
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+$GLOBALS['cfais_stored']['gateway_route'] = 'route1';
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+$backfill_vision_model = skyphusion_ai_backfill_vision_model();
+skyphusion_ai_backfill_call('vision route check', $backfill_vision_model, 'vision', $backfill_image, true);
+$backfill_vision_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+$backfill_vision_raw = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+$backfill_vision_body = json_decode($backfill_vision_raw, true);
+$backfill_vision_sent = is_array($backfill_vision_body) && isset($backfill_vision_body['model']) ? (string) $backfill_vision_body['model'] : '';
+expect('a vision backfill keeps the model path', strpos($backfill_vision_url, '/workers-ai/' . $backfill_vision_model) !== false, true);
+expect('a vision backfill does not use the chat path', strpos($backfill_vision_url, '/chat/completions') === false, true);
+expect('a vision backfill does not set a dynamic model', strpos($backfill_vision_sent, 'dynamic/') === 0, false);
+expect('a vision backfill keeps the vision model', $backfill_vision_sent, $backfill_vision_model);
+backfill_clear();
+$GLOBALS['cfais_bodies'] = array($backfill_text);
+skyphusion_ai_backfill_call('text route check', skyphusion_ai_backfill_model(), 'text', '', true);
+$backfill_text_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+$backfill_text_raw = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+$backfill_text_body = json_decode($backfill_text_raw, true);
+$backfill_text_sent = is_array($backfill_text_body) && isset($backfill_text_body['model']) ? (string) $backfill_text_body['model'] : '';
+expect('a text backfill uses the chat path', strpos($backfill_text_url, '/v1/chat/completions') !== false, true);
+expect('a text backfill sets the dynamic model', $backfill_text_sent, 'dynamic/route1');
+if (null === $backfill_route_id) {
+    unset($GLOBALS['cfais_stored']['gateway_id']);
+} else {
+    $GLOBALS['cfais_stored']['gateway_id'] = $backfill_route_id;
+}
+if (null === $backfill_route_was) {
+    unset($GLOBALS['cfais_stored']['gateway_route']);
+} else {
+    $GLOBALS['cfais_stored']['gateway_route'] = $backfill_route_was;
+}
+
 update_option('skyphusion_ai_neurons', array(
     'day' => skyphusion_ai_neuron_today(),
     'neurons' => 10000,
