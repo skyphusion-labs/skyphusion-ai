@@ -49,8 +49,9 @@ function skyphusionAiGateway(env, feature, model, tool) {
 	return gateway;
 }
 
-async function skyphusionAiRun(env, model, input, feature, tool) {
-	const gateway = skyphusionAiGateway(env, feature, model, tool);
+async function skyphusionAiRun(env, model, input, feature, tool, logModel) {
+	const tagged = logModel == null ? model : logModel;
+	const gateway = skyphusionAiGateway(env, feature, tagged, tool);
 	if (!gateway) {
 		return env.AI.run(model, input);
 	}
@@ -95,7 +96,7 @@ export default {
 		const aiStream = await skyphusionAiRun(env, runModel, {
 			messages: [{ role: 'user', content: prompt }],
 			stream: true,
-		}, 'text', 'assistant');
+		}, 'text', 'assistant', model);
 		headers.set('content-type', 'text/event-stream; charset=utf-8');
 		headers.set('cache-control', 'no-cache');
 		return new Response(skyphusionAiEvents(aiStream, pages), { headers: headers });
@@ -306,7 +307,7 @@ async function skyphusionAiEarlier(env, model, turns, keepValue) {
 				role: 'user',
 				content: 'Summarize these earlier turns in one short block.\n' + older.join('\n'),
 			}],
-		}, 'text', 'assistant');
+		}, 'text', 'assistant', model);
 		block = skyphusionAiReplyText(summary);
 	}
 	const tail = latest.join('\n');
@@ -343,9 +344,10 @@ async function skyphusionAiBackfill(env) {
 	if (!job || job.state !== 'ready' || !job.prompt) {
 		return;
 	}
-	const result = await skyphusionAiRun(env, skyphusionAiTextModel(env, job.model || env.MODEL), {
+	const backfillModel = String(job.model || env.MODEL || '');
+	const result = await skyphusionAiRun(env, skyphusionAiTextModel(env, backfillModel), {
 		messages: [{ role: 'user', content: job.prompt }],
-	}, 'text', 'backfill');
+	}, 'text', 'backfill', backfillModel);
 	const text = result && typeof result.response === 'string' ? result.response : '';
 	if (!text) {
 		return;

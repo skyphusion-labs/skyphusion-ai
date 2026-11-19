@@ -113,6 +113,7 @@ expect('the script passes a gateway object', strpos($worker_script, 'gateway: ga
 expect('a blank gateway id skips the gateway option', strpos($worker_script, 'if (!gateway)') !== false, true);
 expect('text calls can use a dynamic route', strpos($worker_script, "'dynamic/' + route") !== false, true);
 expect('embeddings stay on the embedding model', strpos($worker_script, 'skyphusionAiRun(env, EMBED_MODEL') !== false, true);
+expect('the worker can log the Workers AI model', strpos($worker_script, 'logModel') !== false, true);
 expect('the script keeps the large embedding model', strpos($worker_script, '@cf/baai/bge-large-en-v1.5') !== false, true);
 expect('the script has an hourly task', strpos($worker_script, 'async scheduled') !== false, true);
 
