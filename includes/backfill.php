@@ -834,9 +834,13 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 		}
 	}
 	$url = '';
-	if ( function_exists( 'cloudflare_ai_provider_run_url' ) && is_array( $credentials ) ) {
+	if ( is_array( $credentials ) ) {
 		$account = isset( $credentials['account_id'] ) ? (string) $credentials['account_id'] : '';
-		$url     = cloudflare_ai_provider_run_url( $account, $gateway, $model );
+		if ( function_exists( 'skyphusion_ai_gateway_text_url' ) ) {
+			$url = skyphusion_ai_gateway_text_url( $account, $gateway, $model );
+		} elseif ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+			$url = cloudflare_ai_provider_run_url( $account, $gateway, $model );
+		}
 	}
 	$token = ( is_array( $credentials ) && isset( $credentials['token'] ) ) ? (string) $credentials['token'] : '';
 	if ( '' === $url || '' === $token || ! function_exists( 'wp_remote_post' ) ) {
@@ -858,12 +862,15 @@ function skyphusion_ai_backfill_call( $prompt, $model, $feature, $image, $regene
 			)
 		);
 	}
+	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
+		$body = skyphusion_ai_gateway_apply_route( $body );
+	}
 	$headers = array(
 		'Content-Type'  => 'application/json',
 		'Authorization' => 'Bearer ' . $token,
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, $feature, $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, $feature, $model, 'backfill' ) );
 	}
 	$response = wp_remote_post(
 		$url,

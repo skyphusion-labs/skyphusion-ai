@@ -1685,7 +1685,7 @@ function skyphusion_ai_neuron_embeddings_post( $url, $token, $body ) {
 		'Authorization' => 'Bearer ' . $token,
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'embeddings', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'embeddings', $model, 'embeddings' ) );
 	}
 	$response = wp_remote_post(
 		$url,

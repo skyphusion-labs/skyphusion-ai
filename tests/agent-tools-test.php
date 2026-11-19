@@ -90,9 +90,14 @@ expect('the later build still leaves checkout to a person', $agent_later['checko
 $agent_gateway = skyphusion_ai_agent_tools_gateway();
 expect('the gateway header is cf-aig-metadata', $agent_gateway['header'], 'cf-aig-metadata');
 expect(
-    'the gateway fields are site, feature, model, user, and version',
+    'the gateway fields are site, feature, model, user, and tool',
     $agent_gateway['fields'],
-    array('site', 'feature', 'model', 'user', 'version')
+    array('site', 'feature', 'model', 'user', 'tool')
+);
+expect(
+    'the gateway tools are the allowlist plus an empty unknown',
+    $agent_gateway['tools'],
+    array('assistant', 'translate', 'backfill', 'prompts', 'links', 'insights', 'embeddings', 'provider', '')
 );
 expect('five gateway entries is the maximum', $agent_gateway['max_entries'], 5);
 expect('count of gateway fields is the maximum', count($agent_gateway['fields']), 5);
