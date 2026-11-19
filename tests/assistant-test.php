@@ -85,8 +85,14 @@ expect('the answer is the model sentence', $assistant_hit['answer'], 'The shirt 
 expect('the citation is the stored title', $assistant_hit['citations'][0]['title'], 'Linen shirt');
 expect('the answer makes three requests', $GLOBALS['cfais_calls'], 3);
 $assistant_post_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
+$assistant_post_body = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
 $assistant_model = skyphusion_ai_assistant_model();
-expect('the text call uses the text model', strpos($assistant_post_url, $assistant_model) !== false, true);
+expect('the text call uses the chat path', strpos($assistant_post_url, '/v1/chat/completions') !== false, true);
+expect(
+    'the text call uses the text model',
+    strpos($assistant_post_body, trim((string) json_encode($assistant_model), '"')) !== false,
+    true
+);
 expect('the text url does not carry the token', strpos($assistant_post_url, $assistant_token) === false, true);
 $assistant_request_url = isset($GLOBALS['cfais_last_request']['url']) ? (string) $GLOBALS['cfais_last_request']['url'] : '';
 expect('retrieval stays on vectorize', strpos($assistant_request_url, '/vectorize/v2/') !== false, true);
@@ -277,8 +283,10 @@ assistant_clear();
 $GLOBALS['cfais_bodies'] = array('{"choices":[{"message":{"content":"unsafe"}}]}');
 $assistant_unsafe = skyphusion_ai_assistant_ask('linen', false);
 $assistant_guard_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
-expect('a question check uses the guard model', strpos($assistant_guard_url, 'llama-guard-3-8b') !== false, true);
-expect('a question check that is not safe skips the writing model', strpos($assistant_guard_url, skyphusion_ai_assistant_model()) === false, true);
+$assistant_guard_body = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+expect('a question check uses the chat path', strpos($assistant_guard_url, '/v1/chat/completions') !== false, true);
+expect('a question check uses the guard model', strpos($assistant_guard_body, 'llama-guard-3-8b') !== false, true);
+expect('a question check that is not safe skips the writing model', strpos($assistant_guard_body, skyphusion_ai_assistant_model()) === false, true);
 expect('a question check makes one request', $GLOBALS['cfais_calls'], 1);
 expect('a question check is counted on the assistant', skyphusion_ai_assistant_config()['day'], skyphusion_ai_neuron_today());
 expect('an unsafe question is blocked', $assistant_unsafe['state'], 'blocked');
@@ -286,8 +294,8 @@ skyphusion_ai_assistant_apply(array('safety' => ''));
 assistant_clear();
 $GLOBALS['cfais_bodies'] = array($assistant_embed, $assistant_embed, $assistant_query, $assistant_text);
 skyphusion_ai_assistant_ask('cotton', false);
-$assistant_plain_url = isset($GLOBALS['cfais_last_post']['url']) ? (string) $GLOBALS['cfais_last_post']['url'] : '';
-expect('the writing call does not use the guard model', strpos($assistant_plain_url, 'llama-guard') === false, true);
+$assistant_plain_body = isset($GLOBALS['cfais_last_post']['args']['body']) ? (string) $GLOBALS['cfais_last_post']['args']['body'] : '';
+expect('the writing call does not use the guard model', strpos($assistant_plain_body, 'llama-guard') === false, true);
 update_option('skyphusion_ai_assistant', array_merge(skyphusion_ai_assistant_config(), array(
     'enabled' => 1,
     'limit' => 10,

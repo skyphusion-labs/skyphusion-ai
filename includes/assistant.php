@@ -1029,8 +1029,8 @@ function skyphusion_ai_assistant_safety_ok( $question ) {
 		}
 	}
 	$url = '';
-	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
-		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
+	if ( function_exists( 'cloudflare_ai_provider_chat_url' ) ) {
+		$url = cloudflare_ai_provider_chat_url( $credentials['account_id'], $gateway );
 	}
 	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_remote_post' ) ) {
 		return false;
@@ -1049,12 +1049,15 @@ function skyphusion_ai_assistant_safety_ok( $question ) {
 			)
 		);
 	}
+	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
+		$body = skyphusion_ai_gateway_apply_route( $body );
+	}
 	$headers = array(
 		'Content-Type'  => 'application/json',
 		'Authorization' => 'Bearer ' . $credentials['token'],
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model, 'assistant' ) );
 	}
 	$before = 0;
 	if ( function_exists( 'skyphusion_ai_neuron_state' ) ) {
@@ -1583,6 +1586,7 @@ function skyphusion_ai_assistant_stream_walk( $lines, &$carry, &$pieces, $write 
 /**
  * Workers AI request for one streamed answer.
  *
+ * The URL is the chat path, the same path the AI Client uses.
  * An empty gateway id stays on api.cloudflare.com. A saved gateway id
  * uses the gateway host. The token is a header, not part of the URL.
  *
@@ -1606,8 +1610,8 @@ function skyphusion_ai_assistant_stream_spec( $prompt ) {
 		}
 	}
 	$url = '';
-	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
-		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
+	if ( function_exists( 'cloudflare_ai_provider_chat_url' ) ) {
+		$url = cloudflare_ai_provider_chat_url( $credentials['account_id'], $gateway );
 	}
 	if ( '' === $url || '' === $credentials['token'] || ! function_exists( 'wp_json_encode' ) ) {
 		return new WP_Error( 'skyphusion_ai_assistant', __( 'The assistant could not answer.', 'skyphusion-ai' ) );
@@ -1629,13 +1633,16 @@ function skyphusion_ai_assistant_stream_spec( $prompt ) {
 	if ( ! is_array( $body ) ) {
 		$body = array();
 	}
+	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
+		$body = skyphusion_ai_gateway_apply_route( $body );
+	}
 	$body['stream'] = true;
 	$headers        = array(
 		'Content-Type'  => 'application/json',
 		'Authorization' => 'Bearer ' . $credentials['token'],
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model, 'assistant' ) );
 	}
 	$encoded = wp_json_encode( $body );
 	if ( ! is_string( $encoded ) ) {

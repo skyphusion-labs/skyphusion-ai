@@ -152,7 +152,8 @@ function activity_miss_logged($label, $before, $feature, $model, $token, $sentin
     }
     expect($label . ' sent the text', strpos($posted, $sentinel) !== false, true);
     expect($label . ' sent the bearer', $auth, 'Bearer ' . $token);
-    expect($label . ' called the model', strpos($url, $model) !== false, true);
+    $encoded_model = trim((string) json_encode((string) $model), '"');
+    expect($label . ' called the model', strpos($url, $model) !== false || strpos($posted, $encoded_model) !== false, true);
     expect($label . ' url omits the bearer', strpos($url, $token) === false, true);
 }
 

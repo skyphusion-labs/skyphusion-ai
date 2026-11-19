@@ -137,6 +137,101 @@ function skyphusion_ai_gateway_route() {
 }
 
 /**
+ * Model id for a saved dynamic route, or an empty string.
+ *
+ * Both the gateway id and the route must be set.
+ * A refused gateway uses the direct API, so this stays empty.
+ * Translation, image, speech, and embeddings do not use this id.
+ *
+ * @return string
+ */
+function skyphusion_ai_gateway_dynamic_model() {
+	if ( ! function_exists( 'skyphusion_ai_settings' ) ) {
+		return '';
+	}
+	$settings = skyphusion_ai_settings();
+	$gateway  = '';
+	if ( is_array( $settings ) && isset( $settings['gateway_id'] ) ) {
+		$gateway = (string) $settings['gateway_id'];
+	}
+	if ( '' === $gateway ) {
+		return '';
+	}
+	$route = skyphusion_ai_gateway_route();
+	if ( '' === $route ) {
+		return '';
+	}
+	return 'dynamic/' . $route;
+}
+
+/**
+ * Set the dynamic route model on a chat body.
+ *
+ * The body is unchanged when no route is saved.
+ *
+ * @param mixed $body Request body.
+ * @return mixed
+ */
+function skyphusion_ai_gateway_apply_route( $body ) {
+	if ( ! is_array( $body ) ) {
+		return $body;
+	}
+	$dynamic = skyphusion_ai_gateway_dynamic_model();
+	if ( '' === $dynamic ) {
+		return $body;
+	}
+	$body['model'] = $dynamic;
+	return $body;
+}
+
+/**
+ * URL for a text or chat call.
+ *
+ * A saved gateway and route use the chat path.
+ * Any other call keeps the Workers AI model path.
+ *
+ * @param string $account_id Account id.
+ * @param string $gateway_id Gateway id.
+ * @param string $model      Model id.
+ * @return string
+ */
+function skyphusion_ai_gateway_text_url( $account_id, $gateway_id, $model ) {
+	if ( '' !== skyphusion_ai_gateway_dynamic_model() && function_exists( 'cloudflare_ai_provider_chat_url' ) ) {
+		return cloudflare_ai_provider_chat_url( $account_id, $gateway_id );
+	}
+	if ( ! function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+		return '';
+	}
+	return cloudflare_ai_provider_run_url( $account_id, $gateway_id, $model );
+}
+
+/**
+ * Tool name that may appear in the log.
+ *
+ * An unknown name is an empty string. The prompt is not a tool name.
+ *
+ * @param string $tool Requested tool.
+ * @return string
+ */
+function skyphusion_ai_gateway_tool( $tool ) {
+	$allowed = array(
+		'assistant',
+		'translate',
+		'backfill',
+		'prompts',
+		'links',
+		'insights',
+		'embeddings',
+		'provider',
+	);
+	$tool    = (string) $tool;
+	if ( in_array( $tool, $allowed, true ) ) {
+		return $tool;
+	}
+	return '';
+}
+
+/**
  * Option that stores the fallback expiry.
  *
  * @return string
@@ -231,25 +326,24 @@ function skyphusion_ai_gateway_note( $url, $feature, $response ) {
 /**
  * Log fields. The prompt is not one of them.
  *
+ * Cloudflare allows five metadata entries. The plugin version stays out of this header.
+ *
  * @param string $feature Feature name.
  * @param string $model   Model id.
- * @return array{site: string, feature: string, model: string, user: string, version: string}
+ * @param string $tool    Tool name.
+ * @return array{site: string, feature: string, model: string, user: string, tool: string}
  */
-function skyphusion_ai_gateway_metadata( $feature, $model ) {
+function skyphusion_ai_gateway_metadata( $feature, $model, $tool = '' ) {
 	$clean_model = '';
 	if ( function_exists( 'cloudflare_ai_provider_model_id' ) ) {
 		$clean_model = cloudflare_ai_provider_model_id( $model );
-	}
-	$version = '0.6.3';
-	if ( defined( 'SKYPHUSION_AI_VERSION' ) ) {
-		$version = (string) SKYPHUSION_AI_VERSION;
 	}
 	return array(
 		'site'    => skyphusion_ai_gateway_site(),
 		'feature' => skyphusion_ai_gateway_feature( $feature ),
 		'model'   => $clean_model,
 		'user'    => skyphusion_ai_gateway_user(),
-		'version' => $version,
+		'tool'    => skyphusion_ai_gateway_tool( $tool ),
 	);
 }
 
@@ -259,16 +353,17 @@ function skyphusion_ai_gateway_metadata( $feature, $model ) {
  * @param string $url     Request URL.
  * @param string $feature Feature name.
  * @param string $model   Model id.
+ * @param string $tool    Tool name.
  * @return array<string, string>
  */
-function skyphusion_ai_gateway_metadata_header( $url, $feature, $model ) {
+function skyphusion_ai_gateway_metadata_header( $url, $feature, $model, $tool = '' ) {
 	if ( ! skyphusion_ai_gateway_host( $url ) ) {
 		return array();
 	}
 	if ( ! function_exists( 'wp_json_encode' ) ) {
 		return array();
 	}
-	$encoded = wp_json_encode( skyphusion_ai_gateway_metadata( $feature, $model ) );
+	$encoded = wp_json_encode( skyphusion_ai_gateway_metadata( $feature, $model, $tool ) );
 	if ( ! is_string( $encoded ) || '' === $encoded ) {
 		return array();
 	}
@@ -308,7 +403,7 @@ function skyphusion_ai_gateway_transport_headers( $url, $token ) {
 		'Content-Type'  => 'application/json',
 		'Authorization' => 'Bearer ' . $token,
 	);
-	return array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, $feature, $model ) );
+	return array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, $feature, $model, 'provider' ) );
 }
 
 /**
@@ -413,7 +508,12 @@ function skyphusion_ai_field_gateway_route() {
 		'<input type="text" class="regular-text code" name="skyphusion_ai_settings[gateway_route]" value="%s" maxlength="64" spellcheck="false" autocomplete="off" />',
 		esc_attr( skyphusion_ai_gateway_route() )
 	);
-	echo '<p class="description">' . esc_html__( 'An image failure on this route does not switch the site to the direct API.', 'skyphusion-ai' ) . '</p>';
+	echo '<p class="description">';
+	echo esc_html__( 'Text and chat calls use this route on the chat path.', 'skyphusion-ai' ) . ' ';
+	echo esc_html__( 'The model id is dynamic/ plus this route.', 'skyphusion-ai' ) . ' ';
+	echo esc_html__( 'Image, speech, and embeddings stay on the model path.', 'skyphusion-ai' ) . ' ';
+	echo esc_html__( 'An image failure on this route does not switch the site to the direct API.', 'skyphusion-ai' );
+	echo '</p>';
 }
 
 /**

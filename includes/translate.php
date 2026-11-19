@@ -267,7 +267,7 @@ function skyphusion_ai_translate( $text, $target, $source = '', $regenerate = fa
 		'Authorization' => 'Bearer ' . $token,
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model, 'translate' ) );
 	}
 	$response = wp_remote_post(
 		$url,

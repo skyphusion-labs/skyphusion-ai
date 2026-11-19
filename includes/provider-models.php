@@ -228,6 +228,9 @@ function cloudflare_ai_provider_post(AbstractApiBasedModel $model, $url, array $
 	if ( '' !== $skyphusion_ai_neuron_closed ) {
 		throw new RuntimeException( esc_html( $skyphusion_ai_neuron_closed ) );
 	}
+	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) && is_string( $url ) && false !== strpos( $url, '/chat/completions' ) ) {
+		$payload = skyphusion_ai_gateway_apply_route( $payload );
+	}
     $key = '';
     try {
         $auth = $model->getRequestAuthentication();

@@ -102,10 +102,13 @@ AI Gateway can tag a request with the header `cf-aig-metadata`.
 Values are strings, numbers, or booleans.
 Five entries is the maximum.
 Keys that start with `cf.` are reserved.
-This plugin sends the site, the feature, the model, the user id, and the plugin version.
+This plugin sends the site, the feature, the model, the user id, and the tool.
+The tool is a short name such as assistant or translate.
+An unknown tool is an empty string.
+The plugin version stays out of this header.
 The user value is the numeric user id, or empty for a visitor.
 The plugin does not send the prompt.
 The plugin adds the header only on `gateway.ai.cloudflare.com`.
 The plugin does not add the header on a direct `api.cloudflare.com` call.
-The docs were updated on 2026-09-24.
+The docs were updated on 2026-11-19.
 Source: https://developers.cloudflare.com/ai-gateway/observability/custom-metadata/

@@ -37,7 +37,8 @@ expect('a prompt is not kept as the feature', $cfais_gateway_visitor['feature'],
 expect('a prompt is not kept as the model', $cfais_gateway_visitor['model'], '');
 expect('the site drops the user, the query, and the fragment', $cfais_gateway_visitor['site'], 'https://shop.example/store');
 expect('the log has five fields', count($cfais_gateway_visitor), 5);
-expect('the log names the plugin version', $cfais_gateway_visitor['version'], defined('SKYPHUSION_AI_VERSION') ? (string) SKYPHUSION_AI_VERSION : '0.6.3');
+expect('an unknown tool is an empty string', $cfais_gateway_visitor['tool'], '');
+expect('the log does not name the plugin version', isset($cfais_gateway_visitor['version']), false);
 expect('translation is logged as text', skyphusion_ai_gateway_feature('translate'), 'text');
 
 $GLOBALS['cfais_user_id'] = 15;
@@ -55,7 +56,7 @@ $cfais_gateway_json = isset($cfais_gateway_header['cf-aig-metadata']) ? $cfais_g
 $cfais_gateway_decoded = json_decode((string) $cfais_gateway_json, true);
 $cfais_gateway_keys = is_array($cfais_gateway_decoded) ? array_keys($cfais_gateway_decoded) : array();
 sort($cfais_gateway_keys);
-expect('the header names the five fields', $cfais_gateway_keys, array('feature', 'model', 'site', 'user', 'version'));
+expect('the header names the five fields', $cfais_gateway_keys, array('feature', 'model', 'site', 'tool', 'user'));
 expect('the header does not carry the prompt', strpos((string) $cfais_gateway_json, $cfais_gateway_prompt), false);
 expect('the header does not carry the token', strpos((string) $cfais_gateway_json, $cfais_gateway_token), false);
 foreach ($cfais_gateway_keys as $cfais_gateway_key) {
@@ -78,6 +79,8 @@ $cfais_gateway_transport_json = isset($cfais_gateway_transport['cf-aig-metadata'
 $cfais_gateway_transport_meta = json_decode((string) $cfais_gateway_transport_json, true);
 expect('the client call tags the text feature', is_array($cfais_gateway_transport_meta) && $cfais_gateway_transport_meta['feature'] === 'text', true);
 expect('the client call tags the model', is_array($cfais_gateway_transport_meta) && $cfais_gateway_transport_meta['model'] === '@cf/meta/llama-3.3-70b-instruct-fp8-fast', true);
+expect('the client call tags the provider tool', is_array($cfais_gateway_transport_meta) && $cfais_gateway_transport_meta['tool'] === 'provider', true);
+expect('the client call does not send a version key', is_array($cfais_gateway_transport_meta) && isset($cfais_gateway_transport_meta['version']), false);
 expect('the client tag does not carry the prompt', strpos((string) $cfais_gateway_transport_json, $cfais_gateway_prompt), false);
 $cfais_gateway_direct_transport = skyphusion_ai_gateway_transport_headers($cfais_gateway_direct, $cfais_gateway_token);
 expect('a direct client call has no gateway tag', isset($cfais_gateway_direct_transport['cf-aig-metadata']), false);
@@ -95,6 +98,7 @@ $cfais_gateway_embed_headers = is_array($cfais_gateway_embed) && isset($cfais_ga
 $cfais_gateway_embed_json = isset($cfais_gateway_embed_headers['cf-aig-metadata']) ? $cfais_gateway_embed_headers['cf-aig-metadata'] : '';
 $cfais_gateway_embed_meta = json_decode((string) $cfais_gateway_embed_json, true);
 expect('an embeddings call through the gateway is tagged', is_array($cfais_gateway_embed_meta) && $cfais_gateway_embed_meta['feature'] === 'embeddings', true);
+expect('an embeddings call tags the embeddings tool', is_array($cfais_gateway_embed_meta) && $cfais_gateway_embed_meta['tool'] === 'embeddings', true);
 expect('the embeddings tag does not carry the text', strpos((string) $cfais_gateway_embed_json, $cfais_gateway_embed_text), false);
 expect('the embeddings body still carries the text', strpos((string) $cfais_gateway_embed['args']['body'], $cfais_gateway_embed_text) !== false, true);
 
@@ -179,6 +183,99 @@ if (null === $cfais_gateway_route_was) {
     $GLOBALS['cfais_stored']['gateway_route'] = $cfais_gateway_route_was;
 }
 unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+
+$cfais_gateway_id_was = array_key_exists('gateway_id', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['gateway_id'] : null;
+$cfais_gateway_route_now = array_key_exists('gateway_route', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['gateway_route'] : null;
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+unset($GLOBALS['cfais_stored']['gateway_route']);
+expect('a blank route has no dynamic model', skyphusion_ai_gateway_dynamic_model(), '');
+$GLOBALS['cfais_stored']['gateway_route'] = 'bad route';
+expect('an invalid route is not saved by the reader', skyphusion_ai_gateway_route(), '');
+expect('an invalid route has no dynamic model', skyphusion_ai_gateway_dynamic_model(), '');
+$GLOBALS['cfais_stored']['gateway_route'] = '../escape';
+expect('a route with a slash is rejected', skyphusion_ai_gateway_route(), '');
+$GLOBALS['cfais_stored']['gateway_id'] = '';
+$GLOBALS['cfais_stored']['gateway_route'] = 'route1';
+expect('a route without a gateway id stays off', skyphusion_ai_gateway_dynamic_model(), '');
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+expect('a saved route builds the dynamic model', skyphusion_ai_gateway_dynamic_model(), 'dynamic/route1');
+$cfais_gateway_text_url = skyphusion_ai_gateway_text_url(
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'store',
+    '@cf/meta/llama-3.3-70b-instruct-fp8-fast'
+);
+expect('a saved route uses the chat path', $cfais_gateway_text_url, $cfais_gateway_chat);
+$cfais_gateway_routed = skyphusion_ai_gateway_apply_route(array(
+    'model' => '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
+    'messages' => array(array('role' => 'user', 'content' => $cfais_gateway_prompt)),
+));
+expect('a saved route sets the request model', $cfais_gateway_routed['model'], 'dynamic/route1');
+expect('a saved route does not put the prompt in the model', $cfais_gateway_routed['model'] === $cfais_gateway_prompt, false);
+$cfais_gateway_image = cloudflare_ai_provider_run_url(
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'store',
+    '@cf/black-forest-labs/flux-1-schnell'
+);
+expect('an image call keeps the model path', strpos($cfais_gateway_image, '/workers-ai/@cf/black-forest-labs/flux-1-schnell') !== false, true);
+expect('an image call does not use the dynamic model', strpos($cfais_gateway_image, 'dynamic/') === false, true);
+$cfais_gateway_speech = cloudflare_ai_provider_run_url(
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'store',
+    '@cf/deepgram/aura-1'
+);
+expect('a speech call keeps the model path', strpos($cfais_gateway_speech, '/workers-ai/@cf/deepgram/aura-1') !== false, true);
+$cfais_gateway_embed_url = cloudflare_ai_provider_run_url(
+    'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+    'store',
+    '@cf/baai/bge-large-en-v1.5'
+);
+expect('an embeddings call keeps the model path', strpos($cfais_gateway_embed_url, '/workers-ai/@cf/baai/bge-large-en-v1.5') !== false, true);
+$cfais_gateway_translate = (string) file_get_contents(dirname(__DIR__) . '/includes/translate.php');
+expect('translation stays on the model path', strpos($cfais_gateway_translate, 'skyphusion_ai_gateway_text_url') === false, true);
+expect('translation still builds a run url', strpos($cfais_gateway_translate, 'cloudflare_ai_provider_run_url') !== false, true);
+expect('translation names the translate tool', strpos($cfais_gateway_translate, "'translate'") !== false, true);
+$cfais_gateway_tool_files = array(
+    'includes/assistant.php' => 'assistant',
+    'includes/backfill.php' => 'backfill',
+    'includes/prompts.php' => 'prompts',
+    'includes/links.php' => 'links',
+    'includes/insights.php' => 'insights',
+    'includes/budget.php' => 'embeddings',
+    'includes/gateway.php' => 'provider',
+);
+foreach ($cfais_gateway_tool_files as $cfais_gateway_tool_file => $cfais_gateway_tool_name) {
+    $cfais_gateway_tool_src = (string) file_get_contents(dirname(__DIR__) . '/' . $cfais_gateway_tool_file);
+    expect(
+        $cfais_gateway_tool_file . ' passes the ' . $cfais_gateway_tool_name . ' tool',
+        strpos($cfais_gateway_tool_src, "'" . $cfais_gateway_tool_name . "'") !== false
+            && strpos($cfais_gateway_tool_src, 'skyphusion_ai_gateway_metadata_header') !== false,
+        true
+    );
+}
+$cfais_gateway_known = skyphusion_ai_gateway_metadata('text', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'assistant');
+expect('assistant is a metadata tool', $cfais_gateway_known['tool'], 'assistant');
+expect('a known tool still leaves five fields', count($cfais_gateway_known), 5);
+$cfais_gateway_unknown = skyphusion_ai_gateway_metadata('text', '@cf/meta/llama-3.3-70b-instruct-fp8-fast', 'version');
+expect('version is not a tool name', $cfais_gateway_unknown['tool'], '');
+expect('version is not a sixth field', isset($cfais_gateway_unknown['version']), false);
+$GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] = time() + 3600;
+expect('a refused gateway does not use the dynamic model', skyphusion_ai_gateway_dynamic_model(), '');
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+$cfais_gateway_help = (string) file_get_contents(dirname(__DIR__) . '/includes/gateway.php');
+expect('the route help names the chat path', strpos($cfais_gateway_help, 'Text and chat calls use this route on the chat path.') !== false, true);
+expect('the route help names the dynamic model', strpos($cfais_gateway_help, 'The model id is dynamic/ plus this route.') !== false, true);
+expect('the route help keeps image, speech, and embeddings on the model path', strpos($cfais_gateway_help, 'Image, speech, and embeddings stay on the model path.') !== false, true);
+if (null === $cfais_gateway_id_was) {
+    unset($GLOBALS['cfais_stored']['gateway_id']);
+} else {
+    $GLOBALS['cfais_stored']['gateway_id'] = $cfais_gateway_id_was;
+}
+if (null === $cfais_gateway_route_now) {
+    unset($GLOBALS['cfais_stored']['gateway_route']);
+} else {
+    $GLOBALS['cfais_stored']['gateway_route'] = $cfais_gateway_route_now;
+}
+
 $cfais_gateway_models = file_get_contents(dirname(__DIR__) . '/includes/models.php');
 expect('the account model list does not add a gateway tag', strpos((string) $cfais_gateway_models, 'cf-aig-metadata'), false);
 $cfais_gateway_settings = file_get_contents(dirname(__DIR__) . '/includes/settings.php');

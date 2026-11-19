@@ -251,7 +251,18 @@ function skyphusion_ai_agent_tools_later() {
 function skyphusion_ai_agent_tools_gateway() {
 	return array(
 		'header'           => 'cf-aig-metadata',
-		'fields'           => array( 'site', 'feature', 'model', 'user', 'version' ),
+		'fields'           => array( 'site', 'feature', 'model', 'user', 'tool' ),
+		'tools'            => array(
+			'assistant',
+			'translate',
+			'backfill',
+			'prompts',
+			'links',
+			'insights',
+			'embeddings',
+			'provider',
+			'',
+		),
 		'types'            => array( 'string', 'number', 'boolean' ),
 		'max_entries'      => 5,
 		'reserved_prefix'  => 'cf.',
@@ -260,6 +271,6 @@ function skyphusion_ai_agent_tools_gateway() {
 		'host'             => 'gateway.ai.cloudflare.com',
 		'direct_host'      => 'api.cloudflare.com',
 		'header_on_direct' => false,
-		'docs_updated'     => '2026-09-24',
+		'docs_updated'     => '2026-11-19',
 	);
 }

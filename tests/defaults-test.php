@@ -129,6 +129,30 @@ $GLOBALS['cfais_stored']['cache'] = '1';
 $defaults_gateway = 'https://gateway.ai.cloudflare.com/v1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/store/workers-ai';
 $defaults_headers = skyphusion_ai_gateway_metadata_header($defaults_gateway, 'text', skyphusion_ai_defaults_writing_id());
 expect('caching on sets the gateway cache header', isset($defaults_headers['cf-aig-cache-ttl']) ? $defaults_headers['cf-aig-cache-ttl'] : '', '3600');
+$defaults_spec_gateway = array_key_exists('gateway_id', $GLOBALS['cfais_stored']) ? $GLOBALS['cfais_stored']['gateway_id'] : null;
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+$defaults_spec = skyphusion_ai_assistant_stream_spec('cache check');
+expect('the assistant spec is a request', is_array($defaults_spec), true);
+expect(
+    'the assistant spec uses the chat path',
+    is_array($defaults_spec) && false !== strpos((string) $defaults_spec['url'], '/v1/chat/completions'),
+    true
+);
+expect(
+    'the assistant spec sets the cache header',
+    is_array($defaults_spec) && isset($defaults_spec['headers']['cf-aig-cache-ttl']) ? $defaults_spec['headers']['cf-aig-cache-ttl'] : '',
+    '3600'
+);
+expect(
+    'the assistant spec sets metadata',
+    is_array($defaults_spec) && isset($defaults_spec['headers']['cf-aig-metadata']),
+    true
+);
+if (null === $defaults_spec_gateway) {
+    unset($GLOBALS['cfais_stored']['gateway_id']);
+} else {
+    $GLOBALS['cfais_stored']['gateway_id'] = $defaults_spec_gateway;
+}
 $defaults_direct = skyphusion_ai_gateway_metadata_header('https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/x', 'text', 'x');
 expect('a direct call still has no cache header', $defaults_direct, array());
 

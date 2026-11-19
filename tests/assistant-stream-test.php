@@ -88,13 +88,14 @@ $GLOBALS['cfais_bodies'] = array($stream_embed, $stream_embed, $stream_query, $s
 $stream_hit = skyphusion_ai_assistant_ask('linen', false);
 $stream_body = json_decode((string) $GLOBALS['cfais_last_post']['args']['body'], true);
 $stream_model = skyphusion_ai_assistant_model();
-$stream_direct = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/run/' . $stream_model;
+$stream_direct = 'https://api.cloudflare.com/client/v4/accounts/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/ai/v1/chat/completions';
 expect('a blank url still answers in three requests', $GLOBALS['cfais_calls'], 3);
 expect('the answer request sets stream true', is_array($stream_body) && true === $stream_body['stream'], true);
-expect('an empty gateway id uses the Workers AI URL', $GLOBALS['cfais_last_post']['url'], $stream_direct);
+expect('an empty gateway id keeps the assistant model', is_array($stream_body) && $stream_body['model'] === $stream_model, true);
+expect('an empty gateway id uses the chat URL', $GLOBALS['cfais_last_post']['url'], $stream_direct);
 expect('an empty gateway id does not use the gateway host', strpos((string) $GLOBALS['cfais_last_post']['url'], 'gateway.ai.cloudflare.com') === false, true);
 expect('an empty gateway id does not use the search host', strpos((string) $GLOBALS['cfais_last_post']['url'], 'search.ai.cloudflare.com') === false, true);
-expect('an empty gateway id does not use chat completions', strpos((string) $GLOBALS['cfais_last_post']['url'], '/ai/v1/chat/completions') === false, true);
+expect('an empty gateway id uses chat completions', strpos((string) $GLOBALS['cfais_last_post']['url'], '/ai/v1/chat/completions') !== false, true);
 expect('the direct url does not carry the token', strpos((string) $GLOBALS['cfais_last_post']['url'], $stream_token) === false, true);
 expect('the direct body does not carry the token', strpos((string) $GLOBALS['cfais_last_post']['args']['body'], $stream_token) === false, true);
 
@@ -106,11 +107,33 @@ stream_clear();
 $GLOBALS['cfais_bodies'] = array($stream_embed, $stream_embed, $stream_query, $stream_answer);
 skyphusion_ai_assistant_ask('linen', false);
 $stream_via = json_decode((string) $GLOBALS['cfais_last_post']['args']['body'], true);
-$stream_gateway = 'https://gateway.ai.cloudflare.com/v1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/shop-gw/workers-ai/' . $stream_model;
-expect('a saved gateway uses the gateway URL', $GLOBALS['cfais_last_post']['url'], $stream_gateway);
+$stream_gateway = 'https://gateway.ai.cloudflare.com/v1/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/shop-gw/workers-ai/v1/chat/completions';
+$stream_headers = isset($GLOBALS['cfais_last_post']['args']['headers']) ? $GLOBALS['cfais_last_post']['args']['headers'] : array();
+$stream_meta = array();
+if (isset($stream_headers['cf-aig-metadata'])) {
+    $stream_decoded_meta = json_decode((string) $stream_headers['cf-aig-metadata'], true);
+    if (is_array($stream_decoded_meta)) {
+        $stream_meta = $stream_decoded_meta;
+    }
+}
+expect('a saved gateway uses the gateway chat URL', $GLOBALS['cfais_last_post']['url'], $stream_gateway);
 expect('a saved gateway does not use api.cloudflare.com', strpos((string) $GLOBALS['cfais_last_post']['url'], 'api.cloudflare.com') === false, true);
 expect('a saved gateway still sets stream true', is_array($stream_via) && true === $stream_via['stream'], true);
+expect('a saved gateway keeps the assistant model', is_array($stream_via) && $stream_via['model'] === $stream_model, true);
+expect('a saved gateway tags the assistant tool', isset($stream_meta['tool']) ? $stream_meta['tool'] : '', 'assistant');
+expect('a saved gateway does not send the plugin version', isset($stream_meta['version']), false);
 expect('a saved gateway still makes three requests', $GLOBALS['cfais_calls'], 3);
+
+$GLOBALS['cfais_stored']['gateway_route'] = 'route1';
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+stream_clear();
+$GLOBALS['cfais_bodies'] = array($stream_embed, $stream_embed, $stream_query, $stream_answer);
+skyphusion_ai_assistant_ask('linen', false);
+$stream_route = json_decode((string) $GLOBALS['cfais_last_post']['args']['body'], true);
+expect('a saved route stays on the chat path', $GLOBALS['cfais_last_post']['url'], $stream_gateway);
+expect('a saved route sets the dynamic model', is_array($stream_route) && $stream_route['model'] === 'dynamic/route1', true);
+expect('a saved route still sets stream true', is_array($stream_route) && true === $stream_route['stream'], true);
+unset($GLOBALS['cfais_stored']['gateway_route']);
 
 $GLOBALS['cfais_settings']['gateway_id'] = 'Shop GW';
 $GLOBALS['cfais_stored']['gateway_id'] = 'Shop GW';
@@ -277,6 +300,8 @@ expect('the PHP form is back', strpos($stream_blank_again, 'skyphusion-ai-assist
 
 $stream_php = (string) file_get_contents(dirname(__DIR__) . '/includes/assistant.php');
 expect('the blank path emits each piece', strpos($stream_php, 'skyphusion_ai_assistant_stream_emit') !== false, true);
+expect('the assistant uses the chat url helper', strpos($stream_php, 'cloudflare_ai_provider_chat_url') !== false, true);
+expect('the assistant does not use the run url helper', strpos($stream_php, 'cloudflare_ai_provider_run_url') === false, true);
 expect('the assistant does not add to cart', strpos($stream_php, 'add_to_cart') === false, true);
 expect('the assistant does not look up an order', strpos($stream_php, 'wc_get_order') === false, true);
 expect('the assistant does not touch the cart object', strpos($stream_php, 'WC()->cart') === false, true);

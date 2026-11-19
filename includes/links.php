@@ -880,7 +880,9 @@ function skyphusion_ai_link_ask( $post_id, $question ) {
 		}
 	}
 	$url = '';
-	if ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
+	if ( function_exists( 'skyphusion_ai_gateway_text_url' ) ) {
+		$url = skyphusion_ai_gateway_text_url( $credentials['account_id'], $gateway, $model );
+	} elseif ( function_exists( 'cloudflare_ai_provider_run_url' ) ) {
 		$url = cloudflare_ai_provider_run_url( $credentials['account_id'], $gateway, $model );
 	}
 	$failed = __( 'The link chat could not run.', 'skyphusion-ai' );
@@ -901,12 +903,15 @@ function skyphusion_ai_link_ask( $post_id, $question ) {
 			)
 		);
 	}
+	if ( function_exists( 'skyphusion_ai_gateway_apply_route' ) ) {
+		$body = skyphusion_ai_gateway_apply_route( $body );
+	}
 	$headers = array(
 		'Content-Type'  => 'application/json',
 		'Authorization' => 'Bearer ' . $credentials['token'],
 	);
 	if ( function_exists( 'skyphusion_ai_gateway_metadata_header' ) ) {
-		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model ) );
+		$headers = array_merge( $headers, skyphusion_ai_gateway_metadata_header( $url, 'text', $model, 'links' ) );
 	}
 	$response = wp_remote_post(
 		$url,
