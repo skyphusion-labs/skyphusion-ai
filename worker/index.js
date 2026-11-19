@@ -5,8 +5,57 @@
  * A chat of more than ten turns sends one short summary of the older turns.
  * The summary is one text call. The page still shows every turn.
  * This file does not store the chat and does not read an IP address.
+ * A saved gateway id is passed on each model call.
+ * A blank gateway id leaves the call on the AI binding.
+ * Vectorize stays on the Vectorize binding.
  */
 const EMBED_MODEL = '@cf/baai/bge-large-en-v1.5';
+
+function skyphusionAiTextModel(env, model) {
+	const id = String(env.GATEWAY_ID || '').trim();
+	const route = String(env.GATEWAY_ROUTE || '').trim();
+	if (id && route) {
+		return 'dynamic/' + route;
+	}
+	return String(model || '');
+}
+
+function skyphusionAiGateway(env, feature, model, tool) {
+	const id = String(env.GATEWAY_ID || '').trim();
+	if (!id) {
+		return null;
+	}
+	const gateway = {
+		id: id,
+		metadata: {
+			site: String(env.SITE_URL || ''),
+			feature: feature,
+			model: String(model || ''),
+			user: '',
+			tool: tool,
+		},
+	};
+	const cache = String(env.GATEWAY_CACHE || '');
+	if (cache === 'skip') {
+		gateway.skipCache = true;
+	} else if (/^[1-9][0-9]*$/.test(cache)) {
+		gateway.cacheTtl = Number(cache);
+	}
+	if (feature === 'embeddings') {
+		gateway.collectLog = false;
+	} else {
+		gateway.collectLog = String(env.GATEWAY_COLLECT || '') === 'true';
+	}
+	return gateway;
+}
+
+async function skyphusionAiRun(env, model, input, feature, tool) {
+	const gateway = skyphusionAiGateway(env, feature, model, tool);
+	if (!gateway) {
+		return env.AI.run(model, input);
+	}
+	return env.AI.run(model, input, { gateway: gateway });
+}
 
 export default {
 	async fetch(request, env) {
@@ -42,10 +91,11 @@ export default {
 		if (earlier) {
 			prompt += '\n' + earlier;
 		}
-		const aiStream = await env.AI.run(model, {
+		const runModel = skyphusionAiTextModel(env, model);
+		const aiStream = await skyphusionAiRun(env, runModel, {
 			messages: [{ role: 'user', content: prompt }],
 			stream: true,
-		});
+		}, 'text', 'assistant');
 		headers.set('content-type', 'text/event-stream; charset=utf-8');
 		headers.set('cache-control', 'no-cache');
 		return new Response(skyphusionAiEvents(aiStream, pages), { headers: headers });
@@ -59,7 +109,7 @@ async function skyphusionAiPages(env, question) {
 	if (!env.AI || !env.VECTORIZE) {
 		return [];
 	}
-	const embedded = await env.AI.run(EMBED_MODEL, { text: [question] });
+	const embedded = await skyphusionAiRun(env, EMBED_MODEL, { text: [question] }, 'embeddings', 'embeddings');
 	let vector = null;
 	if (embedded && Array.isArray(embedded.data)) {
 		if (Array.isArray(embedded.data[0])) {
@@ -251,12 +301,12 @@ async function skyphusionAiEarlier(env, model, turns, keepValue) {
 	const latest = pairs.slice(-keep);
 	let block = '';
 	if (env.AI && older.length) {
-		const summary = await env.AI.run(model, {
+		const summary = await skyphusionAiRun(env, skyphusionAiTextModel(env, model), {
 			messages: [{
 				role: 'user',
 				content: 'Summarize these earlier turns in one short block.\n' + older.join('\n'),
 			}],
-		});
+		}, 'text', 'assistant');
 		block = skyphusionAiReplyText(summary);
 	}
 	const tail = latest.join('\n');
@@ -293,9 +343,9 @@ async function skyphusionAiBackfill(env) {
 	if (!job || job.state !== 'ready' || !job.prompt) {
 		return;
 	}
-	const result = await env.AI.run(job.model || env.MODEL, {
+	const result = await skyphusionAiRun(env, skyphusionAiTextModel(env, job.model || env.MODEL), {
 		messages: [{ role: 'user', content: job.prompt }],
-	});
+	}, 'text', 'backfill');
 	const text = result && typeof result.response === 'string' ? result.response : '';
 	if (!text) {
 		return;

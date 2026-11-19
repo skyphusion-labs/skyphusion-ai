@@ -41,3 +41,28 @@ The Worker does not store posts.
 The Worker does not store the neuron ledger.
 The public search snippet is a separate script.
 The snippet pin stays `0.0.25`.
+
+A saved gateway id goes on each model call.
+A blank gateway id leaves those calls on the AI binding.
+The option name is gateway.
+The five metadata fields match the PHP tags.
+The fields are the site, the feature, the model, the user, and the tool.
+The user field is empty.
+The Worker does not know the WordPress user.
+Embeddings stay on `@cf/baai/bge-large-en-v1.5`.
+A saved dynamic route changes text calls.
+The model id is dynamic/ plus the route.
+Embeddings do not use that route.
+Vectorize stays on the Vectorize binding.
+It does not go through AI Gateway.
+Cache follows the cache choice at deploy time.
+A cache value of 1 sets 3600 seconds.
+A cache value of 0 skips the cache.
+A missing choice adds no cache field.
+Text calls store the request body only when Log prompts is on.
+Embedding calls do not store the request body.
+A later gateway change does not update a live Worker.
+The settings screen says when that Worker is behind.
+Deploy the Worker again to send the new values.
+A blank gateway id clears the gateway option on that deploy.
+The docs for the binding are at https://developers.cloudflare.com/ai-gateway/usage/worker-binding-methods/

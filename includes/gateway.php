@@ -348,6 +348,174 @@ function skyphusion_ai_gateway_metadata( $feature, $model, $tool = '' ) {
 }
 
 /**
+ * A positive whole number up to a maximum, or an empty string.
+ *
+ * @param mixed $value Candidate value.
+ * @param int   $max   Largest allowed value.
+ * @return string
+ */
+function skyphusion_ai_gateway_number_clean( $value, $max ) {
+	$value = trim( (string) $value );
+	if ( 1 !== preg_match( '/^[1-9][0-9]*$/', $value ) ) {
+		return '';
+	}
+	if ( (int) $value > (int) $max ) {
+		return '';
+	}
+	return $value;
+}
+
+/**
+ * Stored whole number. An empty post clears it. A bad post keeps the old one.
+ *
+ * @param mixed  $original Previous settings.
+ * @param mixed  $posted   Posted settings, or null.
+ * @param string $key      Settings key.
+ * @param int    $max      Largest allowed value.
+ * @return string
+ */
+function skyphusion_ai_gateway_number_stored( $original, $posted, $key, $max ) {
+	$previous = '';
+	if ( is_array( $original ) && isset( $original[ $key ] ) ) {
+		$previous = skyphusion_ai_gateway_number_clean( $original[ $key ], $max );
+	}
+	if ( ! is_array( $posted ) || ! array_key_exists( $key, $posted ) ) {
+		return $previous;
+	}
+	$typed = trim( (string) $posted[ $key ] );
+	if ( '' === $typed ) {
+		return '';
+	}
+	$clean = skyphusion_ai_gateway_number_clean( $typed, $max );
+	if ( '' === $clean ) {
+		return $previous;
+	}
+	return $clean;
+}
+
+/**
+ * Backoff name to store. Empty clears it.
+ *
+ * @param mixed $original Previous settings.
+ * @param mixed $posted   Posted settings, or null.
+ * @return string
+ */
+function skyphusion_ai_gateway_backoff_stored( $original, $posted ) {
+	$allowed  = array( 'constant', 'linear', 'exponential' );
+	$previous = '';
+	if ( is_array( $original ) && isset( $original['gateway_backoff'] ) && in_array( (string) $original['gateway_backoff'], $allowed, true ) ) {
+		$previous = (string) $original['gateway_backoff'];
+	}
+	if ( ! is_array( $posted ) || ! array_key_exists( 'gateway_backoff', $posted ) ) {
+		return $previous;
+	}
+	$typed = trim( (string) $posted['gateway_backoff'] );
+	if ( '' === $typed ) {
+		return '';
+	}
+	if ( ! in_array( $typed, $allowed, true ) ) {
+		return $previous;
+	}
+	return $typed;
+}
+
+/**
+ * Image and speech opt-in. Only 1 is on.
+ *
+ * @param mixed $original Previous settings.
+ * @param mixed $posted   Posted settings, or null.
+ * @return string
+ */
+function skyphusion_ai_gateway_media_stored( $original, $posted ) {
+	$previous = '0';
+	if ( is_array( $original ) && isset( $original['gateway_retry_media'] ) && '1' === (string) $original['gateway_retry_media'] ) {
+		$previous = '1';
+	}
+	if ( ! is_array( $posted ) || ! array_key_exists( 'gateway_retry_media', $posted ) ) {
+		return $previous;
+	}
+	return '1' === (string) $posted['gateway_retry_media'] ? '1' : '0';
+}
+
+/**
+ * Retry and timeout values. Blank fields send no header.
+ *
+ * Timeout is milliseconds, up to 120000. Attempts are 1 to 5.
+ * Delay is milliseconds, up to 60000.
+ *
+ * @return array{timeout: string, attempts: string, delay: string, backoff: string, media: string}
+ */
+function skyphusion_ai_gateway_retry_settings() {
+	$empty = array(
+		'timeout'  => '',
+		'attempts' => '',
+		'delay'    => '',
+		'backoff'  => '',
+		'media'    => '0',
+	);
+	if ( ! function_exists( 'skyphusion_ai_settings' ) ) {
+		return $empty;
+	}
+	$settings = skyphusion_ai_settings();
+	if ( ! is_array( $settings ) ) {
+		return $empty;
+	}
+	$timeout  = isset( $settings['gateway_timeout'] ) ? skyphusion_ai_gateway_number_clean( $settings['gateway_timeout'], 120000 ) : '';
+	$attempts = isset( $settings['gateway_attempts'] ) ? skyphusion_ai_gateway_number_clean( $settings['gateway_attempts'], 5 ) : '';
+	$delay    = isset( $settings['gateway_delay'] ) ? skyphusion_ai_gateway_number_clean( $settings['gateway_delay'], 60000 ) : '';
+	$backoff  = '';
+	if ( isset( $settings['gateway_backoff'] ) && in_array( (string) $settings['gateway_backoff'], array( 'constant', 'linear', 'exponential' ), true ) ) {
+		$backoff = (string) $settings['gateway_backoff'];
+	}
+	$media = '0';
+	if ( isset( $settings['gateway_retry_media'] ) && '1' === (string) $settings['gateway_retry_media'] ) {
+		$media = '1';
+	}
+	return array(
+		'timeout'  => $timeout,
+		'attempts' => $attempts,
+		'delay'    => $delay,
+		'backoff'  => $backoff,
+		'media'    => $media,
+	);
+}
+
+/**
+ * Retry and timeout headers for a gateway URL.
+ *
+ * A direct URL gets none. Image and speech get none until the admin opts in.
+ * A blank field is left off the request.
+ *
+ * @param string $url     Request URL.
+ * @param string $feature Feature name.
+ * @return array<string, string>
+ */
+function skyphusion_ai_gateway_retry_headers( $url, $feature ) {
+	if ( ! skyphusion_ai_gateway_host( $url ) ) {
+		return array();
+	}
+	$settings = skyphusion_ai_gateway_retry_settings();
+	$kind     = skyphusion_ai_gateway_feature( $feature );
+	if ( ( 'image' === $kind || 'speech' === $kind ) && '1' !== $settings['media'] ) {
+		return array();
+	}
+	$headers = array();
+	if ( '' !== $settings['timeout'] ) {
+		$headers['cf-aig-request-timeout'] = $settings['timeout'];
+	}
+	if ( '' !== $settings['attempts'] ) {
+		$headers['cf-aig-max-attempts'] = $settings['attempts'];
+	}
+	if ( '' !== $settings['delay'] ) {
+		$headers['cf-aig-retry-delay'] = $settings['delay'];
+	}
+	if ( '' !== $settings['backoff'] ) {
+		$headers['cf-aig-backoff'] = $settings['backoff'];
+	}
+	return $headers;
+}
+
+/**
  * Header for a gateway URL, or an empty array for any other URL.
  *
  * @param string $url     Request URL.
@@ -374,6 +542,7 @@ function skyphusion_ai_gateway_metadata_header( $url, $feature, $model, $tool = 
 	if ( function_exists( 'skyphusion_ai_defaults_cache_header' ) ) {
 		$headers = array_merge( $headers, skyphusion_ai_defaults_cache_header() );
 	}
+	$headers = array_merge( $headers, skyphusion_ai_gateway_retry_headers( $url, $feature ) );
 	return $headers;
 }
 
@@ -473,8 +642,13 @@ function skyphusion_ai_gateway_sanitize_option( $value, $option = '', $original 
 			$posted = wp_unslash( $posted );
 		}
 	}
-	$value['log_prompts']   = skyphusion_ai_gateway_log_stored( $original, $posted );
-	$value['gateway_route'] = skyphusion_ai_gateway_route_stored( $original, $posted );
+	$value['log_prompts']         = skyphusion_ai_gateway_log_stored( $original, $posted );
+	$value['gateway_route']       = skyphusion_ai_gateway_route_stored( $original, $posted );
+	$value['gateway_timeout']     = skyphusion_ai_gateway_number_stored( $original, $posted, 'gateway_timeout', 120000 );
+	$value['gateway_attempts']    = skyphusion_ai_gateway_number_stored( $original, $posted, 'gateway_attempts', 5 );
+	$value['gateway_delay']       = skyphusion_ai_gateway_number_stored( $original, $posted, 'gateway_delay', 60000 );
+	$value['gateway_backoff']     = skyphusion_ai_gateway_backoff_stored( $original, $posted );
+	$value['gateway_retry_media'] = skyphusion_ai_gateway_media_stored( $original, $posted );
 	return $value;
 }
 
@@ -517,6 +691,56 @@ function skyphusion_ai_field_gateway_route() {
 }
 
 /**
+ * Retry and timeout fields. Blank values send no header.
+ *
+ * @return void
+ */
+function skyphusion_ai_field_gateway_retry() {
+	if ( ! function_exists( 'esc_attr' ) || ! function_exists( 'esc_html' ) ) {
+		return;
+	}
+	$settings = skyphusion_ai_gateway_retry_settings();
+	echo '<p class="description">' . esc_html__( 'Blank fields send no header.', 'skyphusion-ai' ) . '</p>';
+	echo '<p><label>' . esc_html__( 'Timeout in milliseconds', 'skyphusion-ai' ) . ' ';
+	printf(
+		'<input type="text" class="small-text code" name="skyphusion_ai_settings[gateway_timeout]" value="%s" maxlength="6" spellcheck="false" autocomplete="off" />',
+		esc_attr( $settings['timeout'] )
+	);
+	echo '</label></p>';
+	echo '<p><label>' . esc_html__( 'Attempts, from 1 to 5', 'skyphusion-ai' ) . ' ';
+	printf(
+		'<input type="text" class="small-text code" name="skyphusion_ai_settings[gateway_attempts]" value="%s" maxlength="1" spellcheck="false" autocomplete="off" />',
+		esc_attr( $settings['attempts'] )
+	);
+	echo '</label></p>';
+	echo '<p><label>' . esc_html__( 'Delay in milliseconds', 'skyphusion-ai' ) . ' ';
+	printf(
+		'<input type="text" class="small-text code" name="skyphusion_ai_settings[gateway_delay]" value="%s" maxlength="5" spellcheck="false" autocomplete="off" />',
+		esc_attr( $settings['delay'] )
+	);
+	echo '</label></p>';
+	echo '<p><label>' . esc_html__( 'Backoff', 'skyphusion-ai' ) . ' ';
+	echo '<select name="skyphusion_ai_settings[gateway_backoff]">';
+	echo '<option value="">' . esc_html__( 'Blank', 'skyphusion-ai' ) . '</option>';
+	foreach ( array( 'constant', 'linear', 'exponential' ) as $choice ) {
+		echo '<option value="' . esc_attr( $choice ) . '"';
+		if ( $settings['backoff'] === $choice ) {
+			echo ' selected="selected"';
+		}
+		echo '>' . esc_html( $choice ) . '</option>';
+	}
+	echo '</select></label></p>';
+	echo '<input type="hidden" name="skyphusion_ai_settings[gateway_retry_media]" value="0" />';
+	echo '<p><label><input type="checkbox" name="skyphusion_ai_settings[gateway_retry_media]" value="1"';
+	if ( '1' === $settings['media'] ) {
+		echo ' checked="checked"';
+	}
+	echo ' /> ' . esc_html__( 'Also send these headers on image and speech calls.', 'skyphusion-ai' ) . '</label></p>';
+	echo '<p class="description">' . esc_html__( 'Image and speech stay off until you turn this on.', 'skyphusion-ai' ) . '</p>';
+	echo '<p class="description">' . esc_html__( 'A refused gateway still uses the direct API for one hour.', 'skyphusion-ai' ) . '</p>';
+}
+
+/**
  * Register the gateway fields.
  *
  * @return void
@@ -527,6 +751,7 @@ function skyphusion_ai_gateway_register_fields() {
 	}
 	add_settings_field( 'log_prompts', __( 'Log prompts', 'skyphusion-ai' ), 'skyphusion_ai_field_log_prompts', 'cloudflare-ai-search', 'workers' );
 	add_settings_field( 'gateway_route', __( 'Dynamic route', 'skyphusion-ai' ), 'skyphusion_ai_field_gateway_route', 'cloudflare-ai-search', 'workers' );
+	add_settings_field( 'gateway_retry', __( 'Retry and timeout', 'skyphusion-ai' ), 'skyphusion_ai_field_gateway_retry', 'cloudflare-ai-search', 'workers' );
 }
 
 /**

@@ -36,7 +36,7 @@ This plugin does three jobs, and it does not charge a license for any of them.
 
 Search. The box is Cloudflare AI Search. The card shows the product image, the title, and the description. The image is the page image. You do not add a field for it. On a product page the description gains the SKU, the stock status, and the managed stock count. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a license. They are not this search.
 
-Chat. You can turn on a chat button. It answers in a sentence. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. See docs/worker.md. It is not a staff inbox, and it has no seats. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month. AIPCF is a free Cloudflare provider. Its site assistant answers from the site's pages and is off until you turn it on. It is not a help desk.
+Chat. You can turn on a chat button. It answers in a sentence. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. See docs/worker.md. It is not a staff inbox, and it has no seats. The chat button is AI Search. It does not use this gateway id. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. The assistant Worker uses that gateway after you deploy it. A blank gateway id clears the Worker gateway option on the next deploy. The screen says when the live Worker is behind the saved gateway settings. Vectorize stays on the Vectorize binding. Text calls on the Worker use a saved dynamic route. Embeddings on the Worker stay on the embedding model. Retry and timeout headers stay blank until you set them. Image and speech calls do not send those headers until you opt in. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month. AIPCF is a free Cloudflare provider. Its site assistant answers from the site's pages and is off until you turn it on. It is not a help desk.
 
 Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
 
@@ -80,6 +80,20 @@ What it is: an optional proxy for the same Workers AI calls. It can log, cache a
 
 What is sent and when: only when you save a gateway id. The same Workers AI requests then go to this host instead of api.cloudflare.com. Each request also sends a tag with the site, the feature, the model, the user id, and the tool. A visitor sends an empty user id. The tag does not contain the prompt. Prompts are logged only when you turn on logging in your gateway.
 
+These Workers AI calls use this gateway when you save a gateway id.
+The calls are the AI Client, the PHP assistant, embeddings, and backfill.
+Translate, prompts, links, and insights use it too.
+The assistant Worker uses it after you deploy that id.
+A saved dynamic route sends text and chat calls on the chat path.
+The model id is dynamic/ plus the route.
+Image, speech, and embeddings stay on the model path.
+The Worker does the same for its text calls.
+Vectorize stays on the Vectorize binding.
+AI Search does not use this gateway id.
+Retry and timeout headers stay blank until you set them.
+Image and speech do not send those headers until you opt in.
+A refused gateway still uses the direct API for one hour.
+
 = Cloudflare Vectorize =
 
 What it is: the store for post embeddings. Related pages, member search and the site assistant read it. Host: api.cloudflare.com.
@@ -90,7 +104,7 @@ What is sent and when: only when embeddings are on. When a published post is sav
 
 What it is: an optional assistant Worker that answers from the stored pages. Host: api.cloudflare.com for the deploy, and your own address on workers.dev for the Worker.
 
-What is sent and when: only when an admin deploys the Worker from the settings screen or with WP-CLI. The deploy sends the Worker code, the site address, the model id, the index name and a shared secret. After the deploy, the visitor's browser sends the question and the earlier turns of that chat to the Worker. The Worker calls the site once each hour with the shared secret to ask for the next empty text. When the Worker address is saved, a member search also sends the search words to the Worker.
+What is sent and when: only when an admin deploys the Worker from the settings screen or with WP-CLI. The deploy sends the Worker code, the site address, the model id, the index name and a shared secret. The deploy also sends the gateway id, the dynamic route, and the cache choice. After the deploy, the visitor's browser sends the question and the earlier turns of that chat to the Worker. The Worker calls the site once each hour with the shared secret to ask for the next empty text. When the Worker address is saved, a member search also sends the search words to the Worker.
 
 == Installation ==
 
@@ -164,7 +178,7 @@ Yes. Settings, then Skyphusion AI, has a picker for writing, vision, image, spee
 
 = Does the chat button cost extra? =
 
-This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. You can expand that button with Cloudflare Workers AI or with Cloudflare AI Gateway. The prices are in the Cost section of README.md.
+This plugin does not charge a subscription. Cloudflare bills the account that owns the AI Search instance. The search box only lists pages. The chat button answers in a sentence and uses more of that allowance. You can leave the chat button off. The chat button is AI Search. It does not use this gateway id. The prices are in the Cost section of README.md.
 
 = Does search show how many are in stock? =
 
