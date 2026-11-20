@@ -265,7 +265,7 @@ expect('a REST step obeys its batch size', $step_rest['processed'], 5);
 expect('a REST step says it is not done', $step_rest['state'], 'step');
 expect('a REST step queues the next step', isset($GLOBALS['step_cron']['skyphusion_ai_embed_step_event']), true);
 $step_src = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php');
-expect('the admin button runs one step', strpos($step_src, "check_admin_referer( 'skyphusion_ai_embed_run' );\n\tskyphusion_ai_embed_step_now();") !== false, true);
+expect('the admin button runs one step', strpos($step_src, "check_admin_referer( 'skyphusion_ai_embed_run' );\n\t\$result = skyphusion_ai_embed_step_now();") !== false, true);
 expect('the admin button no longer runs every post', strpos($step_src, 'skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), true )'), false);
 
 // 8. Issue #233: two steps never run at once. Cron, the Run button, REST and
@@ -327,6 +327,40 @@ skyphusion_ai_embed_render_progress();
 $step_progress = (string) ob_get_clean();
 expect('a blocked pass is not called background work', strpos($step_progress, 'runs in the background') === false, true);
 expect('a blocked pass says it is blocked and how to resume', strpos($step_progress, 'blocked') !== false && strpos($step_progress, 'Run') !== false, true);
+
+// 9. Lead ruling on #233: pressing Run while a step holds the lock says so on the screen.
+if (!function_exists('check_admin_referer')) {
+    function check_admin_referer($action = -1)
+    {
+        return true;
+    }
+}
+$GLOBALS['cfais_can'] = array('manage_options' => true);
+$GLOBALS['cfais_user_id'] = 7;
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(3);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+update_option('skyphusion_ai_embed_step_lock', time() + 600, false);
+skyphusion_ai_embed_handle_run();
+delete_option('skyphusion_ai_embed_step_lock');
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_busy_screen = (string) ob_get_clean();
+expect('Run on a held lock puts a notice on the screen', strpos($step_busy_screen, 'An embedding step is already running') !== false, true);
+ob_start();
+skyphusion_ai_embed_render_progress();
+expect('the notice shows once', strpos((string) ob_get_clean(), 'Your press of Run did nothing') === false, true);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+skyphusion_ai_embed_handle_run();
+ob_start();
+skyphusion_ai_embed_render_progress();
+expect('Run with no lock held shows no busy notice', strpos((string) ob_get_clean(), 'already running') === false, true);
+skyphusion_ai_embed_cursor_start(25);
+update_option('skyphusion_ai_embed_step_lock', time() + 600, false);
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_locked_screen = (string) ob_get_clean();
+delete_option('skyphusion_ai_embed_step_lock');
+expect('a held lock is named while a pass is active', strpos($step_locked_screen, 'An embedding step is already running') !== false, true);
 
 // Leave the shared state as it was for the files that follow.
 unset($GLOBALS['cfais_settings']);

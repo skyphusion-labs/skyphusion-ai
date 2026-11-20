@@ -607,6 +607,27 @@ add_action( 'rest_api_init', 'skyphusion_ai_embed_register_rest' );
 add_action( skyphusion_ai_embed_step_hook(), 'skyphusion_ai_embed_on_step_event' );
 
 /**
+ * Transient that carries the busy notice to the next screen load of one admin.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_busy_key() {
+	$user = function_exists( 'get_current_user_id' ) ? (int) get_current_user_id() : 0;
+	return 'skyphusion_ai_embed_busy_' . (string) $user;
+}
+
+/**
+ * Remember that this admin pressed Run while a step held the lock.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_busy_flag() {
+	if ( function_exists( 'set_transient' ) ) {
+		set_transient( skyphusion_ai_embed_busy_key(), 1, 120 );
+	}
+}
+
+/**
  * Say how far the current pass is.
  *
  * @return void
@@ -614,6 +635,14 @@ add_action( skyphusion_ai_embed_step_hook(), 'skyphusion_ai_embed_on_step_event'
 function skyphusion_ai_embed_render_progress() {
 	if ( ! function_exists( 'esc_html' ) ) {
 		return;
+	}
+	if ( function_exists( 'get_transient' ) && get_transient( skyphusion_ai_embed_busy_key() ) ) {
+		if ( function_exists( 'delete_transient' ) ) {
+			delete_transient( skyphusion_ai_embed_busy_key() );
+		}
+		echo '<p class="notice notice-warning inline">' . esc_html__( 'An embedding step is already running. Your press of Run did nothing. Wait for it to finish.', 'skyphusion-ai' ) . '</p>';
+	} elseif ( skyphusion_ai_embed_step_locked() ) {
+		echo '<p>' . esc_html__( 'An embedding step is already running.', 'skyphusion-ai' ) . '</p>';
 	}
 	$cursor = skyphusion_ai_embed_cursor();
 	if ( empty( $cursor['active'] ) ) {

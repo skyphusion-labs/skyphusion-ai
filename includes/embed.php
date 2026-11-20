@@ -2635,7 +2635,10 @@ function skyphusion_ai_embed_handle_run() {
 		return;
 	}
 	check_admin_referer( 'skyphusion_ai_embed_run' );
-	skyphusion_ai_embed_step_now();
+	$result = skyphusion_ai_embed_step_now();
+	if ( isset( $result['state'] ) && 'busy' === $result['state'] ) {
+		skyphusion_ai_embed_busy_flag();
+	}
 	skyphusion_ai_embed_redirect();
 }
 
