@@ -327,9 +327,9 @@ Then it checks out SVN with `--depth immediates`, syncs the archive into `trunk`
 
 To run it again, or to try it: Actions, `wporg-deploy`, Run workflow. Type the tag. Tick `dry_run` to do every step except the commit and the read-back. A re-run of a tag that is already on SVN stops at the tag check, so a failed read-back is fixed by hand, not by running it again.
 
-The `wordpress-org` environment holds the two secrets `WP_SVN_USERNAME` and `WP_SVN_PASSWORD`. Restrict it to the default branch and tags, and add required reviewers if a person should approve each deploy.
+The `wordpress-org` environment holds the two secrets `WP_SVN_USERNAME` and `WP_SVN_PASSWORD`. Its deployment branches are limited to `main` and tags `v*`. It has no required reviewers. To make a person approve each deploy: Settings, Environments, `wordpress-org`, tick Required reviewers, add the people, and save. A run then waits at the job until one of them approves.
 
-Test it without touching wordpress.org: `bash tests/wporg-deploy-test.sh` runs the script against a local `svnadmin` repository. It needs `svn`, `svnadmin`, `rsync`, `unzip` and `gitleaks`.
+Test it without touching wordpress.org: `bash tests/wporg-deploy-test.sh` runs the script against a local `svnadmin` repository. It needs `svn`, `svnadmin`, `rsync`, `unzip` and `gitleaks`. The `ci` job runs it on every pull request.
 
 ## Trademarks
 
