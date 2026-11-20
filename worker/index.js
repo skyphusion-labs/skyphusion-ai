@@ -348,7 +348,7 @@ async function skyphusionAiBackfill(env) {
 	const result = await skyphusionAiRun(env, skyphusionAiTextModel(env, backfillModel), {
 		messages: [{ role: 'user', content: job.prompt }],
 	}, 'text', 'backfill', backfillModel);
-	const text = result && typeof result.response === 'string' ? result.response : '';
+	const text = skyphusionAiReplyText(result);
 	if (!text) {
 		return;
 	}

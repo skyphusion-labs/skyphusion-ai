@@ -24,6 +24,19 @@ expect('the script streams', strpos($worker_script, 'stream: true') !== false, t
 expect('the script has no bearer', strpos($worker_script, 'Bearer') === false, true);
 expect('the script does not call Skyphusion', strpos($worker_script, 'skyphusion.org') === false, true);
 
+// Issue #230. The Worker is JavaScript, so its hourly backfill runs under node
+// against a stand-in AI binding. No node is a FAILURE here, never a skip: a
+// skipped check reads like a passed one. CI's ubuntu-latest image has node.
+$worker_node_lines = array();
+$worker_node_code = 1;
+exec('node ' . escapeshellarg(__DIR__ . '/worker-backfill.mjs') . ' 2>&1', $worker_node_lines, $worker_node_code);
+$worker_node_text = implode("\n", $worker_node_lines);
+expect('node ran the Worker backfill check', strpos($worker_node_text, 'ok worker backfill: a response reply is still saved') !== false, true);
+expect('the Worker backfill check exits 0', $worker_node_code, 0);
+if ($worker_node_code !== 0) {
+    fwrite(STDERR, $worker_node_text . "\n");
+}
+
 $worker_src = (string) file_get_contents(dirname(__DIR__) . '/includes/worker.php');
 expect('the command is worker deploy', strpos($worker_src, 'skyphusion-ai worker deploy') !== false, true);
 expect('deploy does not add a shop route', strpos($worker_src, 'workers/routes') === false, true);

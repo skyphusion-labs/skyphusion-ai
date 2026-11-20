@@ -38,6 +38,113 @@ function skyphusion_ai_embed_hash_key() {
 }
 
 /**
+ * Version of the metadata stored beside each vector.
+ *
+ * Raise it when the metadata gains a field. Version 2 added the terms line
+ * (#210). A site that is behind sees a notice and rebuilds when the admin says
+ * so. Nothing re-embeds on its own, because the site owner pays for the model.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_schema_now() {
+	return 2;
+}
+
+/**
+ * Option that records the metadata version the index was written with.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_schema_option() {
+	return 'skyphusion_ai_embed_schema';
+}
+
+/**
+ * Option that is set while a rebuild runs, until its pass is done.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_schema_pending_option() {
+	return 'skyphusion_ai_embed_schema_pending';
+}
+
+/**
+ * True when an index exists and was written with older metadata.
+ *
+ * An index that never recorded a version predates the record, so it is behind.
+ *
+ * @return bool
+ */
+function skyphusion_ai_embed_schema_behind() {
+	if ( ! function_exists( 'get_option' ) ) {
+		return false;
+	}
+	$config = skyphusion_ai_embed_config();
+	if ( empty( $config['created'] ) ) {
+		return false;
+	}
+	return (int) get_option( skyphusion_ai_embed_schema_option(), 0 ) < skyphusion_ai_embed_schema_now();
+}
+
+/**
+ * Record that the index now carries the current metadata.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_schema_mark() {
+	if ( function_exists( 'update_option' ) ) {
+		update_option( skyphusion_ai_embed_schema_option(), skyphusion_ai_embed_schema_now(), false );
+	}
+	if ( function_exists( 'delete_option' ) ) {
+		delete_option( skyphusion_ai_embed_schema_pending_option() );
+	}
+}
+
+/**
+ * Called when a pass is done. A rebuild pass brings the record up to date.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_schema_settle() {
+	if ( function_exists( 'get_option' ) && get_option( skyphusion_ai_embed_schema_pending_option(), false ) ) {
+		skyphusion_ai_embed_schema_mark();
+	}
+}
+
+/**
+ * Forget every stored hash and start a pass from the first post.
+ *
+ * The admin button and WP-CLI rebuild both call this. Every included post is
+ * embedded again, so it spends neurons. The record of the metadata version is
+ * brought up to date when the pass is done.
+ *
+ * The lock is held while the hashes are cleared, so no step runs between the
+ * clear and the restart.
+ *
+ * @param int $batch Batch size, or zero for the saved size.
+ * @return bool False when a step is running and nothing was changed.
+ */
+function skyphusion_ai_embed_rebuild_start( $batch = 0 ) {
+	$held = skyphusion_ai_embed_lock_take();
+	if ( '' === $held ) {
+		return false;
+	}
+	try {
+		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
+			skyphusion_ai_embed_hash_set( $post_id, '' );
+			skyphusion_ai_embed_fail_set( $post_id, false );
+		}
+		if ( function_exists( 'update_option' ) ) {
+			update_option( skyphusion_ai_embed_schema_pending_option(), 1, false );
+		}
+		skyphusion_ai_embed_cursor_start( $batch );
+	} finally {
+		skyphusion_ai_embed_lock_release( $held );
+	}
+	return true;
+}
+
+/**
  * Saved choice, with defaults filled in.
  *
  * @return array<string, mixed>
@@ -698,6 +805,7 @@ function skyphusion_ai_embed_estimate( $posts, $config ) {
  * @return array{posts: int, passages: int, chars: int}
  */
 function skyphusion_ai_embed_estimate_tally( $posts, $config ) {
+	$behind        = skyphusion_ai_embed_schema_behind();
 	$chars         = 0;
 	$count         = 0;
 	$passage_count = 0;
@@ -714,7 +822,8 @@ function skyphusion_ai_embed_estimate_tally( $posts, $config ) {
 			continue;
 		}
 		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
-		if ( skyphusion_ai_embed_hash_get( $post_id ) === hash( 'sha256', $text ) ) {
+		// While the index is behind, a rebuild sends every post, so the count does too.
+		if ( ! $behind && skyphusion_ai_embed_hash_get( $post_id ) === hash( 'sha256', $text ) ) {
 			continue;
 		}
 		$pieces = skyphusion_ai_embed_passages( $text );
@@ -1280,6 +1389,7 @@ function skyphusion_ai_embed_ensure_bridge( $config, $model ) {
 	if ( function_exists( 'update_option' ) ) {
 		update_option( skyphusion_ai_embed_option_name(), $config, false );
 	}
+	skyphusion_ai_embed_schema_mark();
 	return array( 'state' => 'ready' );
 }
 
@@ -1436,6 +1546,7 @@ function skyphusion_ai_embed_ensure( $config ) {
 	$config['enabled'] = 1;
 	$config['model']   = $model;
 	update_option( skyphusion_ai_embed_option_name(), $config, false );
+	skyphusion_ai_embed_schema_mark();
 	return array( 'state' => 'ready' );
 }
 
@@ -1681,7 +1792,8 @@ function skyphusion_ai_embed_sync_post( $post ) {
 		return array( 'state' => 'blocked' );
 	}
 	if ( ! $included ) {
-		if ( '' === $stored ) {
+		// A rebuild clears every hash first. Parts above zero mean vectors are still in the index (#234).
+		if ( '' === $stored && 1 > skyphusion_ai_embed_part_count( $post_id ) ) {
 			skyphusion_ai_embed_fail_set( $post_id, false );
 			return array( 'state' => 'removed' );
 		}
@@ -2434,6 +2546,37 @@ function skyphusion_ai_embed_admin_allowed() {
 }
 
 /**
+ * Notice for an index written with older metadata.
+ *
+ * It says what is stale and what a rebuild costs, and offers the button. The
+ * re-embed starts only when the admin presses it.
+ *
+ * @param array<string, mixed>|null $estimate Stored count, or null.
+ * @return void
+ */
+function skyphusion_ai_embed_render_schema_notice( $estimate ) {
+	if ( ! function_exists( 'esc_html' ) || ! skyphusion_ai_embed_schema_behind() ) {
+		return;
+	}
+	echo '<div class="notice notice-warning inline skyphusion-ai-embed-schema">';
+	echo '<p>' . esc_html__( 'The vectors in your index were stored before the category and tag line was added. Search and related posts cannot use it for those posts until you rebuild.', 'skyphusion-ai' ) . '</p>';
+	if ( is_array( $estimate ) ) {
+		echo '<p>' . esc_html( skyphusion_ai_embed_estimate_sentence( $estimate ) ) . '</p>';
+		echo '<p>' . esc_html__( 'A rebuild embeds every included post again, so this is its cost in Workers AI neurons. Press Count the posts for a fresh figure.', 'skyphusion-ai' ) . '</p>';
+	} else {
+		echo '<p>' . esc_html__( 'A rebuild embeds every included post again and spends Workers AI neurons. Press Count the posts to see the cost first.', 'skyphusion-ai' ) . '</p>';
+	}
+	echo '<form method="post" action="' . esc_url( admin_url( 'admin-post.php' ) ) . '">';
+	echo '<input type="hidden" name="action" value="skyphusion_ai_embed_rebuild" />';
+	if ( function_exists( 'wp_nonce_field' ) ) {
+		wp_nonce_field( 'skyphusion_ai_embed_rebuild' );
+	}
+	echo '<button type="submit" class="button">' . esc_html__( 'Rebuild the index', 'skyphusion-ai' ) . '</button>';
+	echo '</form>';
+	echo '</div>';
+}
+
+/**
  * Print the estimate and the run control.
  *
  * @return void
@@ -2453,6 +2596,7 @@ function skyphusion_ai_embed_render() {
 		echo esc_html( skyphusion_ai_embed_estimate_sentence( $estimate ) );
 	}
 	echo '</p>';
+	skyphusion_ai_embed_render_schema_notice( $estimate );
 	$nonce = function_exists( 'wp_create_nonce' ) ? wp_create_nonce( 'skyphusion_ai_embed_count' ) : '';
 	/* translators: %d is the number of posts read so far. */
 	$working = __( 'Counting. %d posts read so far.', 'skyphusion-ai' );
@@ -2635,7 +2779,30 @@ function skyphusion_ai_embed_handle_run() {
 		return;
 	}
 	check_admin_referer( 'skyphusion_ai_embed_run' );
-	skyphusion_ai_embed_step_now();
+	$result = skyphusion_ai_embed_step_now();
+	if ( isset( $result['state'] ) && 'busy' === $result['state'] ) {
+		skyphusion_ai_embed_busy_flag();
+	}
+	skyphusion_ai_embed_redirect();
+}
+
+/**
+ * Rebuild the index after the admin presses the button in the notice.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_handle_rebuild() {
+	if ( ! skyphusion_ai_embed_admin_allowed() ) {
+		return;
+	}
+	check_admin_referer( 'skyphusion_ai_embed_rebuild' );
+	if ( skyphusion_ai_embed_on( skyphusion_ai_embed_config() ) ) {
+		if ( skyphusion_ai_embed_rebuild_start() ) {
+			skyphusion_ai_embed_step_now();
+		} else {
+			skyphusion_ai_embed_busy_flag();
+		}
+	}
 	skyphusion_ai_embed_redirect();
 }
 
@@ -2849,7 +3016,7 @@ function skyphusion_ai_embed_reconcile( $posts ) {
 		$text    = skyphusion_ai_embed_text( $post, $fields );
 		$keep    = skyphusion_ai_embed_included( $post, $config ) && '' !== $text;
 		$stored  = skyphusion_ai_embed_hash_get( $post_id );
-		if ( $keep || '' === $stored ) {
+		if ( $keep || ( '' === $stored && 1 > skyphusion_ai_embed_part_count( $post_id ) ) ) {
 			continue;
 		}
 		$result = skyphusion_ai_embed_remove( $post_id, $config, $credentials );
@@ -3281,11 +3448,11 @@ function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 		return;
 	}
 	if ( 'rebuild' === $command ) {
-		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
-			skyphusion_ai_embed_hash_set( $post_id, '' );
-			skyphusion_ai_embed_fail_set( $post_id, false );
+		// The start holds the lock while it clears the hashes, and answers false when a step is running.
+		if ( ! skyphusion_ai_embed_rebuild_start( $batch ) ) {
+			WP_CLI::log( 'embed_state=busy' );
+			return;
 		}
-		skyphusion_ai_embed_cursor_start( $batch );
 	}
 	skyphusion_ai_embed_cli_steps( $batch );
 }
@@ -3400,6 +3567,7 @@ add_action( 'wp_after_insert_post', 'skyphusion_ai_embed_on_save', 20, 1 );
 add_action( 'before_delete_post', 'skyphusion_ai_embed_on_delete', 10, 1 );
 add_action( 'admin_post_skyphusion_ai_embed_save', 'skyphusion_ai_embed_handle_save' );
 add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_run' );
+add_action( 'admin_post_skyphusion_ai_embed_rebuild', 'skyphusion_ai_embed_handle_rebuild' );
 add_action( 'admin_post_skyphusion_ai_embed_delete', 'skyphusion_ai_embed_handle_delete' );
 add_action( 'wp_ajax_skyphusion_ai_embed_count', 'skyphusion_ai_embed_handle_count' );
 

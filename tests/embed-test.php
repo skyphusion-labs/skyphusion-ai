@@ -75,6 +75,9 @@ if (!function_exists('update_post_meta')) {
 if (!function_exists('delete_post_meta')) {
     function delete_post_meta($post_id, $key)
     {
+        if (!empty($GLOBALS['cfais_embed_meta_delete_hook'])) {
+            $GLOBALS['cfais_embed_meta_delete_hook']();
+        }
         unset($GLOBALS['cfais_embed_meta'][(int) $post_id][$key]);
         return true;
     }
@@ -246,6 +249,100 @@ expect('a password protected post is removed', $embed_locked['state'], 'removed'
 expect('removal is one index call', $GLOBALS['cfais_calls'], 1);
 expect('the hash is forgotten', isset($GLOBALS['cfais_embed_meta'][5]['skyphusion_ai_embed_hash']), false);
 expect('removal uses delete by id', strpos((string) $GLOBALS['cfais_last_request']['url'], '/delete_by_ids') !== false, true);
+
+// Issue #234, lead ruling: an old index is never re-embedded on its own. The
+// site owner pays for Workers AI, so the admin sees a notice and decides.
+embed_ready();
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema']);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema_pending']);
+$embed_old = embed_post(97, 'Old schema', 'Stored before terms existed');
+$GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_old, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_parts'] = 1;
+$GLOBALS['cfais_calls'] = 0;
+unset($GLOBALS['cfais_bodies']);
+expect('an unchanged post of an old index is not sent', skyphusion_ai_embed_sync_post($embed_old)['state'], 'unchanged');
+expect('and the model is not called', $GLOBALS['cfais_calls'], 0);
+expect('an index with no recorded metadata version is behind', skyphusion_ai_embed_schema_behind(), true);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_old);
+$embed_behind_est = skyphusion_ai_embed_estimate_tally(array($embed_old), skyphusion_ai_embed_config());
+expect('while behind, the count includes posts that are unchanged', $embed_behind_est['posts'], 1);
+ob_start();
+skyphusion_ai_embed_render();
+$embed_notice = (string) ob_get_clean();
+expect('the screen shows the stale-metadata notice', strpos($embed_notice, 'skyphusion-ai-embed-schema') !== false, true);
+expect('the notice says a rebuild costs neurons', strpos($embed_notice, 'spends Workers AI neurons') !== false, true);
+expect('the notice has a rebuild button of its own', strpos($embed_notice, 'value="skyphusion_ai_embed_rebuild"') !== false, true);
+expect('the rebuild form carries a nonce field name', strpos($embed_notice, 'wp_nonce') !== false || strpos($embed_notice, '_wpnonce') !== false || strpos($embed_notice, 'skyphusion_ai_embed_rebuild') !== false, true);
+expect('the rebuild button is registered for admin-post', strpos((string) file_get_contents(dirname(__DIR__) . '/includes/embed.php'), "'admin_post_skyphusion_ai_embed_rebuild'") !== false, true);
+
+// The rebuild starts only from the button or the CLI, then records the version when the pass is done.
+$GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_hash'] = 'old';
+skyphusion_ai_embed_rebuild_start(25);
+expect('a rebuild forgets the stored hash', isset($GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_hash']), false);
+expect('a rebuild alone does not mark the index current', skyphusion_ai_embed_schema_behind(), true);
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"mutationId":"schema1"}}',
+);
+$embed_rebuilt = skyphusion_ai_embed_step();
+expect('the rebuild pass stores the post again', $embed_rebuilt['embedded'], 1);
+expect('the finished rebuild pass marks the index current', skyphusion_ai_embed_schema_behind(), false);
+expect('the recorded version is the current one', (int) get_option('skyphusion_ai_embed_schema', 0), skyphusion_ai_embed_schema_now());
+ob_start();
+skyphusion_ai_embed_render();
+expect('the notice is gone once the index is current', strpos((string) ob_get_clean(), 'skyphusion-ai-embed-schema') === false, true);
+
+// A run that is not a rebuild does not mark an old index current.
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema']);
+skyphusion_ai_embed_cursor_start(25);
+$GLOBALS['cfais_bodies'] = array('{"result":{"data":[[0.25,0.5]]}}');
+skyphusion_ai_embed_step();
+expect('an ordinary run leaves the old index marked behind', skyphusion_ai_embed_schema_behind(), true);
+
+// A new index is written with the current metadata, so it starts current.
+update_option('skyphusion_ai_vectorize', array(
+    'index' => 'skyphusion-ai',
+    'post_types' => array('post', 'product'),
+    'fields' => array('title', 'content', 'excerpt'),
+    'model' => '',
+    'created' => 0,
+), false);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema']);
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{"name":"skyphusion-ai"}}');
+skyphusion_ai_embed_ensure(skyphusion_ai_embed_config());
+expect('a new index records the current metadata version', (int) get_option('skyphusion_ai_embed_schema', 0), skyphusion_ai_embed_schema_now());
+expect('and is not behind', skyphusion_ai_embed_schema_behind(), false);
+embed_ready();
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema'], $GLOBALS['cfais_options']['skyphusion_ai_embed_schema_pending']);
+unset($GLOBALS['cfais_bodies']);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+
+// Issue #234. rebuild clears every hash first. A post that is no longer
+// included then has no hash but still has vectors in the index.
+$embed_orphan = embed_post(98, 'Orphan', 'Excluded after the upgrade', array('post_password' => 'locked'));
+$GLOBALS['cfais_embed_meta'][98] = array('skyphusion_ai_embed_parts' => 2);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_request_urls'] = array();
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$embed_orphan_state = skyphusion_ai_embed_sync_post($embed_orphan);
+expect('an excluded post with no hash but stored parts is removed', $embed_orphan_state['state'], 'removed');
+expect('the delete call is made', $GLOBALS['cfais_calls'], 1);
+$embed_orphan_ids = json_decode((string) $GLOBALS['cfais_last_request']['args']['body'], true);
+expect('the delete names every stored part', count($embed_orphan_ids['ids'] ?? array()), 2);
+expect('the part count is forgotten', (int) ($GLOBALS['cfais_embed_meta'][98]['skyphusion_ai_embed_parts'] ?? 0), 0);
+
+$GLOBALS['cfais_embed_meta'][99] = array();
+$GLOBALS['cfais_calls'] = 0;
+expect('an excluded post that never had vectors reports removed', skyphusion_ai_embed_sync_post(embed_post(99, 'Never', 'Never stored', array('post_password' => 'locked')))['state'], 'removed');
+expect('and makes no request', $GLOBALS['cfais_calls'], 0);
+
+$GLOBALS['cfais_embed_meta'][100] = array('skyphusion_ai_embed_parts' => 1);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$embed_orphan_recon = skyphusion_ai_embed_reconcile(array(embed_post(100, 'Orphan two', 'Reconcile finds it', array('post_password' => 'locked'))));
+expect('reconcile removes an excluded post that has parts and no hash', $embed_orphan_recon['removed'], 1);
 
 // The run goes through the step (#201). The old one-request
 // skyphusion_ai_embed_run() is gone; these checks drive the step.
