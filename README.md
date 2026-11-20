@@ -306,6 +306,31 @@ git archive --format=zip --prefix=skyphusion-ai/ HEAD | tar -tf - 2>/dev/null ||
   git archive --format=tar --prefix=skyphusion-ai/ HEAD | tar -tf -
 ```
 
+### Releasing to WordPress.org
+
+A published GitHub Release deploys itself to `plugins.svn.wordpress.org/skyphusion-ai` through `.github/workflows/wporg-deploy.yml`. The steps live in `.github/scripts/wporg-deploy.sh`. The workflow uses only GitHub's own `actions/checkout`, the `svn` command line, and a pinned `gitleaks` binary that is checked against its sha256.
+
+To release:
+
+1. Bump the version in three places: the `Version:` line in `skyphusion-ai.php`, `SKYPHUSION_AI_VERSION`, and `Stable tag:` in `readme.txt`. Add the changelog. Merge that as a pull request.
+2. Tag the merge commit `vX.Y.Z` and publish the GitHub Release.
+3. The `wporg-deploy` run starts on its own. Watch it. Approve it if the `wordpress-org` environment asks for a reviewer.
+
+The run refuses before it commits when:
+
+- the tag is not `vX.Y.Z`, or the header `Version`, `SKYPHUSION_AI_VERSION` and `Stable tag` are not all equal to the tag without its `v`;
+- the archive made with `git archive --prefix=skyphusion-ai/` holds `tests/`, `.github/`, `CLAUDE.md`, a `composer.*` file or `phpcs.xml.dist`, or lacks `skyphusion-ai.php`, `readme.txt` or `worker/index.js`;
+- `gitleaks` finds anything in the unzipped tree;
+- `tags/X.Y.Z` already exists on SVN. A tag is never overwritten.
+
+Then it checks out SVN with `--depth immediates`, syncs the archive into `trunk` (deleting what the release no longer has), copies `trunk` to `tags/X.Y.Z`, and syncs the images in `.wordpress-org/` into `assets/` with `svn:mime-type` set. It makes one commit. The password reaches `svn` on standard input. It is never on a command line. After the commit it reads `trunk/readme.txt` and `tags/X.Y.Z/skyphusion-ai.php` back over https and fails if either does not say `X.Y.Z`.
+
+To run it again, or to try it: Actions, `wporg-deploy`, Run workflow. Type the tag. Tick `dry_run` to do every step except the commit and the read-back. A re-run of a tag that is already on SVN stops at the tag check, so a failed read-back is fixed by hand, not by running it again.
+
+The `wordpress-org` environment holds the two secrets `WP_SVN_USERNAME` and `WP_SVN_PASSWORD`. Restrict it to the default branch and tags, and add required reviewers if a person should approve each deploy.
+
+Test it without touching wordpress.org: `bash tests/wporg-deploy-test.sh` runs the script against a local `svnadmin` repository. It needs `svn`, `svnadmin`, `rsync`, `unzip` and `gitleaks`.
+
 ## Trademarks
 
 Cloudflare, the Cloudflare logo, and Cloudflare Workers are trademarks and/or registered trademarks of Cloudflare, Inc. in the United States and other jurisdictions. This plugin is an independent work. Cloudflare, Inc. does not sponsor or endorse it. WordPress and WooCommerce are trademarks of their respective owners.

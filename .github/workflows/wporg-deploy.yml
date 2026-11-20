@@ -1,0 +1,93 @@
+name: wporg-deploy
+
+# Puts a published GitHub Release on WordPress.org SVN.
+#
+#   release published -> deploys that tag.
+#   workflow_dispatch -> deploys the tag you type (a re-run), or with dry_run
+#                        does every step except the commit.
+#
+# All the logic is in .github/scripts/wporg-deploy.sh, which tests/wporg-deploy-test.sh
+# runs against a local svn repository. This file only checks out the code,
+# installs two tools, and passes the secrets in through the environment.
+#
+# The job runs in the GitHub environment `wordpress-org`. Put WP_SVN_USERNAME
+# and WP_SVN_PASSWORD there, and add required reviewers if a person should approve
+# each deploy. A deploy is a commit to a public directory, and an SVN tag is not
+# something to overwrite.
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to deploy, for example v0.7.0
+        required: true
+        type: string
+      dry_run:
+        description: Do every step except the commit
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+# Two deploys of one slug must not interleave. A queued run waits; it is not cancelled.
+concurrency:
+  group: wporg-deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: wordpress-org
+    env:
+      # The tag comes from the event or the input. It reaches the shell only
+      # as an environment variable, never inside a run: line.
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || 'false' }}
+    steps:
+      # The tooling is the code of the ref the workflow runs from, so a re-run
+      # of an old tag still uses the current script.
+      - name: checkout the tooling
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          path: tooling
+          persist-credentials: false
+
+      - name: checkout the release tag
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          path: release
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: install subversion
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq subversion
+
+      # A pinned release binary, checked against its sha256. Not an action.
+      - name: install gitleaks
+        env:
+          GITLEAKS_VERSION: "8.30.1"
+          GITLEAKS_SHA256: 551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb
+        run: |
+          set -euo pipefail
+          archive="gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          curl -fsSL -o "$RUNNER_TEMP/$archive" "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/${archive}"
+          echo "${GITLEAKS_SHA256}  $RUNNER_TEMP/$archive" | sha256sum -c -
+          mkdir -p "$RUNNER_TEMP/gitleaks"
+          tar -xzf "$RUNNER_TEMP/$archive" -C "$RUNNER_TEMP/gitleaks" gitleaks
+          echo "$RUNNER_TEMP/gitleaks" >> "$GITHUB_PATH"
+
+      - name: deploy to WordPress.org
+        env:
+          RELEASE_DIR: ${{ github.workspace }}/release
+          SVN_USERNAME: ${{ secrets.WP_SVN_USERNAME }}
+          SVN_PASSWORD: ${{ secrets.WP_SVN_PASSWORD }}
+        run: bash tooling/.github/scripts/wporg-deploy.sh
