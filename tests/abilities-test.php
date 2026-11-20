@@ -142,12 +142,28 @@ $GLOBALS['cfais_can_post'] = array(
 		10 => true,
 	),
 );
+// Core get_post() returns a WP_Post. An array hides a dropped post_password.
+function abilities_core_post( $id, $title, $content, $extra = array() ) {
+	$row = array(
+		'ID'            => $id,
+		'post_title'    => $title,
+		'post_content'  => $content,
+		'post_status'   => 'publish',
+		'post_password' => '',
+		'post_type'     => 'post',
+	);
+	foreach ( $extra as $key => $value ) {
+		$row[ $key ] = $value;
+	}
+	return new WP_Post( (object) $row );
+}
+
 $GLOBALS['cfais_posts_by_id'] = array(
 	6  => embed_post( 6, 'Seed', 'Body' ),
 	7  => embed_post( 7, 'Public Hat', 'Body' ),
-	8  => embed_post( 8, 'Private Cap', 'Secret', array( 'post_status' => 'private' ) ),
-	9  => embed_post( 9, 'Secret', 'Hidden', array( 'post_status' => 'private' ) ),
-	10 => embed_post( 10, 'Locked', 'Body', array( 'post_password' => 'sesame' ) ),
+	8  => abilities_core_post( 8, 'Private Cap', 'Secret', array( 'post_status' => 'private' ) ),
+	9  => abilities_core_post( 9, 'Secret', 'Hidden', array( 'post_status' => 'private' ) ),
+	10 => abilities_core_post( 10, 'Locked', 'Body', array( 'post_password' => 'sesame' ) ),
 );
 update_option(
 	'skyphusion_ai_vectorize',
