@@ -52,6 +52,11 @@ The result has one field.
 `pages` is a list of title, url, reason, and score.
 The list comes from Vectorize.
 Embeddings must be on.
+A post that is not published returns an empty list.
+A post with a password returns an empty list.
+A post this user cannot read returns an empty list.
+An unknown post returns that same empty list.
+A match this user cannot read is left out.
 
 ## skyphusion-ai/member-search
 

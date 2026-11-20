@@ -226,6 +226,10 @@ No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. Yo
 
 == Changelog ==
 
+= Unreleased =
+
+* Related pages from an ability return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
+
 = 0.6.3 =
 
 * The plugin gets the Workers AI token from the WordPress AI Client registry. It does not read the Connectors option.

@@ -178,27 +178,80 @@ function skyphusion_ai_related_ability_post( $post_id ) {
 }
 
 /**
+ * True when this user may receive one post from the related ability.
+ *
+ * The caller must be able to read the post. The post must be published
+ * and must have no password. A missing post is not readable.
+ *
+ * @param int $post_id Post id.
+ * @return bool
+ */
+function skyphusion_ai_related_ability_readable( $post_id ) {
+	$post_id = (int) $post_id;
+	if ( $post_id < 1 ) {
+		return false;
+	}
+	if ( ! function_exists( 'current_user_can' ) || ! current_user_can( 'read_post', $post_id ) ) {
+		return false;
+	}
+	$post = skyphusion_ai_related_ability_post( $post_id );
+	if ( ! is_array( $post ) ) {
+		return false;
+	}
+	$status = isset( $post['post_status'] ) ? (string) $post['post_status'] : '';
+	if ( 'publish' !== $status ) {
+		return false;
+	}
+	$password = isset( $post['post_password'] ) ? (string) $post['post_password'] : '';
+	return '' === $password;
+}
+
+/**
+ * Drop every match this user cannot read.
+ *
+ * @param mixed $rows Related rows.
+ * @return array<int, array<string, mixed>>
+ */
+function skyphusion_ai_related_ability_visible( $rows ) {
+	$kept = array();
+	if ( ! is_array( $rows ) ) {
+		return $kept;
+	}
+	foreach ( $rows as $row ) {
+		if ( ! is_array( $row ) ) {
+			continue;
+		}
+		$id = isset( $row['post_id'] ) ? (int) $row['post_id'] : 0;
+		if ( ! skyphusion_ai_related_ability_readable( $id ) ) {
+			continue;
+		}
+		$kept[] = $row;
+	}
+	return $kept;
+}
+
+/**
  * Run the related ability.
  *
+ * A missing post and a post this user cannot read both return an empty list.
+ *
  * @param mixed $input Ability input.
- * @return array{pages: array<int, array{title: string, url: string, reason: string, score: float}>}|WP_Error
+ * @return array{pages: array<int, array{title: string, url: string, reason: string, score: float}>}
  */
 function skyphusion_ai_related_ability_run( $input ) {
 	$post_id = 0;
 	if ( is_array( $input ) && isset( $input['post_id'] ) ) {
 		$post_id = (int) $input['post_id'];
 	}
+	if ( ! skyphusion_ai_related_ability_readable( $post_id ) ) {
+		return array( 'pages' => array() );
+	}
 	$post = skyphusion_ai_related_ability_post( $post_id );
-	if ( null === $post ) {
-		if ( function_exists( 'WP_Error' ) || class_exists( 'WP_Error' ) ) {
-			return new WP_Error( 'skyphusion_ai_related', __( 'That post was not found.', 'skyphusion-ai' ) );
-		}
+	if ( null === $post || ! function_exists( 'skyphusion_ai_related_rows' ) ) {
 		return array( 'pages' => array() );
 	}
-	if ( ! function_exists( 'skyphusion_ai_related_rows' ) ) {
-		return array( 'pages' => array() );
-	}
-	return skyphusion_ai_related_ability_output( skyphusion_ai_related_rows( $post ) );
+	$rows = skyphusion_ai_related_ability_visible( skyphusion_ai_related_rows( $post ) );
+	return skyphusion_ai_related_ability_output( $rows );
 }
 
 /**
