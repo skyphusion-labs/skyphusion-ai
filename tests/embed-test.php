@@ -75,6 +75,9 @@ if (!function_exists('update_post_meta')) {
 if (!function_exists('delete_post_meta')) {
     function delete_post_meta($post_id, $key)
     {
+        if (!empty($GLOBALS['cfais_embed_meta_delete_hook'])) {
+            $GLOBALS['cfais_embed_meta_delete_hook']();
+        }
         unset($GLOBALS['cfais_embed_meta'][(int) $post_id][$key]);
         return true;
     }

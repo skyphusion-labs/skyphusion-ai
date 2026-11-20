@@ -29,6 +29,106 @@ if (!function_exists('register_rest_route')) {
     }
 }
 
+function step_race_fire($point)
+{
+    // step_race_at limits the hook to one point: insert or delete. Empty means either.
+    $only = isset($GLOBALS['step_race_at']) ? $GLOBALS['step_race_at'] : '';
+    if (!empty($GLOBALS['step_race_hook']) && ('' === $only || $only === $point)) {
+        $hook = $GLOBALS['step_race_hook'];
+        unset($GLOBALS['step_race_hook']);
+        $hook();
+    }
+}
+// NOT atomic, like core: it reads the row, then writes. The race hook fires in the gap.
+if (!function_exists('add_option')) {
+    function add_option($name, $value = '', $deprecated = '', $autoload = 'yes')
+    {
+        $exists = array_key_exists($name, $GLOBALS['cfais_options']);
+        step_race_fire('insert');
+        if ($exists) {
+            return false;
+        }
+        $GLOBALS['cfais_options'][$name] = $value;
+        return true;
+    }
+}
+if (!function_exists('delete_option')) {
+    function delete_option($name)
+    {
+        step_race_fire('delete');
+        unset($GLOBALS['cfais_options'][$name]);
+        // Same body as reset-test.php. This file loads first, so its copy wins.
+        if ('skyphusion_ai_settings' === $name) {
+            $GLOBALS['cfais_stored'] = array();
+        }
+        return true;
+    }
+}
+
+/**
+ * A stand-in for $wpdb that holds the options table in memory. Its statements
+ * are atomic, as MySQL's are. prepare() keeps the query and its arguments so
+ * query() can tell INSERT IGNORE, DELETE and SELECT apart. The race hook fires
+ * just before a write is applied.
+ */
+class Step_Wpdb
+{
+    public $options = 'wp_options';
+    public $table = array();
+    public function prepare($sql, ...$args)
+    {
+        return array('sql' => $sql, 'args' => $args);
+    }
+    public function query($prepared)
+    {
+        $sql = $prepared['sql'];
+        $args = $prepared['args'];
+        if (0 === strpos($sql, 'INSERT IGNORE')) {
+            step_race_fire('insert');
+            if (array_key_exists($args[0], $this->table)) {
+                return 0;
+            }
+            $this->table[$args[0]] = $args[1];
+            return 1;
+        }
+        if (0 === strpos($sql, 'DELETE FROM') && false !== strpos($sql, 'option_value = %s')) {
+            step_race_fire('delete');
+            if (isset($this->table[$args[0]]) && $this->table[$args[0]] === $args[1]) {
+                unset($this->table[$args[0]]);
+                return 1;
+            }
+            return 0;
+        }
+        return 0;
+    }
+    public function get_var($prepared)
+    {
+        return $this->table[$prepared['args'][0]] ?? null;
+    }
+}
+$step_prev_wpdb = isset($GLOBALS['wpdb']) ? $GLOBALS['wpdb'] : null;
+$GLOBALS['wpdb'] = new Step_Wpdb();
+
+// The lock row lives in the fake table. The old option is written too, so a
+// check run against the old add_option lock sees the same state.
+function step_lock_put($value)
+{
+    $GLOBALS['wpdb']->table['skyphusion_ai_embed_step_lock'] = $value;
+    $GLOBALS['cfais_options']['skyphusion_ai_embed_step_lock'] = skyphusion_ai_embed_lock_expiry_of_test($value);
+}
+function skyphusion_ai_embed_lock_expiry_of_test($value)
+{
+    return (int) substr((string) $value, strrpos((string) $value, ':') + 1);
+}
+function step_lock_clear()
+{
+    unset($GLOBALS['wpdb']->table['skyphusion_ai_embed_step_lock'], $GLOBALS['cfais_options']['skyphusion_ai_embed_step_lock']);
+}
+function step_lock_row()
+{
+    return $GLOBALS['wpdb']->table['skyphusion_ai_embed_step_lock'] ?? '';
+}
+
 $step_prev_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
 $step_prev_body = isset($GLOBALS['cfais_body']) ? $GLOBALS['cfais_body'] : null;
 
@@ -243,8 +343,153 @@ expect('a REST step obeys its batch size', $step_rest['processed'], 5);
 expect('a REST step says it is not done', $step_rest['state'], 'step');
 expect('a REST step queues the next step', isset($GLOBALS['step_cron']['skyphusion_ai_embed_step_event']), true);
 $step_src = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php');
-expect('the admin button runs one step', strpos($step_src, "check_admin_referer( 'skyphusion_ai_embed_run' );\n\tskyphusion_ai_embed_step_now();") !== false, true);
+expect('the admin button runs one step', strpos($step_src, "check_admin_referer( 'skyphusion_ai_embed_run' );\n\t\$result = skyphusion_ai_embed_step_now();") !== false, true);
 expect('the admin button no longer runs every post', strpos($step_src, 'skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), true )'), false);
+
+// 8. Issue #233: two steps never run at once. Cron, the Run button, REST and
+// WP-CLI all call the same step, and two of them used to embed (and bill)
+// the same posts.
+function step_overlap($post)
+{
+    if (null === $GLOBALS['step_inner']) {
+        // A second caller arrives while this step is on its first post.
+        $GLOBALS['step_inner'] = skyphusion_ai_embed_step(0, 'step_counter');
+    }
+    return step_counter($post);
+}
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(3);
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+$GLOBALS['step_inner'] = null;
+step_lock_clear();
+update_option('skyphusion_ai_embed_cursor', array(), false);
+skyphusion_ai_embed_cursor_start(25);
+$step_outer = skyphusion_ai_embed_step(0, 'step_overlap');
+expect('a step that finds another step running does nothing', $GLOBALS['step_inner']['state'] ?? '', 'busy');
+expect('and processes no post', $GLOBALS['step_inner']['processed'] ?? -1, 0);
+expect('the running step stores each post once', $GLOBALS['step_seen'], array(3, 6, 9));
+expect('the running step finishes the pass', $step_outer['state'], 'done');
+expect('the lock is released when the step ends', step_lock_row(), '');
+
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+step_lock_put('stale:' . (time() - 5));
+skyphusion_ai_embed_cursor_start(25);
+$step_stale = skyphusion_ai_embed_step(0, 'step_counter');
+expect('a lock past its expiry does not stop a step', $step_stale['state'], 'done');
+
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+step_lock_put('held:' . (time() + 600));
+skyphusion_ai_embed_cursor_start(25);
+$step_held = skyphusion_ai_embed_step(0, 'step_counter');
+expect('a held lock answers busy', $step_held['state'], 'busy');
+expect('a busy step stores nothing', $GLOBALS['step_seen'], array());
+expect('a busy step leaves the lock to its holder', skyphusion_ai_embed_lock_expiry_of_test(step_lock_row()) > time(), true);
+$GLOBALS['step_cron'] = array();
+skyphusion_ai_embed_on_step_event();
+expect('a busy cron step queues the next one', isset($GLOBALS['step_cron']['skyphusion_ai_embed_step_event']), true);
+$step_now_busy = skyphusion_ai_embed_step_now();
+expect('the button and REST say a step is running', strpos((string) ($step_now_busy['message'] ?? ''), 'already running') !== false, true);
+$GLOBALS['cfais_cli_log'] = array();
+$GLOBALS['cfais_embed_meta'][3]['skyphusion_ai_embed_hash'] = 'keep-me';
+skyphusion_ai_embed_cli(array('rebuild'), array());
+expect('cli says a step is running', strpos(embed_cli_lines(), 'embed_state=busy') !== false, true);
+expect('cli rebuild does not clear hashes under a running step', $GLOBALS['cfais_embed_meta'][3]['skyphusion_ai_embed_hash'] ?? '', 'keep-me');
+step_lock_clear();
+
+// A blocked pass is not "running in the background".
+update_option('skyphusion_ai_embed_cursor', array('active' => 1, 'state' => 'blocked', 'seen' => 4, 'batch' => 25), false);
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_progress = (string) ob_get_clean();
+expect('a blocked pass is not called background work', strpos($step_progress, 'runs in the background') === false, true);
+expect('a blocked pass says it is blocked and how to resume', strpos($step_progress, 'blocked') !== false && strpos($step_progress, 'Run') !== false, true);
+
+// 9. Lead ruling on #233: pressing Run while a step holds the lock says so on the screen.
+if (!function_exists('check_admin_referer')) {
+    function check_admin_referer($action = -1)
+    {
+        return true;
+    }
+}
+$GLOBALS['cfais_can'] = array('manage_options' => true);
+$GLOBALS['cfais_user_id'] = 7;
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(3);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+step_lock_put('held:' . (time() + 600));
+skyphusion_ai_embed_handle_run();
+step_lock_clear();
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_busy_screen = (string) ob_get_clean();
+expect('Run on a held lock puts a notice on the screen', strpos($step_busy_screen, 'An embedding step is already running') !== false, true);
+ob_start();
+skyphusion_ai_embed_render_progress();
+expect('the notice shows once', strpos((string) ob_get_clean(), 'Your press of Run did nothing') === false, true);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+skyphusion_ai_embed_handle_run();
+ob_start();
+skyphusion_ai_embed_render_progress();
+expect('Run with no lock held shows no busy notice', strpos((string) ob_get_clean(), 'already running') === false, true);
+skyphusion_ai_embed_cursor_start(25);
+step_lock_put('held:' . (time() + 600));
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_locked_screen = (string) ob_get_clean();
+step_lock_clear();
+expect('a held lock is named while a pass is active', strpos($step_locked_screen, 'An embedding step is already running') !== false, true);
+
+// 10. Review of #237: the lock is one SQL row, taken atomically and released only by its owner.
+// Each race below is forced at the point where the old add_option/delete_option lock was not atomic.
+step_lock_clear();
+$step_other = '';
+$GLOBALS['step_race_hook'] = function () use (&$step_other) {
+    $step_other = skyphusion_ai_embed_lock_take();
+};
+$step_first = skyphusion_ai_embed_lock_take();
+expect('two steps that start together: exactly one holds the lock', (int) (bool) $step_first + (int) (bool) $step_other, 1);
+step_lock_clear();
+
+// An expired lock: two steps race to take it over.
+step_lock_put('stale:' . (time() - 5));
+$step_other = '';
+$GLOBALS['step_race_at'] = 'delete';
+$GLOBALS['step_race_hook'] = function () use (&$step_other) {
+    $step_other = skyphusion_ai_embed_lock_take();
+};
+$step_first = skyphusion_ai_embed_lock_take();
+expect('two steps that race for an expired lock: exactly one holds it', (int) (bool) $step_first + (int) (bool) $step_other, 1);
+unset($GLOBALS['step_race_at']);
+step_lock_clear();
+
+// A step that ran past the expiry must not delete the next step's lock.
+$step_mine = skyphusion_ai_embed_lock_take();
+step_lock_put('next:' . (time() + 600));
+skyphusion_ai_embed_lock_release($step_mine);
+expect('a late release leaves the next step\'s lock alone', skyphusion_ai_embed_step_locked(), true);
+step_lock_clear();
+$step_mine = skyphusion_ai_embed_lock_take();
+skyphusion_ai_embed_lock_release($step_mine);
+expect('the owner releases its own lock', skyphusion_ai_embed_step_locked(), false);
+
+// Rebuild clears hashes only while it holds the lock.
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(1);
+$step_rebuild_id = (int) $GLOBALS['skyphusion_ai_embed_posts'][0]['ID'];
+$GLOBALS['cfais_embed_meta'][$step_rebuild_id]['skyphusion_ai_embed_hash'] = 'old-hash';
+$GLOBALS['step_rebuild_locked'] = null;
+$GLOBALS['cfais_embed_meta_delete_hook'] = function () {
+    if (null === $GLOBALS['step_rebuild_locked']) {
+        $GLOBALS['step_rebuild_locked'] = skyphusion_ai_embed_step_locked();
+    }
+};
+$GLOBALS['cfais_body'] = '{"success":true,"result":{"data":[[0.25,0.5]],"mutationId":"step1"}}';
+update_option('skyphusion_ai_embed_cursor', array(), false);
+$GLOBALS['cfais_cli_log'] = array();
+skyphusion_ai_embed_cli(array('rebuild'), array());
+unset($GLOBALS['cfais_embed_meta_delete_hook']);
+expect('rebuild holds the lock while it clears the hashes', $GLOBALS['step_rebuild_locked'], true);
+expect('rebuild does not keep the lock afterwards', skyphusion_ai_embed_step_locked(), false);
 
 // Leave the shared state as it was for the files that follow.
 unset($GLOBALS['cfais_settings']);
@@ -257,6 +502,11 @@ if (false === $step_prev_account || '' === $step_prev_account) {
     putenv('CLOUDFLARE_ACCOUNT_ID');
 } else {
     putenv('CLOUDFLARE_ACCOUNT_ID=' . $step_prev_account);
+}
+if (null === $step_prev_wpdb) {
+    unset($GLOBALS['wpdb']);
+} else {
+    $GLOBALS['wpdb'] = $step_prev_wpdb;
 }
 update_option('skyphusion_ai_embed_cursor', array(), false);
 if (null === $step_prev_posts) {

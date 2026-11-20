@@ -2635,7 +2635,10 @@ function skyphusion_ai_embed_handle_run() {
 		return;
 	}
 	check_admin_referer( 'skyphusion_ai_embed_run' );
-	skyphusion_ai_embed_step_now();
+	$result = skyphusion_ai_embed_step_now();
+	if ( isset( $result['state'] ) && 'busy' === $result['state'] ) {
+		skyphusion_ai_embed_busy_flag();
+	}
 	skyphusion_ai_embed_redirect();
 }
 
@@ -3281,11 +3284,21 @@ function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 		return;
 	}
 	if ( 'rebuild' === $command ) {
-		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
-			skyphusion_ai_embed_hash_set( $post_id, '' );
-			skyphusion_ai_embed_fail_set( $post_id, false );
+		// Hold the lock while the hashes are cleared, so no step runs between the clear and the restart.
+		$held = skyphusion_ai_embed_lock_take();
+		if ( '' === $held ) {
+			WP_CLI::log( 'embed_state=busy' );
+			return;
 		}
-		skyphusion_ai_embed_cursor_start( $batch );
+		try {
+			foreach ( skyphusion_ai_embed_ids() as $post_id ) {
+				skyphusion_ai_embed_hash_set( $post_id, '' );
+				skyphusion_ai_embed_fail_set( $post_id, false );
+			}
+			skyphusion_ai_embed_cursor_start( $batch );
+		} finally {
+			skyphusion_ai_embed_lock_release( $held );
+		}
 	}
 	skyphusion_ai_embed_cli_steps( $batch );
 }
