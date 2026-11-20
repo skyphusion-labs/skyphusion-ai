@@ -167,11 +167,12 @@ function skyphusion_ai_related_ability_post( $post_id ) {
 	}
 	if ( is_object( $post ) ) {
 		return array(
-			'ID'           => isset( $post->ID ) ? (int) $post->ID : $post_id,
-			'post_type'    => isset( $post->post_type ) ? (string) $post->post_type : '',
-			'post_status'  => isset( $post->post_status ) ? (string) $post->post_status : '',
-			'post_title'   => isset( $post->post_title ) ? (string) $post->post_title : '',
-			'post_content' => isset( $post->post_content ) ? (string) $post->post_content : '',
+			'ID'            => isset( $post->ID ) ? (int) $post->ID : $post_id,
+			'post_type'     => isset( $post->post_type ) ? (string) $post->post_type : '',
+			'post_status'   => isset( $post->post_status ) ? (string) $post->post_status : '',
+			'post_password' => isset( $post->post_password ) ? (string) $post->post_password : '',
+			'post_title'    => isset( $post->post_title ) ? (string) $post->post_title : '',
+			'post_content'  => isset( $post->post_content ) ? (string) $post->post_content : '',
 		);
 	}
 	return null;
