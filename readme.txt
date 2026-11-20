@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.6.3
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -226,12 +226,27 @@ No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. Yo
 
 == Changelog ==
 
-= Unreleased =
+= 0.7.0 =
 
-* Related pages from an ability return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
-* Unticking llms.txt in Settings turns the file off.
-* The gateway status keeps the saved gateway id while calls use the direct API for one hour.
-* llms.txt is served only at the home path. The response sends X-Content-Type-Options: nosniff.
+* Upgrading, if you use embeddings: open Settings, then Skyphusion AI. A notice says the stored vectors lack the category and tag line. Press Count the posts to see the cost, then press Rebuild the index. Nothing is embedded again until you press it. `wp skyphusion-ai embed rebuild` does the same.
+* Upgrading, if you use the assistant Worker: deploy it again after you change the gateway. The Worker now sends its model calls through the saved gateway.
+* The site assistant sends chat calls through AI Gateway when a gateway id is saved. A saved dynamic route sets the chat model. Alt text stays on the vision model.
+* Gateway logs keep five fields and name the tool.
+* Retry and timeout settings for AI Gateway. A blank field sends no header. Image and speech stay off until you turn them on. The values are cut to fit the 30 second limit of the call. A timeout no longer starts the one hour on the direct API.
+* The Worker fills empty text when the gateway route answers in the chat shape. It no longer asks the model again for the same item every hour.
+* The embedding run works in small steps. The Run button does one step and WP-Cron does the next. `--batch=N` sets the size. A site with no WP-CLI can call `POST /wp-json/skyphusion-ai/v1/embed/step`.
+* Two steps never run at once, so one run is not billed twice. A step that finds another one running says so. A blocked run says it is blocked and how to resume it.
+* The settings screen counts the posts in small steps when you press Count the posts. It does not count on page load. Each admin has a count of their own. A count left for an hour is dropped.
+* Status, estimate, retry, reconcile, move and related refresh read the posts in batches. A retry stops at the daily embeddings limit.
+* The category and tag filter works for real posts and WooCommerce products. A product stores its categories and tags with its vector.
+* A block editor save now uses the new categories and tags. A post moved to an excluded category leaves the index.
+* A rebuild deletes the vectors of a post that is no longer included.
+* A site whose host sets up the Workers AI and Vectorize bindings uses them. Every other site keeps the REST API.
+* The editor link box reads the pages 100 at a time. It keeps the list of pages that nothing links to for one day.
+* The plugin registers four read-only abilities: search, related pages, member search and status. Related pages return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
+* The settings screen shows the gateway status. It keeps the saved gateway id while calls use the direct API for one hour.
+* `wp skyphusion-ai smoke` checks the WordPress AI Client locally. It sends no request to Cloudflare.
+* An optional llms.txt for crawlers. Unticking llms.txt in Settings turns the file off. It is served only at the home path and sends X-Content-Type-Options: nosniff.
 
 = 0.6.3 =
 
