@@ -355,7 +355,7 @@ function skyphusion_ai_status_snapshot() {
 		'embed_on'         => $embed_on,
 		'embed_index'      => $embed_index,
 		'embed_created'    => $embed_created,
-		'search_endpoint'  => $endpoint !== '',
+		'search_endpoint'  => '' !== $endpoint,
 		'provider_id'      => 'skyphusion-ai',
 	);
 }

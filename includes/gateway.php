@@ -331,7 +331,7 @@ function skyphusion_ai_gateway_status() {
 	$route    = function_exists( 'skyphusion_ai_gateway_route' ) ? skyphusion_ai_gateway_route() : '';
 	$until    = skyphusion_ai_gateway_fallback_until();
 	$fallback = $until > time();
-	$host = 'api.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
+	$host     = 'api.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
 	if ( '' !== $gateway_id && ! $fallback ) {
 		$host = 'gateway.ai.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the gateway host, not a remote asset.
 	}

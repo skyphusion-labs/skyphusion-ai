@@ -31,9 +31,9 @@ function skyphusion_ai_llms_on() {
  * @return string
  */
 function skyphusion_ai_llms_body( $parts = array() ) {
-	$name = isset( $parts['name'] ) ? (string) $parts['name'] : '';
-	$home = isset( $parts['home'] ) ? (string) $parts['home'] : '';
-	$desc = isset( $parts['description'] ) ? (string) $parts['description'] : '';
+	$name     = isset( $parts['name'] ) ? (string) $parts['name'] : '';
+	$home     = isset( $parts['home'] ) ? (string) $parts['home'] : '';
+	$desc     = isset( $parts['description'] ) ? (string) $parts['description'] : '';
 	$endpoint = isset( $parts['endpoint'] ) ? (string) $parts['endpoint'] : '';
 
 	if ( '' === $name && function_exists( 'get_bloginfo' ) ) {
@@ -123,9 +123,9 @@ function skyphusion_ai_llms_serve() {
 /**
  * Keep llms_txt on the settings option.
  *
- * @param mixed $value    Sanitized settings.
- * @param string $option  Option name.
- * @param mixed $original Prior value.
+ * @param mixed  $value    Sanitized settings.
+ * @param string $option   Option name.
+ * @param mixed  $original Prior value.
  * @return mixed
  */
 function skyphusion_ai_llms_sanitize_option( $value, $option = '', $original = null ) {
