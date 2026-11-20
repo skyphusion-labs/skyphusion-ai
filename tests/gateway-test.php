@@ -355,6 +355,17 @@ $GLOBALS['cfais_stored']['gateway_attempts'] = '2';
 $GLOBALS['cfais_stored']['gateway_delay'] = '250';
 $cfais_fit = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
 expect('a setting that fits is not changed', array($cfais_fit['cf-aig-request-timeout'] ?? '', $cfais_fit['cf-aig-max-attempts'] ?? ''), array('10000', '2'));
+// A blank timeout with retries still has to fit: the gateway's own default
+// timeout is not the caller's, so send the caller's limit and cut the attempts.
+unset($GLOBALS['cfais_stored']['gateway_timeout'], $GLOBALS['cfais_stored']['gateway_delay'], $GLOBALS['cfais_stored']['gateway_backoff']);
+$GLOBALS['cfais_stored']['gateway_attempts'] = '5';
+$cfais_fit = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
+expect('a blank timeout with 5 attempts sends the caller limit', $cfais_fit['cf-aig-request-timeout'] ?? '', '28000');
+expect('and one attempt', $cfais_fit['cf-aig-max-attempts'] ?? '', '1');
+$GLOBALS['cfais_stored']['gateway_attempts'] = '1';
+expect('a blank timeout with one attempt sends no timeout', isset(skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text')['cf-aig-request-timeout']), false);
+unset($GLOBALS['cfais_stored']['gateway_attempts']);
+expect('a blank timeout and blank attempts send neither', array_intersect_key(skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text'), array('cf-aig-request-timeout' => 1, 'cf-aig-max-attempts' => 1)), array());
 
 $GLOBALS['cfais_stored']['gateway_timeout'] = '8000';
 unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);

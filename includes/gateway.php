@@ -538,8 +538,9 @@ function skyphusion_ai_gateway_wait_worst( $timeout, $attempts, $delay, $backoff
 /**
  * Cut the timeout and the attempts so the gateway finishes inside the caller.
  *
- * Attempts go first, then the timeout. A blank timeout sends no header, so
- * there is nothing to measure and the values stay as saved.
+ * Attempts go first, then the timeout. A blank timeout with retries is set to the
+ * limit first, so the retries are cut as well. A blank timeout with no retries
+ * sends no header.
  *
  * @param string $timeout  Timeout in milliseconds, or empty.
  * @param string $attempts Attempts, or empty.
@@ -548,13 +549,18 @@ function skyphusion_ai_gateway_wait_worst( $timeout, $attempts, $delay, $backoff
  * @return array{timeout: string, attempts: string}
  */
 function skyphusion_ai_gateway_wait_fit( $timeout, $attempts, $delay, $backoff ) {
-	if ( '' === $timeout ) {
-		return array(
-			'timeout'  => $timeout,
-			'attempts' => $attempts,
-		);
-	}
 	$limit = skyphusion_ai_gateway_wait_limit();
+	if ( '' === $timeout ) {
+		// No timeout header means the gateway's own default, which is not the caller's.
+		// One attempt or none cannot retry past the caller, so only retries need a fit.
+		if ( '' === $attempts || 2 > (int) $attempts ) {
+			return array(
+				'timeout'  => $timeout,
+				'attempts' => $attempts,
+			);
+		}
+		$timeout = (string) $limit;
+	}
 	$wait  = (int) $timeout;
 	$tries = '' === $attempts ? 1 : (int) $attempts;
 	$pause = '' === $delay ? 0 : (int) $delay;
