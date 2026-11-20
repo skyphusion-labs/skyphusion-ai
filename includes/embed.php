@@ -3284,15 +3284,21 @@ function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 		return;
 	}
 	if ( 'rebuild' === $command ) {
-		if ( skyphusion_ai_embed_step_locked() ) {
+		// Hold the lock while the hashes are cleared, so no step runs between the clear and the restart.
+		$held = skyphusion_ai_embed_lock_take();
+		if ( '' === $held ) {
 			WP_CLI::log( 'embed_state=busy' );
 			return;
 		}
-		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
-			skyphusion_ai_embed_hash_set( $post_id, '' );
-			skyphusion_ai_embed_fail_set( $post_id, false );
+		try {
+			foreach ( skyphusion_ai_embed_ids() as $post_id ) {
+				skyphusion_ai_embed_hash_set( $post_id, '' );
+				skyphusion_ai_embed_fail_set( $post_id, false );
+			}
+			skyphusion_ai_embed_cursor_start( $batch );
+		} finally {
+			skyphusion_ai_embed_lock_release( $held );
 		}
-		skyphusion_ai_embed_cursor_start( $batch );
 	}
 	skyphusion_ai_embed_cli_steps( $batch );
 }

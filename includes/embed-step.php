@@ -229,51 +229,129 @@ function skyphusion_ai_embed_lock_ttl() {
 }
 
 /**
+ * The database object, or null when WordPress has none.
+ *
+ * The lock is one row in the options table, written with plain SQL. The
+ * function add_option is not atomic: it reads the row first and then runs an
+ * upsert, so two steps that start together can both think they added it.
+ *
+ * @return object|null
+ */
+function skyphusion_ai_embed_lock_db() {
+	global $wpdb;
+	if ( isset( $wpdb ) && is_object( $wpdb ) && method_exists( $wpdb, 'query' ) && method_exists( $wpdb, 'prepare' ) && method_exists( $wpdb, 'get_var' ) && isset( $wpdb->options ) ) {
+		return $wpdb;
+	}
+	return null;
+}
+
+/**
+ * The stored lock value, or an empty string when no row exists.
+ *
+ * The value is a random token, a colon, and the expiry time.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_lock_row() {
+	$db = skyphusion_ai_embed_lock_db();
+	if ( null === $db ) {
+		return '';
+	}
+	// A direct read on purpose: the lock must not come from the object cache.
+	$value = $db->get_var( $db->prepare( "SELECT option_value FROM {$db->options} WHERE option_name = %s", skyphusion_ai_embed_lock_name() ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+	return is_string( $value ) ? $value : '';
+}
+
+/**
+ * Expiry time inside a stored lock value.
+ *
+ * @param string $value Stored value.
+ * @return int
+ */
+function skyphusion_ai_embed_lock_expiry( $value ) {
+	$at = strrpos( $value, ':' );
+	if ( false === $at ) {
+		return 0;
+	}
+	return (int) substr( $value, $at + 1 );
+}
+
+/**
  * True while a step holds an unexpired lock.
  *
  * @return bool
  */
 function skyphusion_ai_embed_step_locked() {
-	if ( ! function_exists( 'get_option' ) ) {
-		return false;
-	}
-	$until = get_option( skyphusion_ai_embed_lock_name(), false );
-	return is_numeric( $until ) && (int) $until > time();
+	$value = skyphusion_ai_embed_lock_row();
+	return '' !== $value && skyphusion_ai_embed_lock_expiry( $value ) > time();
 }
 
 /**
- * Take the step lock. A lock past its expiry is replaced.
+ * Take the step lock. An expired lock is replaced.
  *
- * The function add_option fails when the row exists, so two callers cannot both take it.
+ * INSERT IGNORE adds the row only when none exists, in one statement, so one
+ * caller gets 1 row affected and any other gets 0. An expired row is removed
+ * with a delete that names the exact value read, so a caller that lost the race
+ * cannot remove the winner's fresh lock.
  *
- * @return bool True when this caller holds the lock.
+ * @return string The value this caller holds, or an empty string when it is busy.
  */
 function skyphusion_ai_embed_lock_take() {
-	if ( ! function_exists( 'add_option' ) ) {
-		return true;
+	$db = skyphusion_ai_embed_lock_db();
+	if ( null === $db ) {
+		// No database object means a harness, never a live site. There is nothing to lock on.
+		return 'unlocked';
 	}
-	$until = time() + skyphusion_ai_embed_lock_ttl();
-	if ( add_option( skyphusion_ai_embed_lock_name(), $until, '', 'no' ) ) {
-		return true;
+	$value = bin2hex( random_bytes( 8 ) ) . ':' . (string) ( time() + skyphusion_ai_embed_lock_ttl() );
+	if ( 1 === skyphusion_ai_embed_lock_insert( $db, $value ) ) {
+		return $value;
 	}
-	if ( skyphusion_ai_embed_step_locked() ) {
-		return false;
+	$row = skyphusion_ai_embed_lock_row();
+	if ( '' === $row || skyphusion_ai_embed_lock_expiry( $row ) > time() ) {
+		return '';
 	}
-	if ( function_exists( 'delete_option' ) ) {
-		delete_option( skyphusion_ai_embed_lock_name() );
+	if ( 1 === skyphusion_ai_embed_lock_delete( $db, $row ) && 1 === skyphusion_ai_embed_lock_insert( $db, $value ) ) {
+		return $value;
 	}
-	return (bool) add_option( skyphusion_ai_embed_lock_name(), $until, '', 'no' );
+	return '';
 }
 
 /**
- * Release the step lock.
+ * Insert the lock row if none exists.
  *
+ * @param object $db    Database object.
+ * @param string $value Lock value.
+ * @return int Rows added, 1 or 0.
+ */
+function skyphusion_ai_embed_lock_insert( $db, $value ) {
+	return (int) $db->query( $db->prepare( "INSERT IGNORE INTO {$db->options} (option_name, option_value, autoload) VALUES (%s, %s, 'no')", skyphusion_ai_embed_lock_name(), $value ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+}
+
+/**
+ * Delete the lock row only while it still holds this exact value.
+ *
+ * @param object $db    Database object.
+ * @param string $value Lock value the caller holds or read.
+ * @return int Rows deleted, 1 or 0.
+ */
+function skyphusion_ai_embed_lock_delete( $db, $value ) {
+	return (int) $db->query( $db->prepare( "DELETE FROM {$db->options} WHERE option_name = %s AND option_value = %s", skyphusion_ai_embed_lock_name(), $value ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+}
+
+/**
+ * Release the step lock, but only the one this caller took.
+ *
+ * A step that ran past the expiry finds another step's lock here and leaves it.
+ *
+ * @param string $held Value returned by skyphusion_ai_embed_lock_take().
  * @return void
  */
-function skyphusion_ai_embed_lock_release() {
-	if ( function_exists( 'delete_option' ) ) {
-		delete_option( skyphusion_ai_embed_lock_name() );
+function skyphusion_ai_embed_lock_release( $held = '' ) {
+	$db = skyphusion_ai_embed_lock_db();
+	if ( null === $db || '' === $held || 'unlocked' === $held ) {
+		return;
 	}
+	skyphusion_ai_embed_lock_delete( $db, $held );
 }
 
 /**
@@ -308,7 +386,8 @@ function skyphusion_ai_embed_busy_result( $batch, $after ) {
  * @return array<string, mixed> The step result. State busy means another step holds the lock and this one did nothing.
  */
 function skyphusion_ai_embed_step( $batch = 0, $sync = null ) {
-	if ( ! skyphusion_ai_embed_lock_take() ) {
+	$held = skyphusion_ai_embed_lock_take();
+	if ( '' === $held ) {
 		$cursor = skyphusion_ai_embed_cursor();
 		$size   = 0 < (int) $batch ? skyphusion_ai_embed_batch_size( $batch ) : (int) $cursor['batch'];
 		return skyphusion_ai_embed_busy_result( $size, (int) $cursor['after'] );
@@ -316,7 +395,7 @@ function skyphusion_ai_embed_step( $batch = 0, $sync = null ) {
 	try {
 		return skyphusion_ai_embed_step_locked_run( $batch, $sync );
 	} finally {
-		skyphusion_ai_embed_lock_release();
+		skyphusion_ai_embed_lock_release( $held );
 	}
 }
 
