@@ -1932,11 +1932,10 @@ function skyphusion_ai_embed_estimate_stored() {
 }
 
 /**
- * Option that keeps the running count for each admin.
+ * Name of the shared option older versions used for every admin's count.
  *
- * The value is a map of user id to the tally so far.
- * It is not autoloaded. It is not a transient. An external object
- * cache drops a transient before the next request.
+ * Nothing writes it now. Reset and uninstall still delete it, so a site that
+ * upgraded does not keep the stale row (issue #231).
  *
  * @return string
  */
@@ -1945,33 +1944,108 @@ function skyphusion_ai_embed_count_option() {
 }
 
 /**
- * Running counts, keyed by user id.
+ * Prefix of the per-admin running count options.
  *
- * @return array<int, array<string, int>>
+ * @return string
  */
-function skyphusion_ai_embed_count_book() {
+function skyphusion_ai_embed_count_prefix() {
+	return 'skyphusion_ai_embed_count_';
+}
+
+/**
+ * Option that keeps the running count of one admin.
+ *
+ * One option for each user, so two admins counting at once never overwrite
+ * each other. It is not autoloaded. It is not a transient. An external object
+ * cache drops a transient before the next request.
+ *
+ * @param int $user User id.
+ * @return string
+ */
+function skyphusion_ai_embed_count_user_option( $user ) {
+	return skyphusion_ai_embed_count_prefix() . (string) max( 0, (int) $user );
+}
+
+/**
+ * Seconds a running count stays usable. An abandoned count is removed after it.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_count_ttl() {
+	return 3600;
+}
+
+/**
+ * The running count of one admin, or null when there is none or it expired.
+ *
+ * @param int $user User id.
+ * @return array<string, int>|null
+ */
+function skyphusion_ai_embed_count_get( $user ) {
 	if ( ! function_exists( 'get_option' ) ) {
-		return array();
+		return null;
 	}
-	$stored = get_option( skyphusion_ai_embed_count_option(), array() );
-	if ( ! is_array( $stored ) ) {
-		return array();
+	$stored = get_option( skyphusion_ai_embed_count_user_option( $user ), null );
+	if ( ! is_array( $stored ) || ! isset( $stored['page'], $stored['time'] ) ) {
+		return null;
+	}
+	if ( (int) $stored['time'] + skyphusion_ai_embed_count_ttl() < time() ) {
+		return null;
 	}
 	return $stored;
 }
 
 /**
- * Store the running counts. Delete the option when none remain.
+ * Names of every running count option, the shared legacy one excluded.
  *
- * @param array<int, array<string, int>> $counts Running counts by user id.
+ * A database query runs when WordPress exposes $wpdb. The in-memory option
+ * store is the test stand-in, read the way reset.php reads its transient store.
+ *
+ * @return array<int, string>
+ */
+function skyphusion_ai_embed_count_names() {
+	$names  = array();
+	$prefix = skyphusion_ai_embed_count_prefix();
+	if ( isset( $GLOBALS['cfais_options'] ) && is_array( $GLOBALS['cfais_options'] ) ) {
+		foreach ( array_keys( $GLOBALS['cfais_options'] ) as $name ) {
+			if ( 0 === strpos( (string) $name, $prefix ) ) {
+				$names[] = (string) $name;
+			}
+		}
+	}
+	global $wpdb;
+	if ( isset( $wpdb ) && is_object( $wpdb ) && method_exists( $wpdb, 'get_col' ) && method_exists( $wpdb, 'prepare' ) && method_exists( $wpdb, 'esc_like' ) && isset( $wpdb->options ) ) {
+		$like = $wpdb->esc_like( $prefix ) . '%';
+		// The list exists so the sweep can delete the rows. It is not a cached query.
+		$rows = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $like ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+		if ( is_array( $rows ) ) {
+			foreach ( $rows as $row ) {
+				$names[] = (string) $row;
+			}
+		}
+	}
+	return array_values( array_unique( $names ) );
+}
+
+/**
+ * Delete running counts. Only the expired ones, or every one with $all.
+ *
+ * @param bool $all True to delete every running count, as reset does.
  * @return void
  */
-function skyphusion_ai_embed_count_save( $counts ) {
-	if ( array() === $counts && function_exists( 'delete_option' ) ) {
-		delete_option( skyphusion_ai_embed_count_option() );
+function skyphusion_ai_embed_count_sweep( $all = false ) {
+	if ( ! function_exists( 'delete_option' ) || ! function_exists( 'get_option' ) ) {
 		return;
 	}
-	update_option( skyphusion_ai_embed_count_option(), $counts, false );
+	foreach ( skyphusion_ai_embed_count_names() as $name ) {
+		if ( ! $all ) {
+			$stored = get_option( $name, null );
+			if ( is_array( $stored ) && isset( $stored['time'] ) && (int) $stored['time'] + skyphusion_ai_embed_count_ttl() >= time() ) {
+				continue;
+			}
+		}
+		delete_option( $name );
+	}
 }
 
 /**
@@ -1979,8 +2053,8 @@ function skyphusion_ai_embed_count_save( $counts ) {
  *
  * Page 1 starts again from zero. A later page only adds to the sum when
  * the page before it was counted, so a lost step cannot count twice.
- * The sum is one option, keyed by user id. The last page stores the
- * estimate and clears this admin's sum.
+ * Each admin has their own option, so two counts at once do not touch each
+ * other. The last page stores the estimate and clears this admin's sum.
  *
  * @param int $page Page number, from 1.
  * @return array<string, mixed> state more, done, or restart.
@@ -1996,10 +2070,12 @@ function skyphusion_ai_embed_count_step( $page ) {
 	if ( ! function_exists( 'get_option' ) || ! function_exists( 'update_option' ) ) {
 		return array( 'state' => 'restart' );
 	}
-	$counts = skyphusion_ai_embed_count_book();
+	if ( 1 === $page ) {
+		skyphusion_ai_embed_count_sweep();
+	}
 	if ( 1 < $page ) {
-		$stored = ( isset( $counts[ $user ] ) && is_array( $counts[ $user ] ) ) ? $counts[ $user ] : null;
-		if ( ! is_array( $stored ) || ! isset( $stored['page'] ) || (int) $stored['page'] !== $page - 1 ) {
+		$stored = skyphusion_ai_embed_count_get( $user );
+		if ( ! is_array( $stored ) || (int) $stored['page'] !== $page - 1 ) {
 			return array( 'state' => 'restart' );
 		}
 		foreach ( array_keys( $tally ) as $field ) {
@@ -2015,8 +2091,10 @@ function skyphusion_ai_embed_count_step( $page ) {
 	}
 	$seen = ( $page - 1 ) * $size + count( $rows );
 	if ( count( $rows ) < $size ) {
-		unset( $counts[ $user ] );
-		skyphusion_ai_embed_count_save( $counts );
+		if ( function_exists( 'delete_option' ) ) {
+			delete_option( skyphusion_ai_embed_count_user_option( $user ) );
+		}
+		skyphusion_ai_embed_count_sweep();
 		$estimate         = skyphusion_ai_embed_estimate_from( $tally, $config );
 		$estimate['time'] = time();
 		update_option( skyphusion_ai_embed_estimate_option(), $estimate, false );
@@ -2026,9 +2104,9 @@ function skyphusion_ai_embed_count_step( $page ) {
 			'estimate' => $estimate,
 		);
 	}
-	$tally['page']   = $page;
-	$counts[ $user ] = $tally;
-	skyphusion_ai_embed_count_save( $counts );
+	$tally['page'] = $page;
+	$tally['time'] = time();
+	update_option( skyphusion_ai_embed_count_user_option( $user ), $tally, false );
 	return array(
 		'state' => 'more',
 		'seen'  => $seen,
@@ -3317,7 +3395,8 @@ function skyphusion_ai_embed_cli_move( $assoc_args ) {
 	WP_CLI::log( 'embed_called=0' );
 }
 
-add_action( 'save_post', 'skyphusion_ai_embed_on_save', 20, 1 );
+// wp_after_insert_post fires after the REST controller has saved terms and meta; save_post fires before them (issue 232). The plugin requires WordPress 6.4, which has it.
+add_action( 'wp_after_insert_post', 'skyphusion_ai_embed_on_save', 20, 1 );
 add_action( 'before_delete_post', 'skyphusion_ai_embed_on_delete', 10, 1 );
 add_action( 'admin_post_skyphusion_ai_embed_save', 'skyphusion_ai_embed_handle_save' );
 add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_run' );
