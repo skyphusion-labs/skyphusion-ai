@@ -38,7 +38,12 @@ expect('the output keeps the answer', $search_ability_out['answer'], 'A blue cap
 expect('the output keeps the sources', $search_ability_out['sources'], array('https://ggc.sh/product/cap/'));
 expect('the output drops other fields', isset($search_ability_out['token']), false);
 expect('a missing result is an empty answer', skyphusion_ai_search_ability_output(null), array('answer' => '', 'sources' => array()));
-expect('a user check is refused when WordPress is absent', skyphusion_ai_search_ability_allowed(), false);
+$search_ability_can = isset($GLOBALS['cfais_can']) && is_array($GLOBALS['cfais_can']) ? $GLOBALS['cfais_can'] : array();
+$GLOBALS['cfais_can']['read'] = false;
+expect('search is refused when the stub says read is off', skyphusion_ai_search_ability_allowed(), false);
+$GLOBALS['cfais_can']['read'] = true;
+expect('search is allowed when the stub says read is on', skyphusion_ai_search_ability_allowed(), true);
+$GLOBALS['cfais_can'] = $search_ability_can;
 
 expect('the plugin loads the ability file', strpos($search_ability_plugin, '/includes/search-ability.php') !== false, true);
 expect('the plugin loads abilities.php', strpos($search_ability_plugin, '/includes/abilities.php') !== false, true);

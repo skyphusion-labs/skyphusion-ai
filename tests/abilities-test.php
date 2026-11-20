@@ -70,7 +70,25 @@ expect(
 $status_args = skyphusion_ai_status_ability_args();
 expect( 'status is read-only', $status_args['meta']['annotations']['readonly'], true );
 expect( 'status permission is manage_options', $status_args['permission_callback'], 'skyphusion_ai_status_ability_allowed' );
-expect( 'status is refused without WordPress', skyphusion_ai_status_ability_allowed(), false );
+$abilities_perm_can  = isset( $GLOBALS['cfais_can'] ) && is_array( $GLOBALS['cfais_can'] ) ? $GLOBALS['cfais_can'] : array();
+$abilities_perm_user = isset( $GLOBALS['cfais_user_id'] ) ? $GLOBALS['cfais_user_id'] : null;
+$GLOBALS['cfais_can'] = array();
+$GLOBALS['cfais_user_id'] = 0;
+expect( 'status callback refuses when manage_options is off', skyphusion_ai_status_ability_allowed(), false );
+expect( 'search callback refuses when read is off', skyphusion_ai_search_ability_allowed(), false );
+expect( 'related callback refuses when read is off', call_user_func( $related_args['permission_callback'] ), false );
+expect( 'member callback refuses a signed-out user', skyphusion_ai_member_ability_allowed(), false );
+$GLOBALS['cfais_can'] = array( 'manage_options' => true );
+expect( 'status callback allows manage_options', skyphusion_ai_status_ability_allowed(), true );
+$GLOBALS['cfais_can'] = array( 'read' => true );
+expect( 'search callback allows read', skyphusion_ai_search_ability_allowed(), true );
+expect( 'related callback allows read', call_user_func( $related_args['permission_callback'] ), true );
+$GLOBALS['cfais_can'] = $abilities_perm_can;
+if ( null === $abilities_perm_user ) {
+	unset( $GLOBALS['cfais_user_id'] );
+} else {
+	$GLOBALS['cfais_user_id'] = $abilities_perm_user;
+}
 
 $snap = skyphusion_ai_status_snapshot();
 expect( 'status snapshot names the provider', $snap['provider_id'], 'skyphusion-ai' );
