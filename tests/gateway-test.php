@@ -335,6 +335,47 @@ $cfais_retry_kept = skyphusion_ai_gateway_sanitize_option(
 );
 expect('an omitted timeout keeps the old one', $cfais_retry_kept['gateway_timeout'], '8000');
 expect('an omitted backoff keeps the old one', $cfais_retry_kept['gateway_backoff'], 'exponential');
+// Issue #230. The gateway retries inside the plugin's own HTTP timeout, and a
+// client-side timeout on a call that sent retry headers is not a gateway refusal.
+$GLOBALS['cfais_stored']['gateway_retry_media'] = '0';
+$GLOBALS['cfais_stored']['gateway_timeout'] = '60000';
+$GLOBALS['cfais_stored']['gateway_attempts'] = '3';
+unset($GLOBALS['cfais_stored']['gateway_delay'], $GLOBALS['cfais_stored']['gateway_backoff']);
+$cfais_fit = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
+expect('a 60 s timeout is cut to fit the 30 s caller', $cfais_fit['cf-aig-request-timeout'] ?? '', '28000');
+expect('and the retries that cannot fit are dropped', $cfais_fit['cf-aig-max-attempts'] ?? '', '1');
+$GLOBALS['cfais_stored']['gateway_timeout'] = '10000';
+$GLOBALS['cfais_stored']['gateway_attempts'] = '3';
+$GLOBALS['cfais_stored']['gateway_delay'] = '4000';
+$GLOBALS['cfais_stored']['gateway_backoff'] = 'constant';
+$cfais_fit = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
+expect('the delays count toward the limit', $cfais_fit['cf-aig-max-attempts'] ?? '', '2');
+expect('a timeout that fits is left as saved', $cfais_fit['cf-aig-request-timeout'] ?? '', '10000');
+$GLOBALS['cfais_stored']['gateway_attempts'] = '2';
+$GLOBALS['cfais_stored']['gateway_delay'] = '250';
+$cfais_fit = skyphusion_ai_gateway_retry_headers($cfais_gateway_url, 'text');
+expect('a setting that fits is not changed', array($cfais_fit['cf-aig-request-timeout'] ?? '', $cfais_fit['cf-aig-max-attempts'] ?? ''), array('10000', '2'));
+
+$GLOBALS['cfais_stored']['gateway_timeout'] = '8000';
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+$cfais_timeout_error = new WP_Error('http_request_failed', 'cURL error 28: Operation timed out after 30001 milliseconds with 0 bytes received');
+skyphusion_ai_gateway_note($cfais_gateway_url, 'text', $cfais_timeout_error);
+expect('a client timeout on a call with retry headers does not start the hour', skyphusion_ai_gateway_fallback_active(), false);
+$cfais_refused_error = new WP_Error('http_request_failed', 'cURL error 7: Failed to connect to gateway.ai.cloudflare.com port 443');
+skyphusion_ai_gateway_note($cfais_gateway_url, 'text', $cfais_refused_error);
+expect('a refused connection still starts the hour', skyphusion_ai_gateway_fallback_active(), true);
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+$cfais_status_was = $GLOBALS['cfais_status'];
+$GLOBALS['cfais_status'] = 502;
+skyphusion_ai_gateway_note($cfais_gateway_url, 'text', array('response' => array('code' => 502)));
+$GLOBALS['cfais_status'] = $cfais_status_was;
+expect('a gateway 502 still starts the hour', skyphusion_ai_gateway_fallback_active(), true);
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+unset($GLOBALS['cfais_stored']['gateway_timeout'], $GLOBALS['cfais_stored']['gateway_attempts'], $GLOBALS['cfais_stored']['gateway_delay'], $GLOBALS['cfais_stored']['gateway_backoff']);
+skyphusion_ai_gateway_note($cfais_gateway_url, 'text', $cfais_timeout_error);
+expect('a timeout with no retry headers still starts the hour', skyphusion_ai_gateway_fallback_active(), true);
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+
 $cfais_retry_help = (string) file_get_contents(dirname(__DIR__) . '/includes/gateway.php');
 expect('the retry help says blank fields send no header', strpos($cfais_retry_help, 'Blank fields send no header.') !== false, true);
 expect('the retry help keeps image and speech off', strpos($cfais_retry_help, 'Image and speech stay off until you turn this on.') !== false, true);
