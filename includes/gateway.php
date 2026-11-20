@@ -331,9 +331,9 @@ function skyphusion_ai_gateway_status() {
 	$route    = function_exists( 'skyphusion_ai_gateway_route' ) ? skyphusion_ai_gateway_route() : '';
 	$until    = skyphusion_ai_gateway_fallback_until();
 	$fallback = $until > time();
-	$host     = 'api.cloudflare.com';
+	$host = 'api.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
 	if ( '' !== $gateway_id && ! $fallback ) {
-		$host = 'gateway.ai.cloudflare.com';
+		$host = 'gateway.ai.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the gateway host, not a remote asset.
 	}
 	return array(
 		'gateway_id'      => $gateway_id,
@@ -358,7 +358,7 @@ function skyphusion_ai_gateway_status_html() {
 	}
 	echo '<ul class="skyphusion-ai-gateway-status" style="margin:0.5em 0 0;list-style:disc;padding-left:1.25em;">';
 	if ( '' === $status['gateway_id'] ) {
-		echo '<li>' . esc_html__( 'Gateway id: blank. Calls use api.cloudflare.com.', 'skyphusion-ai' ) . '</li>';
+		echo '<li>' . esc_html__( 'Gateway id: blank. Calls use api.cloudflare.com.', 'skyphusion-ai' ) . '</li>'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
 	} else {
 		echo '<li>' . esc_html(
 			sprintf(

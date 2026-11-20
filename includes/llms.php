@@ -82,9 +82,15 @@ function skyphusion_ai_llms_body( $parts = array() ) {
  * @return bool
  */
 function skyphusion_ai_llms_path( $uri ) {
-	$path = (string) parse_url( (string) $uri, PHP_URL_PATH );
+	$uri  = (string) $uri;
+	$path = '';
+	if ( function_exists( 'wp_parse_url' ) ) {
+		$parsed = wp_parse_url( $uri, PHP_URL_PATH );
+		$path   = is_string( $parsed ) ? $parsed : '';
+	}
 	if ( '' === $path ) {
-		$path = (string) $uri;
+		$bits = explode( '?', $uri, 2 );
+		$path = (string) $bits[0];
 	}
 	$path = rtrim( $path, '/' );
 	return '/llms.txt' === $path || 'llms.txt' === $path || substr( $path, -9 ) === '/llms.txt';
