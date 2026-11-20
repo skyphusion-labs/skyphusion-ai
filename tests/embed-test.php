@@ -41,9 +41,23 @@ if (!function_exists('wp_remote_request')) {
         return array('url' => $url, 'args' => $args);
     }
 }
+if (!function_exists('delete_option')) {
+    // Same body as reset-test.php, which loads later and would otherwise lose.
+    function delete_option($name)
+    {
+        unset($GLOBALS['cfais_options'][$name]);
+        if ('skyphusion_ai_settings' === $name) {
+            $GLOBALS['cfais_stored'] = array();
+        }
+        return true;
+    }
+}
 if (!function_exists('get_post_meta')) {
     function get_post_meta($post_id, $key, $single = false)
     {
+        if (!empty($GLOBALS['cfais_embed_meta_hook'])) {
+            $GLOBALS['cfais_embed_meta_hook']();
+        }
         $post_id = (int) $post_id;
         if (!isset($GLOBALS['cfais_embed_meta'][$post_id][$key])) {
             return '';
@@ -359,8 +373,9 @@ expect('the next page is page 2', $embed_p1['next'], 2);
 expect('a full page reads one page of posts', $embed_p1['seen'], skyphusion_ai_embed_count_size());
 // The running sum is an option. Drop any count transient so the next
 // page cannot continue from the object cache.
-$embed_book = get_option('skyphusion_ai_embed_count', array());
-expect('the running tally is an option', is_array($embed_book) && isset($embed_book[7]['page']) && 1 === (int) $embed_book[7]['page'], true);
+$embed_book = get_option('skyphusion_ai_embed_count_7', array());
+expect('the running tally is an option of its own for the user', is_array($embed_book) && isset($embed_book['page']) && 1 === (int) $embed_book['page'], true);
+expect('the running tally is no longer the shared option', get_option('skyphusion_ai_embed_count', false), false);
 $embed_count_transient = false;
 if (isset($GLOBALS['cfais_store']) && is_array($GLOBALS['cfais_store'])) {
     foreach (array_keys($GLOBALS['cfais_store']) as $embed_store_key) {
@@ -387,6 +402,36 @@ expect('a page after the finished count starts again', skyphusion_ai_embed_count
 expect('a page past the end reads nothing', count(skyphusion_ai_embed_collect_page(9, skyphusion_ai_embed_count_size())), 0);
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
 
+// Issue #231. Two admins count at once. The old shared option lost one tally:
+// A read, B read, B wrote, A wrote its stale copy. B's next page then said restart.
+$GLOBALS['skyphusion_ai_embed_posts'] = $embed_many;
+$GLOBALS['cfais_embed_meta_hook'] = function () {
+    unset($GLOBALS['cfais_embed_meta_hook']);
+    $GLOBALS['cfais_user_id'] = 8;
+    $GLOBALS['embed_inner_count'] = skyphusion_ai_embed_count_step(1);
+    $GLOBALS['cfais_user_id'] = 7;
+};
+$GLOBALS['cfais_user_id'] = 7;
+$embed_a1 = skyphusion_ai_embed_count_step(1);
+expect('the interleaved counts both ask for page 2', array($embed_a1['state'], $GLOBALS['embed_inner_count']['state'] ?? ''), array('more', 'more'));
+expect('the first admin continues after the other admin counted', skyphusion_ai_embed_count_step(2)['state'], 'done');
+$GLOBALS['cfais_user_id'] = 8;
+expect('the second admin continues too', skyphusion_ai_embed_count_step(2)['state'], 'done');
+$GLOBALS['cfais_user_id'] = 7;
+
+// An abandoned count expires, and the next count sweeps it away.
+$GLOBALS['cfais_options']['skyphusion_ai_embed_count_9'] = array('page' => 1, 'posts' => 5, 'passages' => 5, 'chars' => 50, 'time' => time() - 7200);
+$GLOBALS['cfais_options']['skyphusion_ai_embed_count_10'] = array('page' => 1, 'posts' => 5, 'passages' => 5, 'chars' => 50, 'time' => time() - 60);
+$GLOBALS['cfais_user_id'] = 9;
+expect('a count left for hours is not continued', skyphusion_ai_embed_count_step(2)['state'], 'restart');
+$GLOBALS['cfais_user_id'] = 7;
+skyphusion_ai_embed_count_step(1);
+expect('a count left for hours is removed by the next count', isset($GLOBALS['cfais_options']['skyphusion_ai_embed_count_9']), false);
+expect('a recent count of another admin stays', isset($GLOBALS['cfais_options']['skyphusion_ai_embed_count_10']), true);
+expect('the running count is not autoloaded', strpos((string) file_get_contents(dirname(__DIR__) . '/includes/embed.php'), 'update_option( skyphusion_ai_embed_count_user_option( $user ), $tally, false )') !== false, true);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_count_7'], $GLOBALS['cfais_options']['skyphusion_ai_embed_count_10']);
+$GLOBALS['skyphusion_ai_embed_posts'] = array($embed_long);
+
 $embed_js = (string) file_get_contents(dirname(__DIR__) . '/assets/js/embed-count.js');
 expect('the count script calls the count action', strpos($embed_js, 'skyphusion_ai_embed_count') !== false, true);
 expect('the count script sends the nonce', strpos($embed_js, '_ajax_nonce') !== false, true);
@@ -405,7 +450,8 @@ expect('this file does not name another vector store', stripos($embed_src, 'qdra
 $embed_uninstall = (string) file_get_contents(dirname(__DIR__) . '/uninstall.php');
 expect('uninstall removes the vectorize option', strpos($embed_uninstall, 'skyphusion_ai_vectorize') !== false, true);
 expect('uninstall removes the running count', strpos($embed_uninstall, "delete_option( 'skyphusion_ai_embed_count' )") !== false, true);
-expect('the running count option is not autoloaded', strpos($embed_src_count, 'update_option( skyphusion_ai_embed_count_option(), $counts, false )') !== false, true);
+expect('the running count option is not autoloaded', strpos($embed_src_count, 'update_option( skyphusion_ai_embed_count_user_option( $user ), $tally, false )') !== false, true);
+expect('uninstall removes the per-user running counts', strpos($embed_uninstall, "'skyphusion_ai_embed_count_'") !== false, true);
 expect('uninstall does not call vectorize', strpos($embed_uninstall, 'vectorize/v2') === false, true);
 $embed_cli = (string) file_get_contents(dirname(__DIR__) . '/includes/cli.php');
 expect('the cli command reaches the helper', strpos($embed_cli, 'skyphusion_ai_embed_cli') !== false, true);

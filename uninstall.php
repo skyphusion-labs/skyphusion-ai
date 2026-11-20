@@ -15,6 +15,14 @@ delete_option( 'skyphusion_ai_neurons' );
 	delete_option( 'skyphusion_ai_vectorize' );
 	delete_option( 'skyphusion_ai_embed_estimate' );
 	delete_option( 'skyphusion_ai_embed_count' );
+// One running count option for each admin (issue 231).
+global $wpdb;
+if ( isset( $wpdb ) && is_object( $wpdb ) ) {
+	$embed_count_rows = $wpdb->get_col( $wpdb->prepare( "SELECT option_name FROM {$wpdb->options} WHERE option_name LIKE %s", $wpdb->esc_like( 'skyphusion_ai_embed_count_' ) . '%' ) ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching -- the list exists so uninstall can delete the rows.
+	foreach ( (array) $embed_count_rows as $embed_count_row ) {
+		delete_option( (string) $embed_count_row );
+	}
+}
 	delete_option( 'skyphusion_ai_insights' );
 	delete_option( 'skyphusion_ai_assistant' );
 	delete_option( 'skyphusion_ai_member' );
