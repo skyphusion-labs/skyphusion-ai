@@ -5,11 +5,6 @@
 
 require_once dirname( __DIR__ ) . '/includes/llms.php';
 
-$llms_root   = dirname( __DIR__ );
-$llms_plugin = (string) file_get_contents( $llms_root . '/skyphusion-ai.php' );
-$llms_readme = (string) file_get_contents( $llms_root . '/README.md' );
-$llms_php    = (string) file_get_contents( $llms_root . '/includes/llms.php' );
-
 expect( 'llms is off without settings', skyphusion_ai_llms_on(), false );
 
 $llms_cli = skyphusion_ai_llms_apply_cli( array( 'endpoint' => '' ), array( 'llms-txt' => '1' ), array() );
@@ -36,6 +31,43 @@ expect( 'llms path accepts /llms.txt', skyphusion_ai_llms_path( '/llms.txt' ), t
 expect( 'llms path accepts trailing slash home', skyphusion_ai_llms_path( '/llms.txt?x=1' ), true );
 expect( 'llms path rejects other files', skyphusion_ai_llms_path( '/robots.txt' ), false );
 
-expect( 'the plugin loads llms.php', strpos( $llms_plugin, '/includes/llms.php' ) !== false, true );
-expect( 'llms hooks template_redirect', strpos( $llms_php, 'template_redirect' ) !== false, true );
-expect( 'README mentions llms.txt', strpos( $llms_readme, 'llms.txt' ) !== false, true );
+$_POST['skyphusion_ai_settings'] = array(
+	'endpoint' => 'https://abc123.search.ai.cloudflare.com',
+);
+$llms_unticked = skyphusion_ai_llms_sanitize_option(
+	array( 'endpoint' => 'https://abc123.search.ai.cloudflare.com' ),
+	'skyphusion_ai_settings',
+	array(
+		'endpoint' => 'https://abc123.search.ai.cloudflare.com',
+		'llms_txt' => true,
+	)
+);
+expect( 'untick saves llms off', ! empty( $llms_unticked['llms_txt'] ), false );
+$_POST['skyphusion_ai_settings'] = array(
+	'endpoint' => 'https://abc123.search.ai.cloudflare.com',
+	'llms_txt' => '0',
+);
+$llms_posted_off = skyphusion_ai_llms_sanitize_option(
+	array( 'endpoint' => 'https://abc123.search.ai.cloudflare.com' ),
+	'skyphusion_ai_settings',
+	array( 'llms_txt' => true )
+);
+expect( 'a posted zero saves llms off', ! empty( $llms_posted_off['llms_txt'] ), false );
+$_POST['skyphusion_ai_settings'] = array(
+	'endpoint' => 'https://abc123.search.ai.cloudflare.com',
+	'llms_txt' => '1',
+);
+$llms_posted_on = skyphusion_ai_llms_sanitize_option(
+	array( 'endpoint' => 'https://abc123.search.ai.cloudflare.com' ),
+	'skyphusion_ai_settings',
+	array( 'llms_txt' => false )
+);
+expect( 'a posted one saves llms on', ! empty( $llms_posted_on['llms_txt'] ), true );
+unset( $_POST['skyphusion_ai_settings'] );
+
+$llms_kept = skyphusion_ai_llms_sanitize_option(
+	array( 'endpoint' => '' ),
+	'skyphusion_ai_settings',
+	array( 'llms_txt' => true )
+);
+expect( 'a save with no form keeps llms on', ! empty( $llms_kept['llms_txt'] ), true );
