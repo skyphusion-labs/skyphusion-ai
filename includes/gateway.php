@@ -302,6 +302,22 @@ function skyphusion_ai_gateway_notice_text() {
 }
 
 /**
+ * True when the HTTP client gave up waiting for the answer.
+ *
+ * @param mixed $error WP_Error from the HTTP call.
+ * @return bool
+ */
+function skyphusion_ai_gateway_timed_out( $error ) {
+	$message = '';
+	if ( is_object( $error ) && method_exists( $error, 'get_error_message' ) ) {
+		$message = (string) $error->get_error_message();
+	} elseif ( is_object( $error ) && isset( $error->message ) ) {
+		$message = (string) $error->message;
+	}
+	return false !== stripos( $message, 'timed out' ) || false !== stripos( $message, 'curl error 28' );
+}
+
+/**
  * Note a failed Workers AI response. A success does nothing.
  *
  * @param string $url      Request URL.
@@ -311,6 +327,11 @@ function skyphusion_ai_gateway_notice_text() {
  */
 function skyphusion_ai_gateway_note( $url, $feature, $response ) {
 	if ( function_exists( 'is_wp_error' ) && is_wp_error( $response ) ) {
+		// A client-side timeout on a call that asked the gateway to retry is a slow
+		// answer, not a refusal. The hour on the direct API is for a refusal (#230).
+		if ( skyphusion_ai_gateway_timed_out( $response ) && array() !== skyphusion_ai_gateway_retry_headers( $url, $feature ) ) {
+			return;
+		}
 		skyphusion_ai_gateway_mark( $url, $feature );
 		return;
 	}
@@ -481,6 +502,81 @@ function skyphusion_ai_gateway_retry_settings() {
 }
 
 /**
+ * Longest wait, in milliseconds, the gateway may spend on one call.
+ *
+ * Every caller that sends these headers posts with a 30 second HTTP timeout.
+ * Past that limit PHP gives up, the gateway keeps retrying a request nobody
+ * reads, and the timeout looks like a refusal (issue #230). Two seconds stay
+ * free for the connection and the reply.
+ *
+ * @return int
+ */
+function skyphusion_ai_gateway_wait_limit() {
+	return 28000;
+}
+
+/**
+ * Worst case wait for the saved retry values, in milliseconds.
+ *
+ * @param int    $timeout  Timeout of one attempt.
+ * @param int    $attempts Attempts.
+ * @param int    $delay    Delay between attempts.
+ * @param string $backoff  constant, linear, exponential, or empty.
+ * @return int
+ */
+function skyphusion_ai_gateway_wait_worst( $timeout, $attempts, $delay, $backoff ) {
+	$gaps  = max( 0, $attempts - 1 );
+	$waits = $delay * $gaps;
+	if ( 'linear' === $backoff ) {
+		$waits = $delay * (int) ( $gaps * ( $gaps + 1 ) / 2 );
+	} elseif ( 'exponential' === $backoff ) {
+		$waits = $delay * ( ( 1 << $gaps ) - 1 );
+	}
+	return $timeout * $attempts + $waits;
+}
+
+/**
+ * Cut the timeout and the attempts so the gateway finishes inside the caller.
+ *
+ * Attempts go first, then the timeout. A blank timeout with retries is set to the
+ * limit first, so the retries are cut as well. A blank timeout with no retries
+ * sends no header.
+ *
+ * @param string $timeout  Timeout in milliseconds, or empty.
+ * @param string $attempts Attempts, or empty.
+ * @param string $delay    Delay in milliseconds, or empty.
+ * @param string $backoff  Backoff name, or empty.
+ * @return array{timeout: string, attempts: string}
+ */
+function skyphusion_ai_gateway_wait_fit( $timeout, $attempts, $delay, $backoff ) {
+	$limit = skyphusion_ai_gateway_wait_limit();
+	if ( '' === $timeout ) {
+		// No timeout header means the gateway's own default, which is not the caller's.
+		// One attempt or none cannot retry past the caller, so only retries need a fit.
+		if ( '' === $attempts || 2 > (int) $attempts ) {
+			return array(
+				'timeout'  => $timeout,
+				'attempts' => $attempts,
+			);
+		}
+		$timeout = (string) $limit;
+	}
+	$wait  = (int) $timeout;
+	$tries = '' === $attempts ? 1 : (int) $attempts;
+	$pause = '' === $delay ? 0 : (int) $delay;
+	while ( 1 < $tries && skyphusion_ai_gateway_wait_worst( $wait, $tries, $pause, $backoff ) > $limit ) {
+		--$tries;
+	}
+	if ( $wait > $limit ) {
+		$wait = $limit;
+	}
+	return array(
+		'timeout'  => (string) $wait,
+		'attempts' => '' === $attempts ? '' : (string) $tries,
+	);
+}
+
+/**
  * Retry and timeout headers for a gateway URL.
  *
  * A direct URL gets none. Image and speech get none until the admin opts in.
@@ -500,6 +596,10 @@ function skyphusion_ai_gateway_retry_headers( $url, $feature ) {
 		return array();
 	}
 	$headers = array();
+
+	$fitted               = skyphusion_ai_gateway_wait_fit( $settings['timeout'], $settings['attempts'], $settings['delay'], $settings['backoff'] );
+	$settings['timeout']  = $fitted['timeout'];
+	$settings['attempts'] = $fitted['attempts'];
 	if ( '' !== $settings['timeout'] ) {
 		$headers['cf-aig-request-timeout'] = $settings['timeout'];
 	}
