@@ -231,6 +231,7 @@ No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. Yo
 * Related pages from an ability return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
 * Unticking llms.txt in Settings turns the file off.
 * The gateway status keeps the saved gateway id while calls use the direct API for one hour.
+* llms.txt is served only at the home path. The response sends X-Content-Type-Options: nosniff.
 
 = 0.6.3 =
 

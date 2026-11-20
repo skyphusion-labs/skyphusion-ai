@@ -76,12 +76,12 @@ function skyphusion_ai_llms_body( $parts = array() ) {
 }
 
 /**
- * True when the request path is /llms.txt.
+ * Request path with no query and no trailing slash.
  *
  * @param string $uri Request URI.
- * @return bool
+ * @return string
  */
-function skyphusion_ai_llms_path( $uri ) {
+function skyphusion_ai_llms_request_path( $uri ) {
 	$uri  = (string) $uri;
 	$path = '';
 	if ( function_exists( 'wp_parse_url' ) ) {
@@ -93,7 +93,57 @@ function skyphusion_ai_llms_path( $uri ) {
 		$path = (string) $bits[0];
 	}
 	$path = rtrim( $path, '/' );
-	return '/llms.txt' === $path || 'llms.txt' === $path || substr( $path, -9 ) === '/llms.txt';
+	if ( '' === $path ) {
+		return '/';
+	}
+	if ( '/' !== substr( $path, 0, 1 ) ) {
+		$path = '/' . $path;
+	}
+	return $path;
+}
+
+/**
+ * The llms.txt file directly under the home path.
+ *
+ * @return string
+ */
+function skyphusion_ai_llms_home_file() {
+	$prefix = '';
+	if ( function_exists( 'home_url' ) && function_exists( 'wp_parse_url' ) ) {
+		$home   = (string) home_url( '/' );
+		$parsed = wp_parse_url( $home, PHP_URL_PATH );
+		if ( is_string( $parsed ) ) {
+			$prefix = trim( $parsed, '/' );
+		}
+	}
+	if ( '' === $prefix ) {
+		return '/llms.txt';
+	}
+	return '/' . $prefix . '/llms.txt';
+}
+
+/**
+ * True when the request path is the llms.txt file under the home path.
+ *
+ * A path that only ends in /llms.txt is not a match.
+ *
+ * @param string $uri Request URI.
+ * @return bool
+ */
+function skyphusion_ai_llms_path( $uri ) {
+	return skyphusion_ai_llms_home_file() === skyphusion_ai_llms_request_path( $uri );
+}
+
+/**
+ * Headers for the llms.txt response.
+ *
+ * @return array<int, string>
+ */
+function skyphusion_ai_llms_response_headers() {
+	return array(
+		'Content-Type: text/plain; charset=utf-8',
+		'X-Content-Type-Options: nosniff',
+	);
 }
 
 /**
@@ -114,9 +164,24 @@ function skyphusion_ai_llms_serve() {
 	if ( ! skyphusion_ai_llms_path( $uri ) ) {
 		return;
 	}
-	nocache_headers();
-	header( 'Content-Type: text/plain; charset=utf-8' );
+	if ( function_exists( 'nocache_headers' ) ) {
+		nocache_headers();
+	}
+	$capture = ! empty( $GLOBALS['skyphusion_ai_llms_capture'] );
+	foreach ( skyphusion_ai_llms_response_headers() as $header_line ) {
+		if ( $capture ) {
+			if ( ! isset( $GLOBALS['skyphusion_ai_llms_sent'] ) || ! is_array( $GLOBALS['skyphusion_ai_llms_sent'] ) ) {
+				$GLOBALS['skyphusion_ai_llms_sent'] = array();
+			}
+			$GLOBALS['skyphusion_ai_llms_sent'][] = $header_line;
+			continue;
+		}
+		header( $header_line );
+	}
 	echo skyphusion_ai_llms_body(); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- plain text file for crawlers.
+	if ( $capture ) {
+		return;
+	}
 	exit;
 }
 

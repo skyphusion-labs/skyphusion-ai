@@ -46,11 +46,11 @@ if ( null === $llms_home_was ) {
 
 $llms_nosniff = false;
 if ( function_exists( 'skyphusion_ai_llms_response_headers' ) ) {
-	$llms_settings_was = isset( $GLOBALS['cfais_settings'] ) ? $GLOBALS['cfais_settings'] : null;
-	if ( ! isset( $GLOBALS['cfais_settings'] ) || ! is_array( $GLOBALS['cfais_settings'] ) ) {
-		$GLOBALS['cfais_settings'] = array();
+	if ( ! isset( $GLOBALS['cfais_stored'] ) || ! is_array( $GLOBALS['cfais_stored'] ) ) {
+		$GLOBALS['cfais_stored'] = array();
 	}
-	$GLOBALS['cfais_settings']['llms_txt'] = true;
+	$llms_stored_txt = array_key_exists( 'llms_txt', $GLOBALS['cfais_stored'] ) ? $GLOBALS['cfais_stored']['llms_txt'] : null;
+	$GLOBALS['cfais_stored']['llms_txt'] = true;
 	$llms_uri_was = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
 	$_SERVER['REQUEST_URI'] = '/llms.txt';
 	$GLOBALS['skyphusion_ai_llms_capture'] = true;
@@ -58,6 +58,11 @@ if ( function_exists( 'skyphusion_ai_llms_response_headers' ) ) {
 	ob_start();
 	skyphusion_ai_llms_serve();
 	$llms_served = ob_get_clean();
+	$_SERVER['REQUEST_URI'] = '/shop/llms.txt';
+	ob_start();
+	skyphusion_ai_llms_serve();
+	$llms_nested_body = ob_get_clean();
+	expect( 'a nested llms.txt is not served', (string) $llms_nested_body, '' );
 	unset( $GLOBALS['skyphusion_ai_llms_capture'] );
 	$llms_sent = isset( $GLOBALS['skyphusion_ai_llms_sent'] ) && is_array( $GLOBALS['skyphusion_ai_llms_sent'] ) ? $GLOBALS['skyphusion_ai_llms_sent'] : array();
 	foreach ( $llms_sent as $llms_header_line ) {
@@ -66,10 +71,10 @@ if ( function_exists( 'skyphusion_ai_llms_response_headers' ) ) {
 		}
 	}
 	expect( 'llms serve writes the body', false !== strpos( (string) $llms_served, 'Checkout stays a person.' ), true );
-	if ( null === $llms_settings_was ) {
-		unset( $GLOBALS['cfais_settings'] );
+	if ( null === $llms_stored_txt ) {
+		unset( $GLOBALS['cfais_stored']['llms_txt'] );
 	} else {
-		$GLOBALS['cfais_settings'] = $llms_settings_was;
+		$GLOBALS['cfais_stored']['llms_txt'] = $llms_stored_txt;
 	}
 	if ( null === $llms_uri_was ) {
 		unset( $_SERVER['REQUEST_URI'] );
