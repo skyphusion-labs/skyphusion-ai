@@ -5,7 +5,7 @@
 # .gitattributes, which has to be kept in step with this file.
 #
 # The result is the runtime only: the plugin bootstrap, includes/, assets/,
-# readme.txt, README.md, LICENSE and uninstall.php.
+# worker/index.js, docs/, readme.txt, README.md, LICENSE and uninstall.php.
 
 /.distignore
 /.gitattributes
