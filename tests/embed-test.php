@@ -83,6 +83,13 @@ if (!function_exists('get_post')) {
     function get_post($post_id)
     {
         $GLOBALS['cfais_embed_loads'] = (int) ($GLOBALS['cfais_embed_loads'] ?? 0) + 1;
+        $post_id = (int) $post_id;
+        if (isset($GLOBALS['cfais_posts_by_id']) && is_array($GLOBALS['cfais_posts_by_id'])) {
+            if (array_key_exists($post_id, $GLOBALS['cfais_posts_by_id'])) {
+                return $GLOBALS['cfais_posts_by_id'][$post_id];
+            }
+            return null;
+        }
         if (isset($GLOBALS['cfais_embed_post']) && is_array($GLOBALS['cfais_embed_post'])) {
             return $GLOBALS['cfais_embed_post'];
         }

@@ -146,9 +146,16 @@ if (!function_exists('update_option')) {
     }
 }
 if (!function_exists('current_user_can')) {
-    function current_user_can($cap)
+    function current_user_can($cap, ...$args)
     {
-        return !empty($GLOBALS['cfais_can'][(string) $cap]);
+        $name = (string) $cap;
+        if (array() !== $args && isset($GLOBALS['cfais_can_post'][$name]) && is_array($GLOBALS['cfais_can_post'][$name])) {
+            $id = (int) $args[0];
+            if (array_key_exists($id, $GLOBALS['cfais_can_post'][$name])) {
+                return !empty($GLOBALS['cfais_can_post'][$name][$id]);
+            }
+        }
+        return !empty($GLOBALS['cfais_can'][$name]);
     }
 }
 if (!function_exists('admin_url')) {
