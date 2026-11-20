@@ -222,9 +222,16 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 
 = Does this replace another AI provider? =
 
-No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md.
+No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers four read-only abilities. See docs/search-ability.md.
 
 == Changelog ==
+
+= Unreleased =
+
+* Related pages from an ability return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
+* Unticking llms.txt in Settings turns the file off.
+* The gateway status keeps the saved gateway id while calls use the direct API for one hour.
+* llms.txt is served only at the home path. The response sends X-Content-Type-Options: nosniff.
 
 = 0.6.3 =
 

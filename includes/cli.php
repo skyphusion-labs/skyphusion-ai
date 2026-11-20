@@ -286,6 +286,66 @@ class Skyphusion_AI_CLI
 		}
 		skyphusion_ai_activity_cli( $args, $assoc_args );
 	}
+
+	/**
+	 * Check the AI Client provider without a network call.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp skyphusion-ai smoke
+	 *
+	 * @param array $args  Unused positional arguments.
+	 * @param array $assoc Unused flags.
+	 * @return void
+	 */
+	public function smoke( $args, $assoc ) {
+		unset( $args, $assoc );
+		$smoke = skyphusion_ai_client_smoke();
+		foreach ( skyphusion_ai_client_smoke_lines( $smoke ) as $line ) {
+			WP_CLI::log( $line );
+		}
+		if ( 'ready' === $smoke['state'] ) {
+			WP_CLI::success( __( 'Provider skyphusion-ai is registered. No Cloudflare request was made.', 'skyphusion-ai' ) );
+			return;
+		}
+		if ( 'ai_client_missing' === $smoke['state'] ) {
+			WP_CLI::warning( __( 'The WordPress AI Client is not loaded. Install WordPress 7.0 or the AI Client package.', 'skyphusion-ai' ) );
+			return;
+		}
+		WP_CLI::warning( __( 'The provider is not ready yet. Activate the plugin and open Settings, then Connectors.', 'skyphusion-ai' ) );
+	}
+
+	/**
+	 * Publish or hide /llms.txt.
+	 *
+	 * ## OPTIONS
+	 *
+	 * <on>
+	 * : 1 turns the file on. 0 turns it off.
+	 *
+	 * ## EXAMPLES
+	 *
+	 *     wp skyphusion-ai llms 1
+	 *
+	 * @param array $args Positional arguments.
+	 * @param array $assoc Unused flags.
+	 * @return void
+	 */
+	public function llms( $args, $assoc ) {
+		unset( $assoc );
+		$on    = isset( $args[0] ) ? skyphusion_ai_cli_truthy( $args[0] ) : false;
+		$clean = skyphusion_ai_llms_apply_cli(
+			skyphusion_ai_settings(),
+			array( 'llms-txt' => $on ? '1' : '0' ),
+			skyphusion_ai_settings()
+		);
+		update_option( 'skyphusion_ai_settings', $clean );
+		if ( $on ) {
+			WP_CLI::success( __( 'llms.txt is on.', 'skyphusion-ai' ) );
+			return;
+		}
+		WP_CLI::success( __( 'llms.txt is off.', 'skyphusion-ai' ) );
+	}
 }
 
 if (defined('WP_CLI') && WP_CLI) {

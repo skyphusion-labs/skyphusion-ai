@@ -302,6 +302,102 @@ function skyphusion_ai_gateway_notice_text() {
 }
 
 /**
+ * Gateway panel state from saved options. No network call.
+ *
+ * @return array{
+ *   gateway_id: string,
+ *   host: string,
+ *   fallback_active: bool,
+ *   fallback_until: int,
+ *   route: string,
+ *   log_prompts: bool,
+ *   notice: string
+ * }
+ */
+function skyphusion_ai_gateway_status() {
+	$gateway_id = '';
+	$log        = false;
+	if ( function_exists( 'get_option' ) ) {
+		$stored = get_option( 'skyphusion_ai_settings', array() );
+		if ( is_array( $stored ) ) {
+			if ( isset( $stored['gateway_id'] ) ) {
+				$raw = trim( (string) $stored['gateway_id'] );
+				// Format only. The fallback-aware reader hides this id for the hour.
+				if ( 1 === preg_match( '/^[a-z0-9][a-z0-9_-]{0,63}$/', $raw ) ) {
+					$gateway_id = $raw;
+				}
+			}
+			$log = ! empty( $stored['log_prompts'] );
+		}
+	}
+	$route    = function_exists( 'skyphusion_ai_gateway_route' ) ? skyphusion_ai_gateway_route() : '';
+	$until    = skyphusion_ai_gateway_fallback_until();
+	$fallback = $until > time();
+	$host     = 'api.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
+	if ( '' !== $gateway_id && ! $fallback ) {
+		$host = 'gateway.ai.cloudflare.com'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the gateway host, not a remote asset.
+	}
+	return array(
+		'gateway_id'      => $gateway_id,
+		'host'            => $host,
+		'fallback_active' => $fallback,
+		'fallback_until'  => $fallback ? $until : 0,
+		'route'           => $route,
+		'log_prompts'     => $log,
+		'notice'          => skyphusion_ai_gateway_notice_text(),
+	);
+}
+
+/**
+ * Print gateway status under the AI Gateway field.
+ *
+ * @return void
+ */
+function skyphusion_ai_gateway_status_html() {
+	$status = skyphusion_ai_gateway_status();
+	if ( ! function_exists( 'esc_html' ) ) {
+		return;
+	}
+	echo '<ul class="skyphusion-ai-gateway-status" style="margin:0.5em 0 0;list-style:disc;padding-left:1.25em;">';
+	if ( '' === $status['gateway_id'] ) {
+		echo '<li>' . esc_html__( 'Gateway id: blank. Calls use api.cloudflare.com.', 'skyphusion-ai' ) . '</li>'; // phpcs:ignore PluginCheck.CodeAnalysis.Offloading.OffloadedContent -- status names the API host, not a remote asset.
+	} else {
+		echo '<li>' . esc_html(
+			sprintf(
+				/* translators: %s: saved gateway id. */
+				__( 'Gateway id: %s.', 'skyphusion-ai' ),
+				$status['gateway_id']
+			)
+		) . '</li>';
+		echo '<li>' . esc_html(
+			sprintf(
+				/* translators: %s: host name in use. */
+				__( 'Host in use: %s.', 'skyphusion-ai' ),
+				$status['host']
+			)
+		) . '</li>';
+	}
+	if ( $status['fallback_active'] ) {
+		echo '<li>' . esc_html( $status['notice'] ) . '</li>';
+	}
+	if ( '' !== $status['route'] ) {
+		echo '<li>' . esc_html(
+			sprintf(
+				/* translators: %s: dynamic route slug. */
+				__( 'Dynamic route: %s.', 'skyphusion-ai' ),
+				$status['route']
+			)
+		) . '</li>';
+	}
+	echo '<li>' . esc_html(
+		$status['log_prompts']
+			? __( 'Prompt logging: on.', 'skyphusion-ai' )
+			: __( 'Prompt logging: off.', 'skyphusion-ai' )
+	) . '</li>';
+	echo '</ul>';
+}
+
+/**
  * True when the HTTP client gave up waiting for the answer.
  *
  * @param mixed $error WP_Error from the HTTP call.
@@ -855,7 +951,23 @@ function skyphusion_ai_gateway_register_fields() {
 }
 
 /**
- * Tell the admin when the direct API is in use.
+ * True on the Skyphusion AI settings screen.
+ *
+ * @return bool
+ */
+function skyphusion_ai_gateway_settings_screen() {
+	if ( ! function_exists( 'get_current_screen' ) ) {
+		return false;
+	}
+	$screen = get_current_screen();
+	if ( ! is_object( $screen ) || ! isset( $screen->id ) ) {
+		return false;
+	}
+	return 'settings_page_cloudflare-ai-search' === (string) $screen->id;
+}
+
+/**
+ * Tell the admin the gateway state on the settings screen.
  *
  * @return void
  */
@@ -863,11 +975,21 @@ function skyphusion_ai_gateway_admin_notice() {
 	if ( function_exists( 'current_user_can' ) && ! current_user_can( 'manage_options' ) ) {
 		return;
 	}
-	$text = skyphusion_ai_gateway_notice_text();
-	if ( '' === $text || ! function_exists( 'esc_html' ) ) {
+	if ( ! skyphusion_ai_gateway_settings_screen() ) {
+		$text = skyphusion_ai_gateway_notice_text();
+		if ( '' === $text || ! function_exists( 'esc_html' ) ) {
+			return;
+		}
+		echo '<div class="notice notice-warning"><p>' . esc_html( $text ) . '</p></div>';
 		return;
 	}
-	echo '<div class="notice notice-warning"><p>' . esc_html( $text ) . '</p></div>';
+	if ( ! function_exists( 'esc_html' ) ) {
+		return;
+	}
+	$class = skyphusion_ai_gateway_fallback_active() ? 'notice notice-warning' : 'notice notice-info';
+	echo '<div class="' . esc_attr( $class ) . '"><p><strong>' . esc_html__( 'AI Gateway status', 'skyphusion-ai' ) . '</strong></p>';
+	skyphusion_ai_gateway_status_html();
+	echo '</div>';
 }
 
 if ( function_exists( 'add_action' ) ) {

@@ -266,11 +266,12 @@ function skyphusion_ai_related_rows( $post ) {
 			$score = (float) $match['score'];
 		}
 		$rows[] = array(
-			'id'     => $id,
-			'title'  => $title,
-			'url'    => $link,
-			'reason' => skyphusion_ai_related_why( $metadata, $score, $terms ),
-			'score'  => null === $score ? 0 : $score,
+			'id'      => $id,
+			'post_id' => $neighbour,
+			'title'   => $title,
+			'url'     => $link,
+			'reason'  => skyphusion_ai_related_why( $metadata, $score, $terms ),
+			'score'   => null === $score ? 0 : $score,
 		);
 		if ( count( $rows ) >= 5 ) {
 			break;
