@@ -165,6 +165,11 @@ skyphusion_ai_gateway_mark($cfais_gateway_url, 'text');
 $cfais_gateway_status_down = skyphusion_ai_gateway_status();
 expect('status uses the direct host during fallback', $cfais_gateway_status_down['host'], 'api.cloudflare.com');
 expect('status says fallback is on', $cfais_gateway_status_down['fallback_active'], true);
+expect('status keeps the saved gateway id during the hour', $cfais_gateway_status_down['gateway_id'], 'store');
+ob_start();
+skyphusion_ai_gateway_status_html();
+$cfais_gateway_html = ob_get_clean();
+expect('the status panel names the saved gateway id during the hour', strpos((string) $cfais_gateway_html, 'Gateway id: store.') !== false, true);
 unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
 $GLOBALS['cfais_stored']['gateway_id'] = '';
 

@@ -77,6 +77,24 @@ expect( 'status snapshot names the provider', $snap['provider_id'], 'skyphusion-
 expect( 'status snapshot has neuron_cap', isset( $snap['neuron_cap'] ), true );
 expect( 'status snapshot has gateway_host', isset( $snap['gateway_host'] ), true );
 
+$abilities_gw_id   = array_key_exists( 'gateway_id', $GLOBALS['cfais_stored'] ) ? $GLOBALS['cfais_stored']['gateway_id'] : null;
+$abilities_gw_down = isset( $GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] ) ? $GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] : null;
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+update_option( 'skyphusion_ai_gateway_down', time() + 3600, false );
+$abilities_fallback = skyphusion_ai_status_snapshot();
+expect( 'status ability keeps the saved gateway id during fallback', $abilities_fallback['gateway_id'], 'store' );
+expect( 'status ability says fallback is on', $abilities_fallback['gateway_fallback'], true );
+if ( null === $abilities_gw_id ) {
+	unset( $GLOBALS['cfais_stored']['gateway_id'] );
+} else {
+	$GLOBALS['cfais_stored']['gateway_id'] = $abilities_gw_id;
+}
+if ( null === $abilities_gw_down ) {
+	unset( $GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] );
+} else {
+	$GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] = $abilities_gw_down;
+}
+
 $abilities_can        = isset( $GLOBALS['cfais_can'] ) && is_array( $GLOBALS['cfais_can'] ) ? $GLOBALS['cfais_can'] : array();
 $abilities_can_post   = isset( $GLOBALS['cfais_can_post'] ) ? $GLOBALS['cfais_can_post'] : null;
 $abilities_settings   = isset( $GLOBALS['cfais_settings'] ) ? $GLOBALS['cfais_settings'] : null;
