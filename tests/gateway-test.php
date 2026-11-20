@@ -170,6 +170,10 @@ ob_start();
 skyphusion_ai_gateway_status_html();
 $cfais_gateway_html = ob_get_clean();
 expect('the status panel names the saved gateway id during the hour', strpos((string) $cfais_gateway_html, 'Gateway id: store.') !== false, true);
+$GLOBALS['cfais_stored']['gateway_id'] = '../escape';
+$cfais_gateway_bad = skyphusion_ai_gateway_status();
+expect('status drops a gateway id that is not a slug during the hour', $cfais_gateway_bad['gateway_id'], '');
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
 unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
 $GLOBALS['cfais_stored']['gateway_id'] = '';
 

@@ -320,10 +320,12 @@ function skyphusion_ai_gateway_status() {
 	if ( function_exists( 'get_option' ) ) {
 		$stored = get_option( 'skyphusion_ai_settings', array() );
 		if ( is_array( $stored ) ) {
-			if ( isset( $stored['gateway_id'] ) && function_exists( 'cloudflare_ai_provider_gateway_id' ) ) {
-				$gateway_id = cloudflare_ai_provider_gateway_id( (string) $stored['gateway_id'] );
-			} elseif ( isset( $stored['gateway_id'] ) ) {
-				$gateway_id = trim( (string) $stored['gateway_id'] );
+			if ( isset( $stored['gateway_id'] ) ) {
+				$raw = trim( (string) $stored['gateway_id'] );
+				// Format only. The fallback-aware reader hides this id for the hour.
+				if ( 1 === preg_match( '/^[a-z0-9][a-z0-9_-]{0,63}$/', $raw ) ) {
+					$gateway_id = $raw;
+				}
 			}
 			$log = ! empty( $stored['log_prompts'] );
 		}
