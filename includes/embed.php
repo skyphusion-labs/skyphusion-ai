@@ -3317,7 +3317,8 @@ function skyphusion_ai_embed_cli_move( $assoc_args ) {
 	WP_CLI::log( 'embed_called=0' );
 }
 
-add_action( 'save_post', 'skyphusion_ai_embed_on_save', 20, 1 );
+// wp_after_insert_post fires after the REST controller has saved terms and meta; save_post fires before them (issue 232). The plugin requires WordPress 6.4, which has it.
+add_action( 'wp_after_insert_post', 'skyphusion_ai_embed_on_save', 20, 1 );
 add_action( 'before_delete_post', 'skyphusion_ai_embed_on_delete', 10, 1 );
 add_action( 'admin_post_skyphusion_ai_embed_save', 'skyphusion_ai_embed_handle_save' );
 add_action( 'admin_post_skyphusion_ai_embed_run', 'skyphusion_ai_embed_handle_run' );
