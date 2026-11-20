@@ -30,6 +30,54 @@ expect( 'llms body keeps checkout human', strpos( $body, 'Checkout stays a perso
 expect( 'llms path accepts /llms.txt', skyphusion_ai_llms_path( '/llms.txt' ), true );
 expect( 'llms path accepts trailing slash home', skyphusion_ai_llms_path( '/llms.txt?x=1' ), true );
 expect( 'llms path rejects other files', skyphusion_ai_llms_path( '/robots.txt' ), false );
+expect( 'llms path rejects a nested file', skyphusion_ai_llms_path( '/shop/llms.txt' ), false );
+
+$llms_home_was = isset( $GLOBALS['cfais_home'] ) ? $GLOBALS['cfais_home'] : null;
+$GLOBALS['cfais_home'] = 'https://shop.example/blog';
+expect( 'llms path matches llms.txt under the home path', skyphusion_ai_llms_path( '/blog/llms.txt' ), true );
+expect( 'llms path matches the home file with a query', skyphusion_ai_llms_path( '/blog/llms.txt?x=1' ), true );
+expect( 'llms path does not match the site root when home is nested', skyphusion_ai_llms_path( '/llms.txt' ), false );
+expect( 'llms path does not match a deeper file', skyphusion_ai_llms_path( '/blog/shop/llms.txt' ), false );
+if ( null === $llms_home_was ) {
+	unset( $GLOBALS['cfais_home'] );
+} else {
+	$GLOBALS['cfais_home'] = $llms_home_was;
+}
+
+$llms_nosniff = false;
+if ( function_exists( 'skyphusion_ai_llms_response_headers' ) ) {
+	$llms_settings_was = isset( $GLOBALS['cfais_settings'] ) ? $GLOBALS['cfais_settings'] : null;
+	if ( ! isset( $GLOBALS['cfais_settings'] ) || ! is_array( $GLOBALS['cfais_settings'] ) ) {
+		$GLOBALS['cfais_settings'] = array();
+	}
+	$GLOBALS['cfais_settings']['llms_txt'] = true;
+	$llms_uri_was = isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : null;
+	$_SERVER['REQUEST_URI'] = '/llms.txt';
+	$GLOBALS['skyphusion_ai_llms_capture'] = true;
+	$GLOBALS['skyphusion_ai_llms_sent']    = array();
+	ob_start();
+	skyphusion_ai_llms_serve();
+	$llms_served = ob_get_clean();
+	unset( $GLOBALS['skyphusion_ai_llms_capture'] );
+	$llms_sent = isset( $GLOBALS['skyphusion_ai_llms_sent'] ) && is_array( $GLOBALS['skyphusion_ai_llms_sent'] ) ? $GLOBALS['skyphusion_ai_llms_sent'] : array();
+	foreach ( $llms_sent as $llms_header_line ) {
+		if ( false !== stripos( (string) $llms_header_line, 'nosniff' ) ) {
+			$llms_nosniff = true;
+		}
+	}
+	expect( 'llms serve writes the body', false !== strpos( (string) $llms_served, 'Checkout stays a person.' ), true );
+	if ( null === $llms_settings_was ) {
+		unset( $GLOBALS['cfais_settings'] );
+	} else {
+		$GLOBALS['cfais_settings'] = $llms_settings_was;
+	}
+	if ( null === $llms_uri_was ) {
+		unset( $_SERVER['REQUEST_URI'] );
+	} else {
+		$_SERVER['REQUEST_URI'] = $llms_uri_was;
+	}
+}
+expect( 'llms sends nosniff', $llms_nosniff, true );
 
 $_POST['skyphusion_ai_settings'] = array(
 	'endpoint' => 'https://abc123.search.ai.cloudflare.com',
