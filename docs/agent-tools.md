@@ -80,13 +80,12 @@ It is not a switch in this plugin.
 The docs were updated on 2026-10-22.
 Source: https://developers.cloudflare.com/agents/model-context-protocol/guides/remote-mcp-server/
 
-## A later build
+## Read-only abilities
 
-The plugin already registers `skyphusion-ai/search`.
+The plugin registers four read-only abilities.
+The ids are `skyphusion-ai/search`, `skyphusion-ai/related`, `skyphusion-ai/member-search`, and `skyphusion-ai/status`.
 The steps are in docs/search-ability.md.
-A later build waits until you ask for it.
-That build keeps the search box.
-An agent can use the AI Search `/mcp` search tool for indexed pages.
+An agent can also use the AI Search `/mcp` search tool for indexed pages.
 Cart tools belong to WooCommerce abilities.
 Order tools belong to WooCommerce abilities.
 Those tools sit behind the MCP Adapter.

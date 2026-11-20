@@ -32,7 +32,7 @@ $GLOBALS['cfais_stored'] = array(
     'chat' => false,
     'hide_checkout' => true,
     'hide_branding' => false,
-    'lead_search' => false,
+        'lead_search' => false,
 );
 
 if (!function_exists('add_settings_error')) {

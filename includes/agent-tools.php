@@ -225,19 +225,28 @@ function skyphusion_ai_agent_tools_remote() {
 }
 
 /**
- * A later build waits until someone asks for it.
+ * What this release already ships, and what still waits.
+ *
+ * Read-only abilities ship now. A WebMCP bridge still waits.
  *
  * @return array<string, mixed>
  */
 function skyphusion_ai_agent_tools_later() {
 	return array(
-		'this_release'         => false,
+		'this_release'         => true,
+		'abilities'            => array(
+			'skyphusion-ai/search',
+			'skyphusion-ai/related',
+			'skyphusion-ai/member-search',
+			'skyphusion-ai/status',
+		),
 		'keeps_search_box'     => true,
 		'page_search'          => 'ai_search_mcp',
 		'cart_and_order'       => 'woocommerce_abilities',
 		'needs_adapter'        => true,
 		'checkout_is_a_person' => true,
 		'webmcp_per_store_off' => true,
+		'webmcp_this_release'  => false,
 	);
 }
 

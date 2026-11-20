@@ -135,6 +135,8 @@ require __DIR__ . '/activity-test.php';
 require __DIR__ . '/nopaid-test.php';
 require __DIR__ . '/agent-tools-test.php';
 require __DIR__ . '/search-ability-test.php';
+require __DIR__ . '/abilities-test.php';
+require __DIR__ . '/llms-test.php';
 require __DIR__ . '/admin-screen-test.php';
 // LAST on purpose. cold-path-test.php sets CLOUDFLARE_API_KEY and restores
 // it; running it last means no earlier file can read the value it sets.
@@ -143,6 +145,7 @@ require __DIR__ . '/cold-path-test.php';
 // provider-guard-test.php asserts the constant is still undefined, which
 // only holds while nothing in the parent run has defined it.
 require __DIR__ . '/provider-guard-test.php';
+require __DIR__ . '/client-smoke-test.php';
 // LAST. frontend-load-test.php REQUIRES a plugin source rather than only
 // driving functions already in memory, so it runs after every file that
 // defines a WordPress stand-in it depends on.

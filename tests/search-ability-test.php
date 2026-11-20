@@ -41,7 +41,9 @@ expect('a missing result is an empty answer', skyphusion_ai_search_ability_outpu
 expect('a user check is refused when WordPress is absent', skyphusion_ai_search_ability_allowed(), false);
 
 expect('the plugin loads the ability file', strpos($search_ability_plugin, '/includes/search-ability.php') !== false, true);
-expect('the ability hooks the WordPress abilities API', strpos($search_ability_php, 'wp_abilities_api_init') !== false, true);
+expect('the plugin loads abilities.php', strpos($search_ability_plugin, '/includes/abilities.php') !== false, true);
+$abilities_php = (string) file_get_contents($search_ability_root . '/includes/abilities.php');
+expect('abilities.php hooks the WordPress abilities API', strpos($abilities_php, 'wp_abilities_api_init') !== false, true);
 expect('the ability file does not read the API token constant', strpos($search_ability_php, 'CLOUDFLARE_API_KEY') !== false, false);
 expect('the doc names the ability id', strpos($search_ability_doc, 'skyphusion-ai/search') !== false, true);
 expect('the doc names the query field', strpos($search_ability_doc, 'query') !== false, true);

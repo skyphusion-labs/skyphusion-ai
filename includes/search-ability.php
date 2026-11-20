@@ -138,7 +138,10 @@ function skyphusion_ai_search_ability_allowed() {
 }
 
 /**
- * Register the ability when WordPress provides the API.
+ * Register the search ability when WordPress provides the API.
+ *
+ * The abilities.php file registers every ability, including this one.
+ * This helper stays for callers that only need search.
  *
  * @return void
  */
@@ -146,18 +149,5 @@ function skyphusion_ai_search_ability_register() {
 	if ( ! function_exists( 'wp_register_ability' ) ) {
 		return;
 	}
-	if ( function_exists( 'wp_register_ability_category' ) ) {
-		wp_register_ability_category(
-			skyphusion_ai_search_ability_category(),
-			array(
-				'label'       => __( 'Skyphusion AI', 'skyphusion-ai' ),
-				'description' => __( 'Read-only search of the public AI Search index.', 'skyphusion-ai' ),
-			)
-		);
-	}
 	wp_register_ability( skyphusion_ai_search_ability_id(), skyphusion_ai_search_ability_args() );
-}
-
-if ( function_exists( 'add_action' ) ) {
-	add_action( 'wp_abilities_api_init', 'skyphusion_ai_search_ability_register' );
 }

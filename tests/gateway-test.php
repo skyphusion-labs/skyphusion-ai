@@ -153,6 +153,21 @@ expect('a second refusal does not end the hour sooner', skyphusion_ai_gateway_fa
 unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
 expect('the notice is empty when the gateway is in use', skyphusion_ai_gateway_notice_text(), '');
 
+$GLOBALS['cfais_stored']['gateway_id'] = 'store';
+$GLOBALS['cfais_stored']['log_prompts'] = '0';
+unset($GLOBALS['cfais_stored']['gateway_route']);
+$cfais_gateway_status = skyphusion_ai_gateway_status();
+expect('status names the saved gateway id', $cfais_gateway_status['gateway_id'], 'store');
+expect('status uses the gateway host when healthy', $cfais_gateway_status['host'], 'gateway.ai.cloudflare.com');
+expect('status says fallback is off', $cfais_gateway_status['fallback_active'], false);
+expect('status says prompt logging is off', $cfais_gateway_status['log_prompts'], false);
+skyphusion_ai_gateway_mark($cfais_gateway_url, 'text');
+$cfais_gateway_status_down = skyphusion_ai_gateway_status();
+expect('status uses the direct host during fallback', $cfais_gateway_status_down['host'], 'api.cloudflare.com');
+expect('status says fallback is on', $cfais_gateway_status_down['fallback_active'], true);
+unset($GLOBALS['cfais_options']['skyphusion_ai_gateway_down']);
+$GLOBALS['cfais_stored']['gateway_id'] = '';
+
 $GLOBALS['cfais_stored']['gateway_route'] = 'route1';
 skyphusion_ai_gateway_mark($cfais_gateway_url, 'image');
 expect('an image failure on a saved route does not start the hour', skyphusion_ai_gateway_fallback_active(), false);

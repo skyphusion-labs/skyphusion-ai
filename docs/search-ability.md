@@ -1,18 +1,33 @@
-# Search ability
+# Search and other abilities
 
-The plugin registers one read-only ability.
-The ability name is `skyphusion-ai/search`.
-You do not register it again.
+The plugin registers four read-only abilities.
+The category id is `skyphusion-ai`.
+You do not register them again.
 Activate this plugin.
-The ability is present when WordPress provides the abilities API.
+The abilities are present when WordPress provides the abilities API.
 
-## Call it from a client
+## Ability ids
 
-Install the WordPress MCP Adapter when a client should call the ability.
+- `skyphusion-ai/search`
+- `skyphusion-ai/related`
+- `skyphusion-ai/member-search`
+- `skyphusion-ai/status`
+
+Every ability is read-only.
+None of them edit a post.
+None of them change a cart.
+This plugin does not open an MCP server.
+
+## Call them from a client
+
+Install the WordPress MCP Adapter when a client should call an ability.
 This plugin does not install the adapter.
 The endpoint is `/wp-json/mcp/mcp-adapter-default-server`.
 The client signs in as a WordPress user who can read.
 A logged-out visitor is refused.
+The status ability also needs `manage_options`.
+
+## skyphusion-ai/search
 
 Send one field.
 The field name is `query`.
@@ -26,6 +41,35 @@ The call uses the AI Search address saved in Settings, then Skyphusion AI.
 The call sends no token.
 The call does not change a cart.
 Checkout stays a person.
+
+## skyphusion-ai/related
+
+Send one field.
+The field name is `post_id`.
+The value is the post id.
+
+The result has one field.
+`pages` is a list of title, url, reason, and score.
+The list comes from Vectorize.
+Embeddings must be on.
+
+## skyphusion-ai/member-search
+
+Send one field.
+The field name is `query`.
+The value is the search words.
+
+The result has two fields.
+`state` is `ok`, or a closed state such as `closed`.
+`pages` is a list of title and url.
+Member search must be on for that role.
+
+## skyphusion-ai/status
+
+Send no fields.
+The call does not reach Cloudflare.
+
+The result names gateway id, host in use, fallback, route, prompt logging, neuron use, embed state, and the provider id.
 
 ## WebMCP
 

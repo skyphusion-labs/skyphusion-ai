@@ -80,12 +80,23 @@ expect(
 );
 
 $agent_later = skyphusion_ai_agent_tools_later();
-expect('the later build is not this release', $agent_later['this_release'], false);
-expect('the later build keeps the search box', $agent_later['keeps_search_box'], true);
-expect('the later build uses AI Search for pages', $agent_later['page_search'], 'ai_search_mcp');
+expect('read-only abilities ship in this release', $agent_later['this_release'], true);
+expect('this release keeps the search box', $agent_later['keeps_search_box'], true);
+expect('page search can use AI Search MCP', $agent_later['page_search'], 'ai_search_mcp');
 expect('cart and order tools stay WooCommerce abilities', $agent_later['cart_and_order'], 'woocommerce_abilities');
-expect('the later build needs the adapter', $agent_later['needs_adapter'], true);
-expect('the later build still leaves checkout to a person', $agent_later['checkout_is_a_person'], true);
+expect('abilities still need the adapter', $agent_later['needs_adapter'], true);
+expect('checkout still stays a person', $agent_later['checkout_is_a_person'], true);
+expect('WebMCP is not turned on in this release', $agent_later['webmcp_this_release'], false);
+expect(
+	'this release registers four abilities',
+	$agent_later['abilities'],
+	array(
+		'skyphusion-ai/search',
+		'skyphusion-ai/related',
+		'skyphusion-ai/member-search',
+		'skyphusion-ai/status',
+	)
+);
 
 $agent_gateway = skyphusion_ai_agent_tools_gateway();
 expect('the gateway header is cf-aig-metadata', $agent_gateway['header'], 'cf-aig-metadata');

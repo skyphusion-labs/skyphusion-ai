@@ -540,4 +540,70 @@ function skyphusion_ai_client_api_key() {
 	return is_string( $key ) ? $key : '';
 }
 
+/**
+ * Local AI Client smoke check. No Cloudflare request.
+ *
+ * @return array{
+ *   provider_id: string,
+ *   ai_client: bool,
+ *   provider_class: bool,
+ *   registered: bool,
+ *   network: bool,
+ *   state: string
+ * }
+ */
+function skyphusion_ai_client_smoke() {
+	$client_class   = 'WordPress\\AiClient\\AiClient';
+	$provider_class = 'Cloudflare_AI_Provider';
+	$ai_client      = class_exists( $client_class );
+	$provider       = class_exists( $provider_class );
+	$registered     = false;
+	if ( $ai_client ) {
+		try {
+			$registry = $client_class::defaultRegistry();
+			if ( is_object( $registry ) && method_exists( $registry, 'hasProvider' ) ) {
+				$registered = (bool) $registry->hasProvider( 'skyphusion-ai' );
+			}
+		} catch ( \Throwable $error ) {
+			$registered = false;
+		}
+	}
+	$state = 'ready';
+	if ( ! $ai_client ) {
+		$state = 'ai_client_missing';
+	} elseif ( ! $provider ) {
+		$state = 'provider_class_missing';
+	} elseif ( ! $registered ) {
+		$state = 'provider_not_registered';
+	}
+	return array(
+		'provider_id'    => 'skyphusion-ai',
+		'ai_client'      => $ai_client,
+		'provider_class' => $provider,
+		'registered'     => $registered,
+		'network'        => false,
+		'state'          => $state,
+	);
+}
+
+/**
+ * Status lines for the smoke CLI command.
+ *
+ * @param array<string, mixed>|null $smoke Optional smoke row.
+ * @return array<int, string>
+ */
+function skyphusion_ai_client_smoke_lines( $smoke = null ) {
+	if ( ! is_array( $smoke ) ) {
+		$smoke = skyphusion_ai_client_smoke();
+	}
+	return array(
+		'provider_id=' . (string) $smoke['provider_id'],
+		'ai_client=' . ( ! empty( $smoke['ai_client'] ) ? '1' : '0' ),
+		'provider_class=' . ( ! empty( $smoke['provider_class'] ) ? '1' : '0' ),
+		'registered=' . ( ! empty( $smoke['registered'] ) ? '1' : '0' ),
+		'network=' . ( ! empty( $smoke['network'] ) ? '1' : '0' ),
+		'state=' . (string) $smoke['state'],
+	);
+}
+
 require_once __DIR__ . '/embed.php';

@@ -6,7 +6,7 @@ Why this plugin was written: other plugin solutions did not meet our needs. We w
 
 This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
 
-The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin license. The chat button is AI Search. It does not use this gateway id. A saved gateway id sends Workers AI calls through AI Gateway. The plugin registers one read-only search ability, `skyphusion-ai/search`, and the steps are in docs/search-ability.md. The comparison below covers those three jobs against the plugins that charge for each one.
+The plugin does three jobs. Visitors get a search box and, if you turn it on, a chat button. WordPress and WooCommerce get a Cloudflare provider on the AI Client, so other code can call text, vision, JSON, tools, images, speech, and embeddings without a plugin license. The chat button is AI Search. It does not use this gateway id. A saved gateway id sends Workers AI calls through AI Gateway. The plugin registers four read-only abilities. The ids are `skyphusion-ai/search`, `skyphusion-ai/related`, `skyphusion-ai/member-search`, and `skyphusion-ai/status`. The steps are in docs/search-ability.md. The comparison below covers those three jobs against the plugins that charge for each one.
 
 Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well. You connect search from **Settings, then Skyphusion AI**. You can set the same options with WP-CLI.
 
@@ -26,7 +26,9 @@ The license is GPL-2.0-or-later. The plugin needs WordPress 6.4 and PHP 8.0. The
 
 The same screen links to Workers AI, AI Gateway, and AI Search. It links to both the dashboard and the docs. Paste the account id there. The account id is 32 hex characters.
 
-Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id to send model calls through `gateway.ai.cloudflare.com` instead. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. The assistant Worker uses that gateway after you deploy it. A blank gateway id clears the Worker gateway option on the next deploy. The screen says when the live Worker is behind the saved gateway settings. Vectorize stays on the Vectorize binding. Text calls on the Worker use a saved dynamic route. Embeddings on the Worker stay on the embedding model. Retry and timeout headers stay blank until you set them. Image and speech calls do not send those headers until you opt in.
+Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id to send model calls through `gateway.ai.cloudflare.com` instead. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. The AI Gateway field also shows the host in use, the fallback state, the dynamic route, and prompt logging. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. The assistant Worker uses that gateway after you deploy it. A blank gateway id clears the Worker gateway option on the next deploy. The screen says when the live Worker is behind the saved gateway settings. Vectorize stays on the Vectorize binding. Text calls on the Worker use a saved dynamic route. Embeddings on the Worker stay on the embedding model. Retry and timeout headers stay blank until you set them. Image and speech calls do not send those headers until you opt in.
+
+Turn on **Publish /llms.txt for AI crawlers** when you want `/llms.txt`. The file names the site, the home URL, and the AI Search address when set. It is off by default. It does not edit posts.
 
 Then open **Settings, then Connectors**. Save the Workers AI API token for the Cloudflare provider. You can also put the account id in front of the token as `account-id:api-token`. Only the token half is sent. The plugin accepts `CLOUDFLARE_ACCOUNT_ID` from the environment, then from a PHP constant, when the setting is empty.
 
@@ -151,6 +153,8 @@ Speech is `@cf/deepgram/aura-1` (MP3). Voices: angus, asteria, arcas, orion, orp
 
 ```bash
 wp skyphusion-ai status
+wp skyphusion-ai smoke
+wp skyphusion-ai llms 1
 wp skyphusion-ai set --endpoint=https://abc.search.ai.cloudflare.com/ --accent-color=#1B3A32 --chat=0
 wp skyphusion-ai set --account-id=0123456789abcdef0123456789abcdef --gateway-id=store --lead-search=0
 ```
