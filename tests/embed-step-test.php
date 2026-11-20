@@ -491,6 +491,39 @@ unset($GLOBALS['cfais_embed_meta_delete_hook']);
 expect('rebuild holds the lock while it clears the hashes', $GLOBALS['step_rebuild_locked'], true);
 expect('rebuild does not keep the lock afterwards', skyphusion_ai_embed_step_locked(), false);
 
+// 11. #236 rebuild button: a rebuild never starts under a running step.
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(1);
+$step_rb_id = (int) $GLOBALS['skyphusion_ai_embed_posts'][0]['ID'];
+$GLOBALS['cfais_embed_meta'][$step_rb_id]['skyphusion_ai_embed_hash'] = 'keep-under-lock';
+$GLOBALS['cfais_can'] = array('manage_options' => true);
+$GLOBALS['cfais_user_id'] = 7;
+embed_ready();
+update_option('skyphusion_ai_vectorize', array_merge(skyphusion_ai_embed_config(), array('enabled' => 1)), false);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+step_lock_put('held:' . (time() + 600));
+expect('rebuild_start answers false while a step runs', skyphusion_ai_embed_rebuild_start(25), false);
+skyphusion_ai_embed_handle_rebuild();
+expect('the rebuild button leaves the hash alone while a step runs', $GLOBALS['cfais_embed_meta'][$step_rb_id]['skyphusion_ai_embed_hash'] ?? '', 'keep-under-lock');
+expect('the rebuild button does not start a pass while a step runs', skyphusion_ai_embed_cursor()['active'], 0);
+ob_start();
+skyphusion_ai_embed_cursor_start(25);
+skyphusion_ai_embed_render_progress();
+expect('the admin is told a step is already running', strpos((string) ob_get_clean(), 'already running') !== false, true);
+step_lock_clear();
+$GLOBALS['step_rb_locked'] = null;
+$GLOBALS['cfais_embed_meta_delete_hook'] = function () {
+    if (null === $GLOBALS['step_rb_locked']) {
+        $GLOBALS['step_rb_locked'] = skyphusion_ai_embed_step_locked();
+    }
+};
+expect('rebuild_start answers true when it can run', skyphusion_ai_embed_rebuild_start(25), true);
+unset($GLOBALS['cfais_embed_meta_delete_hook']);
+expect('rebuild_start holds the lock while it clears the hashes', $GLOBALS['step_rb_locked'], true);
+expect('and releases it afterwards', skyphusion_ai_embed_step_locked(), false);
+expect('and the hash is forgotten', isset($GLOBALS['cfais_embed_meta'][$step_rb_id]['skyphusion_ai_embed_hash']), false);
+update_option('skyphusion_ai_embed_cursor', array(), false);
+unset($GLOBALS['cfais_options']['skyphusion_ai_embed_schema_pending']);
+
 // Leave the shared state as it was for the files that follow.
 unset($GLOBALS['cfais_settings']);
 if (false === $step_prev_key || '' === $step_prev_key) {
