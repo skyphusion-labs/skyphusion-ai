@@ -229,6 +229,7 @@ No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. Yo
 = Unreleased =
 
 * Related pages from an ability return an empty list for a private post, a password post, and an unknown post. A match the caller cannot read is left out.
+* Unticking llms.txt in Settings turns the file off.
 
 = 0.6.3 =
 

@@ -133,20 +133,20 @@ function skyphusion_ai_llms_sanitize_option( $value, $option = '', $original = n
 	if ( ! is_array( $value ) ) {
 		return $value;
 	}
-	$posted = array();
-	if ( isset( $_POST['skyphusion_ai_settings'] ) && is_array( $_POST['skyphusion_ai_settings'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- settings screen nonce already checked.
+	if ( isset( $_POST['skyphusion_ai_settings'] ) && is_array( $_POST['skyphusion_ai_settings'] ) ) { // phpcs:ignore WordPress.Security.NonceVerification.Missing -- options.php checks the settings nonce before this filter.
 		$posted = wp_unslash( $_POST['skyphusion_ai_settings'] ); // phpcs:ignore WordPress.Security.ValidatedSanitizedInput.InputNotSanitized,WordPress.Security.NonceVerification.Missing -- bool only.
+		if ( ! is_array( $posted ) ) {
+			$posted = array();
+		}
+		// A settings submit with no llms_txt key is an unticked box.
+		$value['llms_txt'] = ! empty( $posted['llms_txt'] );
+		return $value;
 	}
-	if ( array_key_exists( 'llms_txt', $posted ) ) {
-		$on = ! empty( $posted['llms_txt'] );
-	} elseif ( array_key_exists( 'llms_txt', $value ) ) {
-		$on = ! empty( $value['llms_txt'] );
-	} elseif ( is_array( $original ) && ! empty( $original['llms_txt'] ) ) {
-		$on = true;
-	} else {
-		$on = false;
+	if ( array_key_exists( 'llms_txt', $value ) ) {
+		$value['llms_txt'] = ! empty( $value['llms_txt'] );
+		return $value;
 	}
-	$value['llms_txt'] = $on;
+	$value['llms_txt'] = is_array( $original ) && ! empty( $original['llms_txt'] );
 	return $value;
 }
 
@@ -178,6 +178,7 @@ function skyphusion_ai_llms_apply_cli( $clean, $assoc, $current ) {
 function skyphusion_ai_field_llms_txt() {
 	$settings = function_exists( 'skyphusion_ai_settings' ) ? skyphusion_ai_settings() : array();
 	$on       = is_array( $settings ) && ! empty( $settings['llms_txt'] );
+	echo '<input type="hidden" name="skyphusion_ai_settings[llms_txt]" value="0" />';
 	echo '<label><input type="checkbox" name="skyphusion_ai_settings[llms_txt]" value="1" ' . checked( $on, true, false ) . ' /> ';
 	echo esc_html__( 'Publish /llms.txt for AI crawlers', 'skyphusion-ai' );
 	echo '</label>';
