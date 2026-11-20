@@ -3281,6 +3281,10 @@ function skyphusion_ai_embed_cli_job( $command, $assoc_args = array() ) {
 		return;
 	}
 	if ( 'rebuild' === $command ) {
+		if ( skyphusion_ai_embed_step_locked() ) {
+			WP_CLI::log( 'embed_state=busy' );
+			return;
+		}
 		foreach ( skyphusion_ai_embed_ids() as $post_id ) {
 			skyphusion_ai_embed_hash_set( $post_id, '' );
 			skyphusion_ai_embed_fail_set( $post_id, false );

@@ -208,6 +208,94 @@ function skyphusion_ai_embed_load_page( $ids ) {
 }
 
 /**
+ * Option that holds the step lock.
+ *
+ * @return string
+ */
+function skyphusion_ai_embed_lock_name() {
+	return 'skyphusion_ai_embed_step_lock';
+}
+
+/**
+ * Seconds a step may hold the lock before another step may take it.
+ *
+ * A step that ends normally or throws releases the lock. This limit covers a
+ * request that is killed.
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_lock_ttl() {
+	return 900;
+}
+
+/**
+ * True while a step holds an unexpired lock.
+ *
+ * @return bool
+ */
+function skyphusion_ai_embed_step_locked() {
+	if ( ! function_exists( 'get_option' ) ) {
+		return false;
+	}
+	$until = get_option( skyphusion_ai_embed_lock_name(), false );
+	return is_numeric( $until ) && (int) $until > time();
+}
+
+/**
+ * Take the step lock. A lock past its expiry is replaced.
+ *
+ * The function add_option fails when the row exists, so two callers cannot both take it.
+ *
+ * @return bool True when this caller holds the lock.
+ */
+function skyphusion_ai_embed_lock_take() {
+	if ( ! function_exists( 'add_option' ) ) {
+		return true;
+	}
+	$until = time() + skyphusion_ai_embed_lock_ttl();
+	if ( add_option( skyphusion_ai_embed_lock_name(), $until, '', 'no' ) ) {
+		return true;
+	}
+	if ( skyphusion_ai_embed_step_locked() ) {
+		return false;
+	}
+	if ( function_exists( 'delete_option' ) ) {
+		delete_option( skyphusion_ai_embed_lock_name() );
+	}
+	return (bool) add_option( skyphusion_ai_embed_lock_name(), $until, '', 'no' );
+}
+
+/**
+ * Release the step lock.
+ *
+ * @return void
+ */
+function skyphusion_ai_embed_lock_release() {
+	if ( function_exists( 'delete_option' ) ) {
+		delete_option( skyphusion_ai_embed_lock_name() );
+	}
+}
+
+/**
+ * Answer for a step that found the lock held.
+ *
+ * @param int $batch Batch size in use.
+ * @param int $after Cursor position.
+ * @return array<string, mixed>
+ */
+function skyphusion_ai_embed_busy_result( $batch, $after ) {
+	return array(
+		'state'     => 'busy',
+		'processed' => 0,
+		'embedded'  => 0,
+		'after'     => (int) $after,
+		'remaining' => 0,
+		'batch'     => (int) $batch,
+		'message'   => 'A step is already running. This one did nothing.',
+	);
+}
+
+/**
  * Embed at most one batch of posts after the cursor.
  *
  * The cursor moves after each post. A post the model cannot store is
@@ -217,9 +305,29 @@ function skyphusion_ai_embed_load_page( $ids ) {
  *
  * @param int           $batch Batch size, or zero for the saved size.
  * @param callable|null $sync  Stores one post. Tests pass a stand-in.
- * @return array{state: string, processed: int, embedded: int, after: int, remaining: int, batch: int}
+ * @return array<string, mixed> The step result. State busy means another step holds the lock and this one did nothing.
  */
 function skyphusion_ai_embed_step( $batch = 0, $sync = null ) {
+	if ( ! skyphusion_ai_embed_lock_take() ) {
+		$cursor = skyphusion_ai_embed_cursor();
+		$size   = 0 < (int) $batch ? skyphusion_ai_embed_batch_size( $batch ) : (int) $cursor['batch'];
+		return skyphusion_ai_embed_busy_result( $size, (int) $cursor['after'] );
+	}
+	try {
+		return skyphusion_ai_embed_step_locked_run( $batch, $sync );
+	} finally {
+		skyphusion_ai_embed_lock_release();
+	}
+}
+
+/**
+ * The step itself. The caller holds the lock.
+ *
+ * @param int           $batch Batch size, or zero for the saved size.
+ * @param callable|null $sync  Stores one post. Tests pass a stand-in.
+ * @return array{state: string, processed: int, embedded: int, after: int, remaining: int, batch: int}
+ */
+function skyphusion_ai_embed_step_locked_run( $batch, $sync ) {
 	if ( null === $sync ) {
 		$sync = 'skyphusion_ai_embed_sync_post';
 	}
@@ -401,13 +509,13 @@ function skyphusion_ai_embed_left( $ids, $after ) {
  * Queue the next step while a pass runs.
  *
  * A pass stopped by the daily limit waits an hour. Otherwise the next
- * step runs in about a minute.
+ * step runs in about a minute, also when another step held the lock.
  *
  * @param string $state State of the step that just ran.
  * @return void
  */
 function skyphusion_ai_embed_schedule( $state ) {
-	if ( 'step' !== $state && 'limit' !== $state ) {
+	if ( 'step' !== $state && 'limit' !== $state && 'busy' !== $state ) {
 		return;
 	}
 	if ( ! function_exists( 'wp_next_scheduled' ) || ! function_exists( 'wp_schedule_single_event' ) ) {
@@ -509,6 +617,10 @@ function skyphusion_ai_embed_render_progress() {
 	}
 	$cursor = skyphusion_ai_embed_cursor();
 	if ( empty( $cursor['active'] ) ) {
+		return;
+	}
+	if ( 'blocked' === $cursor['state'] ) {
+		echo '<p>' . esc_html__( 'The run is blocked. Check the Cloudflare account ID, the API token and the embeddings model, then press Run to resume it.', 'skyphusion-ai' ) . '</p>';
 		return;
 	}
 	if ( 'limit' === $cursor['state'] ) {

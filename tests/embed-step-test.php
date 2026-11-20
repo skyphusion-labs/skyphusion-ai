@@ -29,6 +29,28 @@ if (!function_exists('register_rest_route')) {
     }
 }
 
+if (!function_exists('add_option')) {
+    function add_option($name, $value = '', $deprecated = '', $autoload = 'yes')
+    {
+        if (array_key_exists($name, $GLOBALS['cfais_options'])) {
+            return false;
+        }
+        $GLOBALS['cfais_options'][$name] = $value;
+        return true;
+    }
+}
+if (!function_exists('delete_option')) {
+    function delete_option($name)
+    {
+        unset($GLOBALS['cfais_options'][$name]);
+        // Same body as reset-test.php. This file loads first, so its copy wins.
+        if ('skyphusion_ai_settings' === $name) {
+            $GLOBALS['cfais_stored'] = array();
+        }
+        return true;
+    }
+}
+
 $step_prev_posts = isset($GLOBALS['skyphusion_ai_embed_posts']) ? $GLOBALS['skyphusion_ai_embed_posts'] : null;
 $step_prev_body = isset($GLOBALS['cfais_body']) ? $GLOBALS['cfais_body'] : null;
 
@@ -245,6 +267,66 @@ expect('a REST step queues the next step', isset($GLOBALS['step_cron']['skyphusi
 $step_src = (string) file_get_contents(dirname(__DIR__) . '/includes/embed.php');
 expect('the admin button runs one step', strpos($step_src, "check_admin_referer( 'skyphusion_ai_embed_run' );\n\tskyphusion_ai_embed_step_now();") !== false, true);
 expect('the admin button no longer runs every post', strpos($step_src, 'skyphusion_ai_embed_run( skyphusion_ai_embed_collect(), true )'), false);
+
+// 8. Issue #233: two steps never run at once. Cron, the Run button, REST and
+// WP-CLI all call the same step, and two of them used to embed (and bill)
+// the same posts.
+function step_overlap($post)
+{
+    if (null === $GLOBALS['step_inner']) {
+        // A second caller arrives while this step is on its first post.
+        $GLOBALS['step_inner'] = skyphusion_ai_embed_step(0, 'step_counter');
+    }
+    return step_counter($post);
+}
+$GLOBALS['skyphusion_ai_embed_posts'] = step_posts(3);
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+$GLOBALS['step_inner'] = null;
+delete_option('skyphusion_ai_embed_step_lock');
+update_option('skyphusion_ai_embed_cursor', array(), false);
+skyphusion_ai_embed_cursor_start(25);
+$step_outer = skyphusion_ai_embed_step(0, 'step_overlap');
+expect('a step that finds another step running does nothing', $GLOBALS['step_inner']['state'] ?? '', 'busy');
+expect('and processes no post', $GLOBALS['step_inner']['processed'] ?? -1, 0);
+expect('the running step stores each post once', $GLOBALS['step_seen'], array(3, 6, 9));
+expect('the running step finishes the pass', $step_outer['state'], 'done');
+expect('the lock is released when the step ends', get_option('skyphusion_ai_embed_step_lock', false), false);
+
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+update_option('skyphusion_ai_embed_step_lock', time() - 5, false);
+skyphusion_ai_embed_cursor_start(25);
+$step_stale = skyphusion_ai_embed_step(0, 'step_counter');
+expect('a lock past its expiry does not stop a step', $step_stale['state'], 'done');
+
+$GLOBALS['step_seen'] = array();
+$GLOBALS['step_this'] = array();
+update_option('skyphusion_ai_embed_step_lock', time() + 600, false);
+skyphusion_ai_embed_cursor_start(25);
+$step_held = skyphusion_ai_embed_step(0, 'step_counter');
+expect('a held lock answers busy', $step_held['state'], 'busy');
+expect('a busy step stores nothing', $GLOBALS['step_seen'], array());
+expect('a busy step leaves the lock to its holder', (int) get_option('skyphusion_ai_embed_step_lock', 0) > time(), true);
+$GLOBALS['step_cron'] = array();
+skyphusion_ai_embed_on_step_event();
+expect('a busy cron step queues the next one', isset($GLOBALS['step_cron']['skyphusion_ai_embed_step_event']), true);
+$step_now_busy = skyphusion_ai_embed_step_now();
+expect('the button and REST say a step is running', strpos((string) ($step_now_busy['message'] ?? ''), 'already running') !== false, true);
+$GLOBALS['cfais_cli_log'] = array();
+$GLOBALS['cfais_embed_meta'][3]['skyphusion_ai_embed_hash'] = 'keep-me';
+skyphusion_ai_embed_cli(array('rebuild'), array());
+expect('cli says a step is running', strpos(embed_cli_lines(), 'embed_state=busy') !== false, true);
+expect('cli rebuild does not clear hashes under a running step', $GLOBALS['cfais_embed_meta'][3]['skyphusion_ai_embed_hash'] ?? '', 'keep-me');
+delete_option('skyphusion_ai_embed_step_lock');
+
+// A blocked pass is not "running in the background".
+update_option('skyphusion_ai_embed_cursor', array('active' => 1, 'state' => 'blocked', 'seen' => 4, 'batch' => 25), false);
+ob_start();
+skyphusion_ai_embed_render_progress();
+$step_progress = (string) ob_get_clean();
+expect('a blocked pass is not called background work', strpos($step_progress, 'runs in the background') === false, true);
+expect('a blocked pass says it is blocked and how to resume', strpos($step_progress, 'blocked') !== false && strpos($step_progress, 'Run') !== false, true);
 
 // Leave the shared state as it was for the files that follow.
 unset($GLOBALS['cfais_settings']);
