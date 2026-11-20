@@ -208,6 +208,9 @@ function skyphusion_ai_reset_apply() {
 		skyphusion_ai_reset_delete_option( $name );
 		++$count;
 	}
+	if ( function_exists( 'skyphusion_ai_embed_count_sweep' ) ) {
+		skyphusion_ai_embed_count_sweep( true );
+	}
 	$transients = skyphusion_ai_reset_sweep_transients();
 	if ( function_exists( 'wp_clear_scheduled_hook' ) ) {
 		wp_clear_scheduled_hook( 'skyphusion_ai_backfill_hourly' );

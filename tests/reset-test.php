@@ -53,6 +53,7 @@ $GLOBALS['cfais_options']['skyphusion_ai_insights'] = array(array('text' => 'red
 $GLOBALS['cfais_options']['skyphusion_ai_search_outcomes'] = array('day' => '2026-10-26');
 $GLOBALS['cfais_options']['skyphusion_ai_vectorize'] = array('created' => 1, 'index' => 'shop');
 $GLOBALS['cfais_options']['skyphusion_ai_embed_count'] = array(7 => array('page' => 1, 'posts' => 100, 'passages' => 100, 'chars' => 10));
+$GLOBALS['cfais_options']['skyphusion_ai_embed_count_7'] = array('page' => 1, 'posts' => 100, 'passages' => 100, 'chars' => 10, 'time' => time());
 $GLOBALS['cfais_options']['skyphusion_ai_assistant'] = array('enabled' => 1);
 $GLOBALS['cfais_options']['skyphusion_ai_assistant_chats'] = array(array('q' => 'hello'));
 $GLOBALS['cfais_options']['skyphusion_ai_gateway_down'] = time() + 100;
@@ -80,6 +81,7 @@ expect('search logs are cleared', isset($GLOBALS['cfais_options']['skyphusion_ai
 expect('search counts are cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_search_outcomes']), false);
 expect('the local index record is cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_vectorize']), false);
 expect('the running count is cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_embed_count']), false);
+expect('the per-user running count is cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_embed_count_7']), false);
 expect('assistant settings are cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_assistant']), false);
 expect('assistant chats are cleared', isset($GLOBALS['cfais_options']['skyphusion_ai_assistant_chats']), false);
 expect('the model list cache is cleared', isset($GLOBALS['cfais_store']['skyphusion_ai_models']), false);
