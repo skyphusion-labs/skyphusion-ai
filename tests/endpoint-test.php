@@ -150,6 +150,8 @@ require __DIR__ . '/frontend-load-test.php';
 // Own process. The suite's add_action stand-in records nothing, and this
 // file has to see the old hook names the shim registers.
 require __DIR__ . '/shim-compat-test.php';
+// Own process. Drives the embed save hooks through a registry and a dispatcher.
+require __DIR__ . '/embed-hooks-test.php';
 // Own process. settings-sanitize-test.php already defined get_option() in
 // this process, as a read of one fixture, and the migration has to see
 // writes. It also loads skyphusion-ai.php, which this process never does.
