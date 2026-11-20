@@ -461,6 +461,7 @@ function skyphusion_ai_embed_step_locked_run( $batch, $sync ) {
 		$cursor['active'] = 0;
 		$cursor['state']  = 'done';
 		skyphusion_ai_embed_cursor_save( $cursor );
+		skyphusion_ai_embed_schema_settle();
 		$result['state'] = 'done';
 		return $result;
 	}

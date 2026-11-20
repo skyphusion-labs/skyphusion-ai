@@ -45,7 +45,7 @@ function jobs_line($text)
 /** Hash a post as stored, so status counts it as embedded. */
 function jobs_store($post)
 {
-    $GLOBALS['cfais_embed_meta'][(int) $post['ID']]['skyphusion_ai_embed_hash'] = skyphusion_ai_embed_text_hash(skyphusion_ai_embed_text($post, array('title', 'content', 'excerpt')));
+    $GLOBALS['cfais_embed_meta'][(int) $post['ID']]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($post, array('title', 'content', 'excerpt')));
 }
 
 /** Forget every meta row the posts of this file own. */
