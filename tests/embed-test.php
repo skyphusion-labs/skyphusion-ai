@@ -206,7 +206,7 @@ expect('that save made no request', $GLOBALS['cfais_calls'], 0);
 
 embed_ready();
 $embed_same = embed_post(4, 'Hello', 'Same text');
-$GLOBALS['cfais_embed_meta'][4]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_same, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][4]['skyphusion_ai_embed_hash'] = skyphusion_ai_embed_text_hash(skyphusion_ai_embed_text($embed_same, array('title', 'content', 'excerpt')));
 $GLOBALS['cfais_calls'] = 0;
 $embed_unchanged = skyphusion_ai_embed_sync_post($embed_same);
 expect('an unchanged post is not sent', $embed_unchanged['state'], 'unchanged');
@@ -242,6 +242,49 @@ expect('a password protected post is removed', $embed_locked['state'], 'removed'
 expect('removal is one index call', $GLOBALS['cfais_calls'], 1);
 expect('the hash is forgotten', isset($GLOBALS['cfais_embed_meta'][5]['skyphusion_ai_embed_hash']), false);
 expect('removal uses delete by id', strpos((string) $GLOBALS['cfais_last_request']['url'], '/delete_by_ids') !== false, true);
+
+// Issue #234. A vector stored before #210 has a hash of the bare text and
+// empty terms. The run must see it as changed, or it never gains terms.
+$embed_old = embed_post(97, 'Old schema', 'Stored before terms existed');
+$GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_old, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][97]['skyphusion_ai_embed_parts'] = 1;
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array(
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"result":{"data":[[0.25,0.5]]}}',
+    '{"success":true,"result":{"mutationId":"schema1"}}',
+);
+$embed_old_state = skyphusion_ai_embed_sync_post($embed_old);
+expect('a vector stored before the metadata schema is stored again', $embed_old_state['state'], 'embedded');
+$GLOBALS['cfais_calls'] = 0;
+unset($GLOBALS['cfais_bodies']);
+expect('and then reads as unchanged', skyphusion_ai_embed_sync_post($embed_old)['state'], 'unchanged');
+expect('the second read made no request', $GLOBALS['cfais_calls'], 0);
+
+// Issue #234. rebuild clears every hash first. A post that is no longer
+// included then has no hash but still has vectors in the index.
+$embed_orphan = embed_post(98, 'Orphan', 'Excluded after the upgrade', array('post_password' => 'locked'));
+$GLOBALS['cfais_embed_meta'][98] = array('skyphusion_ai_embed_parts' => 2);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_request_urls'] = array();
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$embed_orphan_state = skyphusion_ai_embed_sync_post($embed_orphan);
+expect('an excluded post with no hash but stored parts is removed', $embed_orphan_state['state'], 'removed');
+expect('the delete call is made', $GLOBALS['cfais_calls'], 1);
+$embed_orphan_ids = json_decode((string) $GLOBALS['cfais_last_request']['args']['body'], true);
+expect('the delete names every stored part', count($embed_orphan_ids['ids'] ?? array()), 2);
+expect('the part count is forgotten', (int) ($GLOBALS['cfais_embed_meta'][98]['skyphusion_ai_embed_parts'] ?? 0), 0);
+
+$GLOBALS['cfais_embed_meta'][99] = array();
+$GLOBALS['cfais_calls'] = 0;
+expect('an excluded post that never had vectors reports removed', skyphusion_ai_embed_sync_post(embed_post(99, 'Never', 'Never stored', array('post_password' => 'locked')))['state'], 'removed');
+expect('and makes no request', $GLOBALS['cfais_calls'], 0);
+
+$GLOBALS['cfais_embed_meta'][100] = array('skyphusion_ai_embed_parts' => 1);
+$GLOBALS['cfais_calls'] = 0;
+$GLOBALS['cfais_bodies'] = array('{"success":true,"result":{}}');
+$embed_orphan_recon = skyphusion_ai_embed_reconcile(array(embed_post(100, 'Orphan two', 'Reconcile finds it', array('post_password' => 'locked'))));
+expect('reconcile removes an excluded post that has parts and no hash', $embed_orphan_recon['removed'], 1);
 
 // The run goes through the step (#201). The old one-request
 // skyphusion_ai_embed_run() is gone; these checks drive the step.
@@ -773,7 +816,7 @@ expect('estimate names passages', strpos(embed_cli_lines(), 'embed_passages=1') 
 expect('estimate makes no request', $GLOBALS['cfais_calls'], 0);
 expect('estimate does not post', $GLOBALS['cfais_last_post'], array('marker' => 1));
 
-$GLOBALS['cfais_embed_meta'][91]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text(embed_post(91, 'Estimate', 'Four words here'), array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][91]['skyphusion_ai_embed_hash'] = skyphusion_ai_embed_text_hash(skyphusion_ai_embed_text(embed_post(91, 'Estimate', 'Four words here'), array('title', 'content', 'excerpt')));
 $GLOBALS['cfais_cli_log'] = array();
 skyphusion_ai_embed_cli(array('status'), array());
 expect('status counts the stored post', strpos(embed_cli_lines(), 'embed_embedded=1') !== false, true);
@@ -808,7 +851,7 @@ expect('search does not write the index', $embed_search_wrote, false);
 
 $embed_kept = embed_post(92, 'Kept', 'Still here');
 $embed_dropped = embed_post(93, 'Dropped', 'Leave now', array('post_password' => 'locked'));
-$GLOBALS['cfais_embed_meta'][92]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_kept, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][92]['skyphusion_ai_embed_hash'] = skyphusion_ai_embed_text_hash(skyphusion_ai_embed_text($embed_kept, array('title', 'content', 'excerpt')));
 $GLOBALS['cfais_embed_meta'][93]['skyphusion_ai_embed_hash'] = 'old-hash';
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_kept, $embed_dropped);
 $GLOBALS['cfais_calls'] = 0;
@@ -857,7 +900,7 @@ expect('purge does not call the model', strpos(embed_cli_lines(), 'embed_called=
 
 embed_ready();
 $embed_move_post = embed_post(96, 'Move', 'Copy this');
-$GLOBALS['cfais_embed_meta'][96]['skyphusion_ai_embed_hash'] = hash('sha256', skyphusion_ai_embed_text($embed_move_post, array('title', 'content', 'excerpt')));
+$GLOBALS['cfais_embed_meta'][96]['skyphusion_ai_embed_hash'] = skyphusion_ai_embed_text_hash(skyphusion_ai_embed_text($embed_move_post, array('title', 'content', 'excerpt')));
 $GLOBALS['skyphusion_ai_embed_posts'] = array($embed_move_post);
 $GLOBALS['cfais_calls'] = 0;
 $GLOBALS['cfais_request_urls'] = array();

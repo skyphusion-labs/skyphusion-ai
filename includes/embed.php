@@ -38,6 +38,29 @@ function skyphusion_ai_embed_hash_key() {
 }
 
 /**
+ * Version of the metadata stored beside each vector.
+ *
+ * It is part of the stored hash. Raise it when the metadata gains a field, so
+ * the next run stores every vector again and the old ones gain the field (#234).
+ * Version 2 added the terms line (#210).
+ *
+ * @return int
+ */
+function skyphusion_ai_embed_schema() {
+	return 2;
+}
+
+/**
+ * Hash that says a post is already stored: the text and the metadata version.
+ *
+ * @param string $text Embedded text.
+ * @return string
+ */
+function skyphusion_ai_embed_text_hash( $text ) {
+	return hash( 'sha256', (string) skyphusion_ai_embed_schema() . "\n" . $text );
+}
+
+/**
  * Saved choice, with defaults filled in.
  *
  * @return array<string, mixed>
@@ -714,7 +737,7 @@ function skyphusion_ai_embed_estimate_tally( $posts, $config ) {
 			continue;
 		}
 		$post_id = isset( $post['ID'] ) ? (int) $post['ID'] : 0;
-		if ( skyphusion_ai_embed_hash_get( $post_id ) === hash( 'sha256', $text ) ) {
+		if ( skyphusion_ai_embed_hash_get( $post_id ) === skyphusion_ai_embed_text_hash( $text ) ) {
 			continue;
 		}
 		$pieces = skyphusion_ai_embed_passages( $text );
@@ -1663,7 +1686,7 @@ function skyphusion_ai_embed_sync_post( $post ) {
 	}
 	$text     = skyphusion_ai_embed_text( $post, $fields );
 	$included = skyphusion_ai_embed_included( $post, $config ) && '' !== $text;
-	$hash     = '' === $text ? '' : hash( 'sha256', $text );
+	$hash     = '' === $text ? '' : skyphusion_ai_embed_text_hash( $text );
 	$stored   = skyphusion_ai_embed_hash_get( $post_id );
 	if ( $included && $hash === $stored ) {
 		skyphusion_ai_embed_fail_set( $post_id, false );
@@ -1681,7 +1704,8 @@ function skyphusion_ai_embed_sync_post( $post ) {
 		return array( 'state' => 'blocked' );
 	}
 	if ( ! $included ) {
-		if ( '' === $stored ) {
+		// A rebuild clears every hash first. Parts above zero mean vectors are still in the index (#234).
+		if ( '' === $stored && 1 > skyphusion_ai_embed_part_count( $post_id ) ) {
 			skyphusion_ai_embed_fail_set( $post_id, false );
 			return array( 'state' => 'removed' );
 		}
@@ -2697,7 +2721,7 @@ function skyphusion_ai_embed_tally( $posts, $config ) {
 			++$failed;
 			continue;
 		}
-		$hash = hash( 'sha256', $text );
+		$hash = skyphusion_ai_embed_text_hash( $text );
 		if ( skyphusion_ai_embed_hash_get( $post_id ) === $hash ) {
 			++$embedded;
 			continue;
@@ -2852,7 +2876,7 @@ function skyphusion_ai_embed_reconcile( $posts ) {
 		$text    = skyphusion_ai_embed_text( $post, $fields );
 		$keep    = skyphusion_ai_embed_included( $post, $config ) && '' !== $text;
 		$stored  = skyphusion_ai_embed_hash_get( $post_id );
-		if ( $keep || '' === $stored ) {
+		if ( $keep || ( '' === $stored && 1 > skyphusion_ai_embed_part_count( $post_id ) ) ) {
 			continue;
 		}
 		$result = skyphusion_ai_embed_remove( $post_id, $config, $credentials );
