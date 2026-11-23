@@ -7,7 +7,7 @@
  * are stored as short passages. Deleting the plugin removes the saved
  * choice and leaves the index in the Cloudflare account.
  *
- * On wordpress-on-cloudflare the Worker can provision Workers AI and
+ * On pagefeather the Worker can provision Workers AI and
  * Vectorize as bindings. When SKYPHUSION_AI_CF_BRIDGE is set and
  * skyphusion_worker_call() exists, embeddings and the Vectorize data
  * plane use that bridge. Every other install keeps the REST API.
