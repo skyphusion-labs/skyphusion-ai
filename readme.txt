@@ -4,7 +4,7 @@ Tags: search, cloudflare, ai, woocommerce
 Requires at least: 6.4
 Tested up to: 7.1
 Requires PHP: 8.0
-Stable tag: 0.7.1
+Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -250,12 +250,6 @@ The Wrangler commands are documented at https://developers.cloudflare.com/ai-sea
 No. A caller that wants this provider uses `using_provider('skyphusion-ai')`. You can expand those calls with Workers AI or with AI Gateway. The four agent tools sit next to WooCommerce in docs/agent-tools.md. The plugin registers four read-only abilities. See docs/search-ability.md.
 
 == Changelog ==
-
-= 0.7.1 =
-
-* Settings no longer links to Connectors when WordPress AI Client is absent. Set `CLOUDFLARE_API_KEY` instead.
-* WordPress.org assets include the ggc.sh screenshots.
-* Most PHPCS indent and spacing debt is cleared.
 
 = 0.7.0 =
 

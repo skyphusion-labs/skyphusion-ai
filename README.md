@@ -1,6 +1,6 @@
 # Skyphusion AI for Cloudflare
 
-[Install from WordPress.org](https://wordpress.org/plugins/skyphusion-ai/) or from a [GitHub release zip](https://github.com/skyphusion-labs/skyphusion-ai/releases). Current release: **0.7.1**.
+[Install from WordPress.org](https://wordpress.org/plugins/skyphusion-ai/) or from a [GitHub release zip](https://github.com/skyphusion-labs/skyphusion-ai/releases). Current release: **0.7.0**.
 
 This is a free GPL WordPress plugin for Cloudflare® [Workers AI](https://developers.cloudflare.com/workers-ai/), [AI Gateway](https://developers.cloudflare.com/ai-gateway/), and [AI Search](https://developers.cloudflare.com/ai-search/).
 
