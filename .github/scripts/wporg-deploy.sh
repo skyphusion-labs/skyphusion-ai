@@ -56,7 +56,7 @@ check_versions() {
     main=$(git -C "$RELEASE_DIR" show "${TAG}:${SLUG}.php") || die "cannot read ${SLUG}.php at $TAG"
     readme=$(git -C "$RELEASE_DIR" show "${TAG}:readme.txt") || die "cannot read readme.txt at $TAG"
     header=$(printf '%s\n' "$main" | sed -n 's/^ \* Version: *//p' | head -n1 | tr -d '\r ')
-    const=$(printf '%s\n' "$main" | sed -n "s/^define('SKYPHUSION_AI_VERSION', '\\([^']*\\)');.*/\\1/p" | head -n1)
+    const=$(printf '%s\n' "$main" | sed -n "s/^define( *'SKYPHUSION_AI_VERSION', *'\\([^']*\\)' *);.*/\\1/p" | head -n1)
     stable=$(printf '%s\n' "$readme" | sed -n 's/^Stable tag: *//p' | head -n1 | tr -d '\r ')
     say "tag=$VER header=$header constant=$const stable=$stable"
     [[ "$header" == "$VER" ]] || die "plugin header Version '$header' is not '$VER'"
