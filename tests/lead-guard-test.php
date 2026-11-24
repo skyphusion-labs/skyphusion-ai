@@ -656,7 +656,7 @@ $frontend = file_get_contents(dirname(__DIR__) . '/includes/frontend.php');
 expect('the frontend file was read', is_string($frontend) && $frontend !== '', true);
 expect(
     'the search page calls the GUARDED entry point',
-    strpos($frontend, 'skyphusion_ai_lead_answer($question)') !== false,
+    strpos($frontend, 'skyphusion_ai_lead_answer( $question )') !== false,
     true
 );
 expect(

@@ -102,6 +102,7 @@ require __DIR__ . '/provider-test.php';
 require __DIR__ . '/external-services-test.php';
 require __DIR__ . '/settings-sanitize-test.php';
 require __DIR__ . '/token-source-test.php';
+require __DIR__ . '/connectors-help-test.php';
 require __DIR__ . '/cli-accent-color-test.php';
 require __DIR__ . '/stock-test.php';
 // LAST on purpose: it defines WordPress stand-ins at global scope.

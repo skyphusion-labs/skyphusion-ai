@@ -557,7 +557,7 @@ $GLOBALS['cfai_stock_test_plural'] = $cite_plural;
 unset($GLOBALS['assistant_embed_body']);
 unset($GLOBALS['assistant_text_body']);
 $assistant_pin = (string) file_get_contents(dirname(__DIR__) . '/includes/endpoint.php');
-expect('the snippet pin stays', strpos($assistant_pin, "define('SKYPHUSION_AI_SNIPPET', '0.0.25')") !== false, true);
+expect('the snippet pin stays', strpos($assistant_pin, "define( 'SKYPHUSION_AI_SNIPPET', '0.0.25' )") !== false, true);
 unset($GLOBALS['cfais_user_id']);
 unset($GLOBALS['cfais_can']['read']);
 

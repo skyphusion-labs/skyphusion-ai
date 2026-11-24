@@ -129,7 +129,7 @@ What is sent and when: only when an admin deploys the Worker from the settings s
 2. In Cloudflare, turn on the public endpoint for your AI Search instance.
 3. In WordPress, open Settings, then Skyphusion AI. Paste that address.
 4. Paste the account id.
-5. Open Settings, then Connectors. Save the Workers AI API token for Cloudflare.
+5. Set the Workers AI API token. Prefer Settings, then Connectors, when that screen exists. Or set CLOUDFLARE_API_KEY.
 
 == Frequently Asked Questions ==
 
@@ -139,7 +139,7 @@ Open the Cloudflare dashboard. Go to AI Search, then your instance, then Setting
 
 = Where does the API token go? =
 
-Save it in Settings, then Connectors. WordPress passes that token to the skyphusion-ai provider through the AI Client. WordPress also reads the `SKYPHUSION_AI_API_KEY` environment variable or constant for that provider. The plugin does not read the saved option itself. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
+Set `CLOUDFLARE_API_KEY` in the environment, or as a PHP constant. You can put the account id in front of the token as `account-id:api-token`. On WordPress 7.0 and later, Settings, then Connectors, is also available. WordPress passes that Connectors token to the skyphusion-ai provider through the AI Client. WordPress also reads the `SKYPHUSION_AI_API_KEY` environment variable or constant for that provider. The plugin does not read the Connectors option itself. The environment and the constant win over Connectors. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It does not show the token. It does not link to Connectors when that screen is missing.
 
 = Do Cloudflare free plans work? =
 

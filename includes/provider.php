@@ -2,45 +2,45 @@
 /**
  * Register the Cloudflare provider with the WordPress AI Client, and expose
  * Workers AI embeddings plus the public AI Search endpoint to WordPress and WooCommerce.
+ *
+ * @package Skyphusion_AI
  */
 
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
 require_once __DIR__ . '/budget.php';
 require_once __DIR__ . '/prompt-cache.php';
 require_once __DIR__ . '/models.php';
 
-function cloudflare_ai_provider_boot()
-{
-    if (!class_exists('WordPress\\AiClient\\AiClient')) {
-        return;
-    }
-    $text = 'WordPress\\AiClient\\Providers\\Models\\TextGeneration\\Contracts\\TextGenerationModelInterface';
-    $image = 'WordPress\\AiClient\\Providers\\Models\\ImageGeneration\\Contracts\\ImageGenerationModelInterface';
-    if (!interface_exists($text) || !interface_exists($image)) {
-        return;
-    }
-    require_once __DIR__ . '/provider-models.php';
-    $speech = 'WordPress\\AiClient\\Providers\\Models\\SpeechGeneration\\Contracts\\SpeechGenerationModelInterface';
-    if (interface_exists($speech)) {
-        require_once __DIR__ . '/provider-speech.php';
-    }
-    add_action('init', 'cloudflare_ai_provider_register', 5);
+function cloudflare_ai_provider_boot() {
+	if ( ! class_exists( 'WordPress\\AiClient\\AiClient' ) ) {
+		return;
+	}
+	$text  = 'WordPress\\AiClient\\Providers\\Models\\TextGeneration\\Contracts\\TextGenerationModelInterface';
+	$image = 'WordPress\\AiClient\\Providers\\Models\\ImageGeneration\\Contracts\\ImageGenerationModelInterface';
+	if ( ! interface_exists( $text ) || ! interface_exists( $image ) ) {
+		return;
+	}
+	require_once __DIR__ . '/provider-models.php';
+	$speech = 'WordPress\\AiClient\\Providers\\Models\\SpeechGeneration\\Contracts\\SpeechGenerationModelInterface';
+	if ( interface_exists( $speech ) ) {
+		require_once __DIR__ . '/provider-speech.php';
+	}
+	add_action( 'init', 'cloudflare_ai_provider_register', 5 );
 }
-add_action('plugins_loaded', 'cloudflare_ai_provider_boot');
+add_action( 'plugins_loaded', 'cloudflare_ai_provider_boot' );
 
-function cloudflare_ai_provider_register()
-{
-    if (!class_exists('Cloudflare_AI_Provider') || !class_exists('WordPress\\AiClient\\AiClient')) {
-        return;
-    }
-    $registry = WordPress\AiClient\AiClient::defaultRegistry();
-    if ($registry->hasProvider('skyphusion-ai') || $registry->hasProvider('Cloudflare_AI_Provider')) {
-        return;
-    }
-    $registry->registerProvider('Cloudflare_AI_Provider');
+function cloudflare_ai_provider_register() {
+	if ( ! class_exists( 'Cloudflare_AI_Provider' ) || ! class_exists( 'WordPress\\AiClient\\AiClient' ) ) {
+		return;
+	}
+	$registry = WordPress\AiClient\AiClient::defaultRegistry();
+	if ( $registry->hasProvider( 'skyphusion-ai' ) || $registry->hasProvider( 'Cloudflare_AI_Provider' ) ) {
+		return;
+	}
+	$registry->registerProvider( 'Cloudflare_AI_Provider' );
 }
 
 /**
@@ -52,29 +52,28 @@ function cloudflare_ai_provider_register()
  * @param array<int, string> $texts
  * @return array<int, array<int, float>>|WP_Error
  */
-function cloudflare_ai_provider_embeddings($texts)
-{
-    if (!is_array($texts)) {
-        return new WP_Error('cloudflare_ai_embeddings', __('Embeddings need a list of texts.', 'skyphusion-ai'));
-    }
+function cloudflare_ai_provider_embeddings( $texts ) {
+	if ( ! is_array( $texts ) ) {
+		return new WP_Error( 'cloudflare_ai_embeddings', __( 'Embeddings need a list of texts.', 'skyphusion-ai' ) );
+	}
 	if ( function_exists( 'skyphusion_ai_cf_bridge_on' )
 		&& skyphusion_ai_cf_bridge_on()
 		&& function_exists( 'skyphusion_ai_bridge_embeddings' )
 	) {
 		return skyphusion_ai_bridge_embeddings( $texts );
 	}
-    $settings = skyphusion_ai_settings();
-    $key = cloudflare_ai_provider_connector_key();
-    $credentials = cloudflare_ai_provider_resolve_credentials($key, $settings['account_id']);
-    $url = cloudflare_ai_provider_run_url(
-        $credentials['account_id'],
-        $settings['gateway_id'],
-        cloudflare_ai_provider_embeddings_model()
-    );
-    $body = cloudflare_ai_provider_embeddings_body($texts);
-    if ($url === '' || $credentials['token'] === '' || !$body['text']) {
-        return new WP_Error('cloudflare_ai_embeddings', __('Add the Cloudflare account ID and API token before embedding text.', 'skyphusion-ai'));
-    }
+	$settings    = skyphusion_ai_settings();
+	$key         = cloudflare_ai_provider_connector_key();
+	$credentials = cloudflare_ai_provider_resolve_credentials( $key, $settings['account_id'] );
+	$url         = cloudflare_ai_provider_run_url(
+		$credentials['account_id'],
+		$settings['gateway_id'],
+		cloudflare_ai_provider_embeddings_model()
+	);
+	$body        = cloudflare_ai_provider_embeddings_body( $texts );
+	if ( $url === '' || $credentials['token'] === '' || ! $body['text'] ) {
+		return new WP_Error( 'cloudflare_ai_embeddings', __( 'Add the Cloudflare account ID and API token before embedding text.', 'skyphusion-ai' ) );
+	}
 
 	$skyphusion_ai_neuron_refusal = skyphusion_ai_neuron_refusal();
 	if ( is_wp_error( $skyphusion_ai_neuron_refusal ) ) {
@@ -96,12 +95,12 @@ function cloudflare_ai_provider_embeddings($texts)
 			__( 'The site could not reach Cloudflare.', 'skyphusion-ai' )
 		);
 	}
-    $status = (int) wp_remote_retrieve_response_code($response);
-    $decoded = json_decode((string) wp_remote_retrieve_body($response), true);
-    if ($status < 200 || $status >= 300) {
-        return new WP_Error('cloudflare_ai_embeddings', cloudflare_ai_provider_error_message($status, $decoded));
-    }
-    return cloudflare_ai_provider_read_embeddings($decoded);
+	$status  = (int) wp_remote_retrieve_response_code( $response );
+	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	if ( $status < 200 || $status >= 300 ) {
+		return new WP_Error( 'cloudflare_ai_embeddings', cloudflare_ai_provider_error_message( $status, $decoded ) );
+	}
+	return cloudflare_ai_provider_read_embeddings( $decoded );
 }
 
 /**
@@ -111,34 +110,38 @@ function cloudflare_ai_provider_embeddings($texts)
  * @param string $question
  * @return array{answer: string, sources: array<int, string>}|WP_Error
  */
-function skyphusion_ai_query($question)
-{
-    $question = trim((string) $question);
-    $endpoint = skyphusion_ai_settings()['endpoint'];
-    if ($question === '' || $endpoint === '') {
-        return new WP_Error('cloudflare_ai_search', __('Add the AI Search address before searching.', 'skyphusion-ai'));
-    }
-    $response = wp_remote_post($endpoint . '/chat/completions', array(
-        'timeout' => 20,
-        'headers' => array('Content-Type' => 'application/json'),
-        'body' => wp_json_encode(array(
-            'messages' => array(
-                array(
-                    'role' => 'user',
-                    'content' => $question,
-                ),
-            ),
-        )),
-    ));
-    if (is_wp_error($response)) {
-        return new WP_Error('cloudflare_ai_search', __('The site could not reach Cloudflare.', 'skyphusion-ai'));
-    }
-    $status = (int) wp_remote_retrieve_response_code($response);
-    $decoded = json_decode((string) wp_remote_retrieve_body($response), true);
-    if ($status !== 200) {
-        /* translators: %d is an HTTP status code returned by Cloudflare. */
-        return new WP_Error('cloudflare_ai_search', sprintf(__('Cloudflare answered HTTP %d.', 'skyphusion-ai'), (int) $status));
-    }
+function skyphusion_ai_query( $question ) {
+	$question = trim( (string) $question );
+	$endpoint = skyphusion_ai_settings()['endpoint'];
+	if ( $question === '' || $endpoint === '' ) {
+		return new WP_Error( 'cloudflare_ai_search', __( 'Add the AI Search address before searching.', 'skyphusion-ai' ) );
+	}
+	$response = wp_remote_post(
+		$endpoint . '/chat/completions',
+		array(
+			'timeout' => 20,
+			'headers' => array( 'Content-Type' => 'application/json' ),
+			'body'    => wp_json_encode(
+				array(
+					'messages' => array(
+						array(
+							'role'    => 'user',
+							'content' => $question,
+						),
+					),
+				)
+			),
+		)
+	);
+	if ( is_wp_error( $response ) ) {
+		return new WP_Error( 'cloudflare_ai_search', __( 'The site could not reach Cloudflare.', 'skyphusion-ai' ) );
+	}
+	$status  = (int) wp_remote_retrieve_response_code( $response );
+	$decoded = json_decode( (string) wp_remote_retrieve_body( $response ), true );
+	if ( $status !== 200 ) {
+		/* translators: %d is an HTTP status code returned by Cloudflare. */
+		return new WP_Error( 'cloudflare_ai_search', sprintf( __( 'Cloudflare answered HTTP %d.', 'skyphusion-ai' ), (int) $status ) );
+	}
 	return skyphusion_ai_neuron_count_search( $decoded );
 }
 
@@ -157,27 +160,32 @@ function skyphusion_ai_query($question)
  *
  * @return bool
  */
-function skyphusion_ai_lead_take_slot()
-{
-    if (!function_exists('get_transient') || !function_exists('set_transient')) {
-        return true;
-    }
-    $limit = skyphusion_ai_lead_ceiling();
-    $key = 'cfais_lead_calls';
-    $state = get_transient($key);
-    $now = time();
-    if (!is_array($state) || !isset($state['count'], $state['start'])) {
-        $state = array('count' => 0, 'start' => $now);
-    }
-    if (($now - (int) $state['start']) >= $limit['window']) {
-        $state = array('count' => 0, 'start' => $now);
-    }
-    if ((int) $state['count'] >= $limit['calls']) {
-        return false;
-    }
-    $state['count'] = (int) $state['count'] + 1;
-    set_transient($key, $state, $limit['window']);
-    return true;
+function skyphusion_ai_lead_take_slot() {
+	if ( ! function_exists( 'get_transient' ) || ! function_exists( 'set_transient' ) ) {
+		return true;
+	}
+	$limit = skyphusion_ai_lead_ceiling();
+	$key   = 'cfais_lead_calls';
+	$state = get_transient( $key );
+	$now   = time();
+	if ( ! is_array( $state ) || ! isset( $state['count'], $state['start'] ) ) {
+		$state = array(
+			'count' => 0,
+			'start' => $now,
+		);
+	}
+	if ( ( $now - (int) $state['start'] ) >= $limit['window'] ) {
+		$state = array(
+			'count' => 0,
+			'start' => $now,
+		);
+	}
+	if ( (int) $state['count'] >= $limit['calls'] ) {
+		return false;
+	}
+	$state['count'] = (int) $state['count'] + 1;
+	set_transient( $key, $state, $limit['window'] );
+	return true;
 }
 
 /**
@@ -487,24 +495,23 @@ function skyphusion_ai_lead_answer( $question ) {
 	return $result;
 }
 
-function cloudflare_ai_provider_connector_key()
-{
+function cloudflare_ai_provider_connector_key() {
 	// The settings screen reports this same decision via
 	// skyphusion_ai_token_source(). "Set" means a non-empty string.
 	// Environment, then the constant, then the key the AI Client holds for
 	// the cloudflare provider. A change to either function has to land in
 	// both, or the screen will name a source this function does not return.
-    $env = getenv('CLOUDFLARE_API_KEY');
-    if (is_string($env) && $env !== '') {
-        return $env;
-    }
-    if (defined('CLOUDFLARE_API_KEY')) {
-        $value = constant('CLOUDFLARE_API_KEY');
-        if (is_string($value) && $value !== '') {
-            return $value;
-        }
-    }
-    return skyphusion_ai_client_api_key();
+	$env = getenv( 'CLOUDFLARE_API_KEY' );
+	if ( is_string( $env ) && $env !== '' ) {
+		return $env;
+	}
+	if ( defined( 'CLOUDFLARE_API_KEY' ) ) {
+		$value = constant( 'CLOUDFLARE_API_KEY' );
+		if ( is_string( $value ) && $value !== '' ) {
+			return $value;
+		}
+	}
+	return skyphusion_ai_client_api_key();
 }
 
 /**

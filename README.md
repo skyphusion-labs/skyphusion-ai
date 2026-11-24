@@ -22,7 +22,7 @@ The comparison tables below cover search, chat, and agents against plugins that 
 
 ## The token stays off the page
 
-The search box is Cloudflare's own snippet. The page does not contain an API token. Workers AI reads the `CLOUDFLARE_API_KEY` environment variable first. It then tries a PHP constant of the same name. It falls back to the token from **Settings, then Connectors**. This plugin does not store the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
+The search box is Cloudflare's own snippet. The page does not contain an API token. Workers AI reads the `CLOUDFLARE_API_KEY` environment variable first. It then tries a PHP constant of the same name. It falls back to the token from **Settings, then Connectors**, when that screen exists. This plugin does not store the token. The Skyphusion AI screen says which source is in use. It does not show the token. It does not link to Connectors when that page is missing.
 
 The license is GPL-2.0-or-later. The plugin needs WordPress 6.4 and PHP 8.0. The AI Client provider registers on WordPress 7.0 and later. It needs the text and image generation interfaces to be present. Search and the embeddings helper still run without those interfaces.
 
@@ -60,7 +60,7 @@ Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id 
 
 Turn on **Publish /llms.txt for AI crawlers** when you want `/llms.txt`. The file is llms.txt at the home address. A file of that name in another folder is not served. The file names the site, the home URL, and the AI Search address when set. It is off by default. It does not edit posts.
 
-Then open **Settings, then Connectors**. Save the Workers AI API token for the Cloudflare provider. You can also put the account id in front of the token as `account-id:api-token`. Only the token half is sent. The plugin accepts `CLOUDFLARE_ACCOUNT_ID` from the environment, then from a PHP constant, when the setting is empty.
+Set the Workers AI API token. Prefer **Settings, then Connectors**, when that screen exists (WordPress 7.0 and the AI Client). Or set `CLOUDFLARE_API_KEY` in the environment or as a PHP constant. You can put the account id in front of the token as `account-id:api-token`. Only the token half is sent. The plugin accepts `CLOUDFLARE_ACCOUNT_ID` from the environment, then from a PHP constant, when the setting is empty. The settings screen does not link to Connectors when that page is missing.
 
 Put the search box in one spot with the shortcode `[cloudflare_ai_search]`. Then set placement to "Only where I place the shortcode".
 

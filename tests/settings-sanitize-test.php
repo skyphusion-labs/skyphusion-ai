@@ -265,8 +265,8 @@ $cfais_cli = (string) file_get_contents(dirname(__DIR__) . '/includes/cli.php');
  * availability must never be a condition for running the check, whatever the
  * option is called.
  */
-$cfais_open = "&& function_exists('sanitize_hex_color')";
-$cfais_closed = "if (!function_exists('sanitize_hex_color')) {";
+$cfais_open = "&& function_exists( 'sanitize_hex_color' )";
+$cfais_closed = "if ( ! function_exists( 'sanitize_hex_color' ) ) {";
 
 expect('the colour check no longer fails open', strpos($cfais_cli, $cfais_open) !== false, false);
 expect('a missing validator is an error', strpos($cfais_cli, $cfais_closed) !== false, true);

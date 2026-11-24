@@ -147,7 +147,7 @@ $nopaid_src = (string) file_get_contents(dirname(__DIR__) . '/includes/nopaid.ph
 expect('provider.php registers one provider', substr_count($nopaid_provider, 'registerProvider('), 1);
 expect(
     'that provider is the Cloudflare class',
-    strpos($nopaid_provider, "registerProvider('Cloudflare_AI_Provider')") !== false,
+    strpos($nopaid_provider, "registerProvider( 'Cloudflare_AI_Provider' )") !== false,
     true
 );
 expect('provider.php does not name Anthropic', stripos($nopaid_provider, 'anthropic') === false, true);
