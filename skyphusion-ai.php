@@ -2,7 +2,7 @@
 /**
  * Plugin Name: Skyphusion AI for Cloudflare
  * Plugin URI: https://github.com/skyphusion-labs/skyphusion-ai
- * Description: Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce. Connect models from Settings, then Connectors, and search from Settings, then Skyphusion AI.
+ * Description: Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce. Search from Settings, then Skyphusion AI. Set the Workers AI token with CLOUDFLARE_API_KEY, or Settings then Connectors when that screen exists.
  * Version: 0.7.0
  * Requires at least: 6.4
  * Requires PHP: 8.0
@@ -11,14 +11,16 @@
  * License: GPL-2.0-or-later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Text Domain: skyphusion-ai
+ *
+ * @package Skyphusion_AI
  */
 
-if (!defined('ABSPATH')) {
-    exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
 }
 
-define('SKYPHUSION_AI_VERSION', '0.7.0');
-define('SKYPHUSION_AI_FILE', __FILE__);
+define( 'SKYPHUSION_AI_VERSION', '0.7.0' );
+define( 'SKYPHUSION_AI_FILE', __FILE__ );
 
 require_once __DIR__ . '/includes/endpoint.php';
 require_once __DIR__ . '/includes/routes.php';
@@ -49,10 +51,12 @@ require_once __DIR__ . '/includes/abilities.php';
 require_once __DIR__ . '/includes/llms.php';
 require_once __DIR__ . '/includes/deprecated.php';
 
-function skyphusion_ai_activate()
-{
-    if (get_option('skyphusion_ai_settings', null) === null && get_option( 'cloudflare_ai_search_settings', null ) === null) {
-        add_option('skyphusion_ai_settings', skyphusion_ai_defaults());
-    }
+/**
+ * Seed the settings option on first activation when neither key exists.
+ */
+function skyphusion_ai_activate() {
+	if ( get_option( 'skyphusion_ai_settings', null ) === null && get_option( 'cloudflare_ai_search_settings', null ) === null ) {
+		add_option( 'skyphusion_ai_settings', skyphusion_ai_defaults() );
+	}
 }
-register_activation_hook(__FILE__, 'skyphusion_ai_activate');
+register_activation_hook( __FILE__, 'skyphusion_ai_activate' );

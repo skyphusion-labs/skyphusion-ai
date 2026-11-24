@@ -277,7 +277,7 @@ foreach ($worker_gw_keys as $worker_gw_key) {
 $worker_uninstall = (string) file_get_contents(dirname(__DIR__) . '/uninstall.php');
 expect('uninstall removes the worker option', strpos($worker_uninstall, 'skyphusion_ai_worker') !== false, true);
 $worker_pin = (string) file_get_contents(dirname(__DIR__) . '/includes/endpoint.php');
-expect('the snippet pin stays', strpos($worker_pin, "define('SKYPHUSION_AI_SNIPPET', '0.0.25')") !== false, true);
+expect('the snippet pin stays', strpos($worker_pin, "define( 'SKYPHUSION_AI_SNIPPET', '0.0.25' )") !== false, true);
 
 unset($GLOBALS['cfais_options']['skyphusion_ai_worker']);
 unset($GLOBALS['cfais_options']['skyphusion_ai_backfill']);

@@ -52,7 +52,7 @@ git -C "$BASE" commit -q -m base
 release_repo() {
     local name="$1" ver="$2" header="${3:-$2}" const="${4:-$2}" stable="${5:-$2}" d="$T/rel-$1"
     cp -R "$BASE" "$d"
-    sed -i.bak "s/^ \* Version: .*/ * Version: $header/; s/define('SKYPHUSION_AI_VERSION', '[^']*')/define('SKYPHUSION_AI_VERSION', '$const')/" "$d/skyphusion-ai.php"
+    sed -i.bak "s/^ \* Version: .*/ * Version: $header/; s/define( 'SKYPHUSION_AI_VERSION', '[^']*' )/define( 'SKYPHUSION_AI_VERSION', '$const' )/" "$d/skyphusion-ai.php"
     sed -i.bak "s/^Stable tag: .*/Stable tag: $stable/" "$d/readme.txt"
     rm -f "$d"/*.bak
     git -C "$d" add -A
