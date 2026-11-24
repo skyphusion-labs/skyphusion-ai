@@ -1,9 +1,9 @@
 # WordPress.org directory images
 
-These files are the banner and the icon for the plugin page on WordPress.org.
-Copy them into the `assets` directory of the plugin's SVN repository. They are
-not part of the plugin zip. `.distignore` and `.gitattributes` keep this
-directory out of every archive.
+These files are the banner, the icon, and the screenshots for the plugin page
+on WordPress.org. Copy them into the `assets` directory of the plugin's SVN
+repository. They are not part of the plugin zip. `.distignore` and
+`.gitattributes` keep this directory out of every archive.
 
 | File | Pixels |
 | --- | --- |
@@ -12,7 +12,14 @@ directory out of every archive.
 | `icon-256x256.png` | 256 by 256 |
 | `icon-128x128.png` | 128 by 128 |
 | `icon.svg` | the same mark |
+| `screenshot-1.png` | Settings, Connection tab (ggc.sh) |
+| `screenshot-2.png` | Visitor search and chat (ggc.sh) |
+| `screenshot-3.png` | Product stock text (ggc.sh) |
+| `screenshot-4.png` | Embeddings tab (ggc.sh) |
 
 The banner text is the plugin name, Skyphusion AI for Cloudflare, and the line
 Workers AI, AI Gateway, and AI Search. The mark is a search result and one
 point. It is not the Cloudflare logo.
+
+The screenshots match the numbered list in `readme.txt` under Screenshots.
+Captions there are the source of truth for the directory page.

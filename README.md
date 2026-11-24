@@ -34,6 +34,26 @@ The license is GPL-2.0-or-later. The plugin needs WordPress 6.4 and PHP 8.0. The
 4. Choose the search box, the keyboard search, and the chat button. Save again.
 5. Press **Check connection**.
 
+## Screenshots
+
+Shots from the [ggc.sh](https://ggc.sh/) demo store on plugin 0.7.0.
+
+![Settings, Skyphusion AI Connection tab](.wordpress-org/screenshot-1.png)
+
+*Settings, then Skyphusion AI. Paste the AI Search address here.*
+
+![Shop homepage with search bar and chat button](.wordpress-org/screenshot-2.png)
+
+*Visitor search on ggc.sh. Chat stays optional.*
+
+![Product page Stock block with SKU](.wordpress-org/screenshot-3.png)
+
+*A product page prints stock as plain text for crawlers.*
+
+![Embeddings tab with Count the posts](.wordpress-org/screenshot-4.png)
+
+*Embeddings tab. Related posts and sync stay off until you choose them.*
+
 The same screen links to Workers AI, AI Gateway, and AI Search. It links to both the dashboard and the docs. Paste the account id there. The account id is 32 hex characters.
 
 Leave the gateway blank to call `api.cloudflare.com` directly. Set a gateway id to send model calls through `gateway.ai.cloudflare.com` instead. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. The AI Gateway field also shows the host in use, the fallback state, the dynamic route, and prompt logging. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. The assistant Worker uses that gateway after you deploy it. A blank gateway id clears the Worker gateway option on the next deploy. The screen says when the live Worker is behind the saved gateway settings. Vectorize stays on the Vectorize binding. Text calls on the Worker use a saved dynamic route. Embeddings on the Worker stay on the embedding model. Retry and timeout headers stay blank until you set them. Image and speech calls do not send those headers until you opt in.
