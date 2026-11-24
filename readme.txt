@@ -8,37 +8,47 @@ Stable tag: 0.7.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
-Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce.
+Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce. Plugin fee is zero.
 
 == Description ==
 
-This plugin connects your site to Cloudflare® AI Search. Open Settings, then Skyphusion AI. Paste your public endpoint address there. You can set the same options with `wp skyphusion-ai`.
+Skyphusion AI for Cloudflare is a free GPL plugin. Put Cloudflare® AI Search, Workers AI, and AI Gateway on your own Cloudflare account. Install from WordPress.org. Open Settings, then Skyphusion AI. Paste your public AI Search endpoint. You can set the same options with `wp skyphusion-ai`.
 
-Why this plugin was written: other plugin solutions did not meet our needs. We wanted other people to be able to harness the capabilities of AI Search and agents on their WordPress and WooCommerce site without paying a fee to get the harness. So here you go.
+Why it exists: other plugins did not meet the need. The harness should not be a paid product of its own. You already have a Cloudflare account. You should put AI Search and agent calls on WordPress or WooCommerce without a second vendor fee.
 
-This plugin is free. It provides access to Cloudflare services only. It is not a funnel to any other service. Cloudflare free plans work. Past those plans, you pay Cloudflare.
+The plugin fee is $0. It talks to Cloudflare services only. The plugin sends nothing to Skyphusion. Cloudflare free plans work. Past those plan limits, you pay Cloudflare. See the FAQ for the free-plan numbers.
 
-Visitors get a search box. They can also open the keyboard search with Ctrl+K or Command+K. You can turn on a chat button as well.
+= What you get =
 
-WordPress and WooCommerce call Workers AI through the AI Client. The provider id is `skyphusion-ai`. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
+Visitors get a search box. They can also open keyboard search with Ctrl+K or Command+K. You can turn on a chat button. The chat button is off until you turn it on.
 
-Set the account id on the Skyphusion AI screen. Add a gateway id only when calls should go through AI Gateway. The screen also links to Workers AI, AI Gateway, and AI Search.
+WordPress and WooCommerce get a provider on the WordPress AI Client. The provider id is `skyphusion-ai`. It covers text, vision, JSON, tools, images, and speech. Open Settings, then Connectors. Save the API token there. This plugin does not store the token.
+
+Set the account id on the Skyphusion AI screen. Add a gateway id only when Workers AI calls should go through AI Gateway. Leave it blank to call api.cloudflare.com. The screen links to Workers AI, AI Gateway, and AI Search.
 
 One switch prints an AI Search answer above WordPress and WooCommerce search results. The switch is off until you turn it on. Errors stay off the page.
 
-A single product page also prints its stock as text. Each variation names its attributes, its SKU, its price, and its stock. A simple product names its stock. The text sits in the page itself. A crawler that does not run JavaScript can index it.
+Optional tools stay off until you turn them on. Embeddings go into your Vectorize index. Related pages and member search use those vectors. A site assistant can answer from stored pages. An hourly job can fill empty alt text and empty SEO descriptions. Translation and internal-link suggestions are available. The plugin registers four read-only abilities for agents. See docs/search-ability.md. This plugin does not open an MCP server.
 
-The same page adds the SKU, the stock status, and the managed stock count to the meta description. Rank Math and Yoast both receive that sentence. The AI Search dropdown quotes it. A product that does not manage stock gets the SKU and the status, and no count. You do not add a custom field for this sentence.
+= For a WooCommerce shop =
 
-You can also add a stock_quantity number field on the instance. That field is a filter. It is not what the dropdown prints. The steps, including Wrangler, are in the FAQ.
+A single product page prints its stock as text. Each variation names its attributes, its SKU, its price, and its stock. A simple product names its stock. The text sits in the page itself. A crawler that does not run JavaScript can index it.
+
+The same page adds the SKU, the stock status, and the managed stock count to the meta description. Rank Math and Yoast both receive that sentence. The AI Search dropdown quotes it after the next crawl. A product that does not manage stock gets the SKU and the status, and no count. You do not add a custom field for this sentence.
+
+You can also add a stock_quantity number field on the AI Search instance. That field is a filter. It is not what the dropdown prints. The steps, including Wrangler, are in the FAQ.
+
+The assistant and the chat button do not add a product to the cart. Checkout stays a person.
+
+= Compared with other plugins =
 
 This plugin does three jobs, and it does not charge a license for any of them.
 
-Search. The box is Cloudflare AI Search. The card shows the product image, the title, and the description. The image is the page image. You do not add a field for it. On a product page the description gains the SKU, the stock status, and the managed stock count. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a license. They are not this search.
+Search. The box is Cloudflare AI Search. The card shows the product image, the title, and the description. SearchWP, FiboSearch, Relevanssi, and YITH WooCommerce Ajax Search are keyword or instant search. They charge a license. They are not this search.
 
-Chat. You can turn on a chat button. It answers in a sentence. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It does not add the product to the cart. See docs/worker.md. It is not a staff inbox, and it has no seats. The chat button is AI Search. It does not use this gateway id. Workers AI is the provider on the AI Client. It covers text, vision, JSON, tools, images, speech, and embeddings. Leave the gateway id blank to call api.cloudflare.com. Set a gateway id to send those calls through gateway.ai.cloudflare.com. If that host refuses a call, Workers AI uses api.cloudflare.com for one hour and the screen says so. An empty gateway id stays on api.cloudflare.com. Log prompts only on the gateway host. Embedding calls do not log prompts. The log names the tool. An image failure on a saved dynamic route does not start the hour. A saved dynamic route sends text and chat calls on the chat path. The model id is dynamic/ plus the route. Image, speech, and embeddings stay on the model path. The PHP assistant and the AI Client share the chat path. The assistant Worker uses that gateway after you deploy it. A blank gateway id clears the Worker gateway option on the next deploy. The screen says when the live Worker is behind the saved gateway settings. Vectorize stays on the Vectorize binding. Text calls on the Worker use a saved dynamic route. Embeddings on the Worker stay on the embedding model. Retry and timeout headers stay blank until you set them. Image and speech calls do not send those headers until you opt in. Tidio is a help desk. Its Starter plan was $24.17 a month when read on 2026-10-25, and its AI agent, Lyro, starts at $32.50 a month. AIPCF is a free Cloudflare provider. Its site assistant answers from the site's pages and is off until you turn it on. It is not a help desk.
+Chat. The chat button answers in a sentence from the index. The site assistant streams its answer. A product answer shows the image, the SKU, the stock status, and the managed count, and it links to the product. It is not a staff inbox. Tidio is a help desk. AIPCF is a free Cloudflare provider with its own site assistant.
 
-Agents. WordPress and WooCommerce call Workers AI through the AI Client. The provider covers text, vision, JSON, tools, images, and speech. Embeddings are included. You can expand those calls the same way, with Workers AI or with AI Gateway. This plugin does not edit posts. AI Engine is free, and AI Engine Pro starts at $69 a year for one site. You still pay the model vendor there. AIPCF is free. It is a Cloudflare provider for the WordPress AI Client, and its readme also offers Qdrant and PostgreSQL for embeddings. Here the plugin fee is $0. You use a Cloudflare account. Cloudflare free plans work. Past those plans, you pay Cloudflare. Embeddings stay in Cloudflare Vectorize. The plugin does not send the site to another company.
+Agents. Call Workers AI through the AI Client with `using_provider( 'skyphusion-ai' )`. You can expand those calls with Workers AI or with AI Gateway. This plugin does not edit posts by default. AI Engine Pro starts at a yearly license and you still pay the model vendor. Here the plugin fee is $0. Embeddings stay in Cloudflare Vectorize.
 
 The tables, the renewal figures, and the page each price came from are in the Compared section of README.md. Every price was read on 2026-10-25 from that vendor's own page.
 
@@ -124,9 +134,17 @@ Open the Cloudflare dashboard. Go to AI Search, then your instance, then Setting
 
 Save it in Settings, then Connectors. WordPress passes that token to the skyphusion-ai provider through the AI Client. WordPress also reads the `SKYPHUSION_AI_API_KEY` environment variable or constant for that provider. The plugin does not read the saved option itself. The plugin reads the `CLOUDFLARE_API_KEY` environment variable or constant first. You can put the account id in front of the token as `account-id:api-token`. This plugin's own option never stores the token. The Skyphusion AI screen says which source is in use. It says when the saved token is not being used. It does not show the token.
 
+= Do Cloudflare free plans work? =
+
+Yes. You need a Cloudflare account. The plugin fee is $0. Confirm the numbers on Cloudflare's pricing pages before you budget. These figures match the 0.7.0 notes.
+
+Workers AI: both Workers Free and Workers Paid include 10,000 neurons a day. The count resets at 00:00 UTC. On Workers Free, past 10,000 neurons the next Workers AI call fails until the next day. There is no overage price on Free. On Workers Paid, past 10,000 neurons you pay $0.011 per 1,000 neurons. Some models need a paid billing method even when neurons remain.
+
+AI Search: each month an account includes 5 million ingestion tokens. It also includes 10 GB-month of storage. It includes 1,000 semantic queries and 1,000 full-text queries. Past those caps, Cloudflare bills its published rates. A small catalog can stay inside those four caps. That shop adds $0 of AI Search usage for crawl and search. The chat button and the search-results answer are generation. Generation spends Workers AI neurons. The public search box that only lists pages is not a PHP neuron call in this plugin.
+
 = Does the plugin stop at a neuron budget? =
 
-Yes. The default is 10,000 neurons a day. Cloudflare free plans include that allowance. Past it, you pay Cloudflare. The plugin does not add a fee, and it does not send the site to another company. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. You can instead send a plain text call to the cheapest priced model on the account. Backfill, embeddings, the site assistant, translation, vision, images, and speech still pause. Each tool can have its own daily limit. Zero means that tool has no limit of its own. Embeddings start at 3,000 neurons. The site assistant starts at 1,000 neurons, and that limit counts only while the assistant is on. A tool at its limit stops. The other tools continue. The screen shows today's use for each tool. It warns when those limits, including the backfill limit while that job is on, add up to more than the daily budget. The totals do not store an IP address. The public search box and the chat button are not in the total and they are not in the tool limits. The plugin mails the site admin at 80% and at 100%. On a later UTC month it mails the previous month's neurons and calls, once. That mail is the stored totals. It has no prompt and no IP address. A month with no stored use sends nothing. A repeated prompt is answered from memory for 10 minutes and costs no neurons. A regenerate asks again. The public search box is not cached. The cache key has no IP address. The AI Search rate limit is their cap. The admin bar says free next to 10000 when no budget is saved. After a call, an editor can see the feature, the model, the neurons, and the time. The receipt does not store an IP address.
+Yes. The default is 10,000 neurons a day. That matches the Cloudflare free allocation. Past it on Workers Paid, you pay Cloudflare. The plugin does not add a fee, and it does not send the site to another company. You can raise it under Settings, then Skyphusion AI. At that number, the next Workers AI call stays on the site until 00:00 UTC. You can instead send a plain text call to the cheapest priced model on the account. Backfill, embeddings, the site assistant, translation, vision, images, and speech still pause. Each tool can have its own daily limit. Zero means that tool has no limit of its own. Embeddings start at 3,000 neurons. The site assistant starts at 1,000 neurons, and that limit counts only while the assistant is on. A tool at its limit stops. The other tools continue. The screen shows today's use for each tool. It warns when those limits, including the backfill limit while that job is on, add up to more than the daily budget. The totals do not store an IP address. The public search box and the chat button are not in the total and they are not in the tool limits. The plugin mails the site admin at 80% and at 100%. On a later UTC month it mails the previous month's neurons and calls, once. That mail is the stored totals. It has no prompt and no IP address. A month with no stored use sends nothing. A repeated prompt is answered from memory for 10 minutes and costs no neurons. A regenerate asks again. The public search box is not cached. The cache key has no IP address. The AI Search rate limit is their cap. The admin bar says free next to 10000 when no budget is saved. After a call, an editor can see the feature, the model, the neurons, and the time. The receipt does not store an IP address.
 
 = Does AI Gateway see which feature ran? =
 
