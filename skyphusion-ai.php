@@ -3,7 +3,7 @@
  * Plugin Name: Skyphusion AI for Cloudflare
  * Plugin URI: https://github.com/skyphusion-labs/skyphusion-ai
  * Description: Workers AI, AI Gateway, and AI Search for WordPress and WooCommerce. Search from Settings, then Skyphusion AI. Set the Workers AI token with CLOUDFLARE_API_KEY, or Settings then Connectors when that screen exists.
- * Version: 0.7.0
+ * Version: 0.7.1
  * Requires at least: 6.4
  * Requires PHP: 8.0
  * Author: Conrad Rockenhaus (skyphusion)
@@ -19,7 +19,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'SKYPHUSION_AI_VERSION', '0.7.0' );
+define( 'SKYPHUSION_AI_VERSION', '0.7.1' );
 define( 'SKYPHUSION_AI_FILE', __FILE__ );
 
 require_once __DIR__ . '/includes/endpoint.php';
