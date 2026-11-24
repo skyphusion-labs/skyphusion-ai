@@ -116,6 +116,13 @@ What it is: an optional assistant Worker that answers from the stored pages. Hos
 
 What is sent and when: only when an admin deploys the Worker from the settings screen or with WP-CLI. The deploy sends the Worker code, the site address, the model id, the index name and a shared secret. The deploy also sends the gateway id, the dynamic route, and the cache choice. After the deploy, the visitor's browser sends the question and the earlier turns of that chat to the Worker. The Worker calls the site once each hour with the shared secret to ask for the next empty text. When the Worker address is saved, a member search also sends the search words to the Worker.
 
+== Screenshots ==
+
+1. Settings, then Skyphusion AI. Paste the AI Search address on the Connection tab.
+2. Visitor search on the ggc.sh demo store. Search sits at the top. The chat button is optional.
+3. A product page prints stock as plain text. SKU and status sit in the page for crawlers.
+4. Embeddings tab. Related posts and sync stay off until you choose them.
+
 == Installation ==
 
 1. Upload the plugin and activate it.
